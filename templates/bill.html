@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ bill.title }} - TeenCivics
+{% endblock %}
+
+{% block meta_description %}AI summary of {{ bill.title }}. See key points, status, and vote in the community poll.{% endblock %}
+{% block og_title %}{{ bill.title }} - TeenCivics{% endblock %}
+{% block og_description %}AI summary of {{ bill.title }} with key points and community poll.{% endblock %}
+{% block og_url %}{{ request.url }}{% endblock %}
+{% block twitter_title %}{{ bill.title }} - TeenCivics{% endblock %}
+{% block twitter_description %}AI summary of {{ bill.title }} with key points and community poll.{% endblock %}
+
+{% block content %}
+<div class="container bill-detail">
+    <article class="bill-card">
+        <div class="bill-header">
+            <div class="bill-meta">
+                <span class="bill-id">{{ bill.bill_id }}</span>
+                <span class="bill-date">Introduced {{ bill.date_introduced }}</span>
+                <span class="bill-status {{ bill.status|lower|replace(' ', '-') }}">{{ bill.status }}</span>
+            </div>
+            <h1 class="bill-title">{{ bill.title }}</h1>
+            {% if bill.short_title %}
+            <h2 class="bill-short-title">{{ bill.short_title }}</h2>
+            {% endif %}
+        </div>
+
+        <div class="bill-content">
+            <div class="summary-section">
+                <h3>Summary</h3>
+                <div class="summary-text">
+                    {{ bill.summary_long|e|replace('\n', '<br>')|safe }}
+                </div>
+            </div>
+
+            <div class="bill-details">
+                <div class="detail-item">
+                    <h4>Congress Session</h4>
+                    <p>{{ bill.congress_session or 'Not specified' }}</p>
+                </div>
+                <div class="detail-item">
+                    <h4>Date Processed</h4>
+                    <p>{{ bill.date_processed }}</p>
+                </div>
+                {% if bill.tags %}
+                <div class="detail-item">
+                    <h4>Tags</h4>
+                    <div class="tags">
+                        {% for tag in bill.tags.split(',') %}
+                        <span class="tag">{{ tag.strip() }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="bill-actions">
+                <a href="{{ bill.source_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+                    Read Full Bill on Congress.gov
+                </a>
+                {% if bill.tweet_url %}
+                <a href="{{ bill.tweet_url }}" target="_blank" rel="noopener" class="btn btn-twitter">
+                    View on Twitter
+                </a>
+                {% endif %}
+                
+                <!-- Share buttons -->
+                <div class="share-buttons">
+                    <button class="btn btn-share" onclick="shareOnTwitter()">
+                        Share on Twitter
+                    </button>
+                    <button class="btn btn-share" onclick="shareOnFacebook()">
+                        Share on Facebook
+                    </button>
+                    <button class="btn btn-share" onclick="copyLink()">
+                        Copy Link
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Poll Widget -->
+        <div class="poll-widget" data-bill-id="{{ bill.bill_id }}">
+            <h3>What do you think about this bill?</h3>
+            <div class="poll-options">
+                <button class="poll-option" data-vote="yes">
+                    👍 Yes, support it
+                </button>
+                <button class="poll-option" data-vote="no">
+                    👎 No, oppose it
+                </button>
+            </div>
+            <div class="poll-results" style="display: none;">
+                <h4>Community Results</h4>
+                <div class="result-bar">
+                    <div class="result-fill yes-fill" style="width: 0%">
+                        <span class="result-label">Yes: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <div class="result-bar">
+                    <div class="result-fill no-fill" style="width: 0%">
+                        <span class="result-label">No: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <p class="total-votes">Total votes: <span class="votes-count">0</span></p>
+            </div>
+            <div class="poll-message"></div>
+        </div>
+    </article>
+
+    <div class="navigation-links">
+        <a href="/archive" class="btn btn-secondary">
+            ← Back to Archive
+        </a>
+        <a href="/" class="btn btn-secondary">
+            ← Back to Home
+        </a>
+    </div>
+</div>
+
+<script>
+function shareOnTwitter() {
+    const text = "Check out this congressional bill summary on TeenCivics: {{ bill.title }}";
+    const url = window.location.href;
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+}
+
+function shareOnFacebook() {
+    const url = window.location.href;
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+}
+
+function copyLink() {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+        alert('Link copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
+}
+</script>
+{% endblock %}

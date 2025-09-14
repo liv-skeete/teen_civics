@@ -77,7 +77,8 @@ def init_db() -> None:
                 website_slug TEXT,
                 tags TEXT,
                 poll_results_yes INTEGER DEFAULT 0,
-                poll_results_no INTEGER DEFAULT 0
+                poll_results_no INTEGER DEFAULT 0,
+                poll_results_unsure INTEGER DEFAULT 0
             )
             ''')
 
@@ -393,34 +394,72 @@ def generate_website_slug(title: str, bill_id: str) -> str:
 
     return slug
 
-def update_poll_results(bill_id: str, vote_type: str) -> bool:
+def update_poll_results(bill_id: str, vote_type: str, previous_vote: str = None) -> bool:
     """
-    Increment poll results counters for a given bill.
+    Update poll results counters for a given bill, handling vote changes.
 
     Args:
         bill_id: Unique bill identifier
-        vote_type: 'yes' or 'no' (case-insensitive)
+        vote_type: 'yes', 'no', or 'unsure' (case-insensitive) for the new vote
+        previous_vote: Optional 'yes', 'no', or 'unsure' (case-insensitive) for the previous vote to decrement
 
     Returns:
         True on success, False otherwise
     """
     vt = (vote_type or '').strip().lower()
-    if vt not in {'yes', 'no'}:
-        logger.error(f"Invalid vote_type '{vote_type}'. Expected 'yes' or 'no'.")
+    if vt not in {'yes', 'no', 'unsure'}:
+        logger.error(f"Invalid vote_type '{vote_type}'. Expected 'yes', 'no', or 'unsure'.")
         return False
-    column = 'poll_results_yes' if vt == 'yes' else 'poll_results_no'
+    
+    pv = (previous_vote or '').strip().lower() if previous_vote else None
+    if pv and pv not in {'yes', 'no', 'unsure'}:
+        logger.error(f"Invalid previous_vote '{previous_vote}'. Expected 'yes', 'no', or 'unsure'.")
+        return False
+    
+    # Determine columns
+    if vt == 'yes':
+        new_column = 'poll_results_yes'
+    elif vt == 'no':
+        new_column = 'poll_results_no'
+    else:  # 'unsure'
+        new_column = 'poll_results_unsure'
+        
+    if pv:
+        if pv == 'yes':
+            prev_column = 'poll_results_yes'
+        elif pv == 'no':
+            prev_column = 'poll_results_no'
+        else:  # 'unsure'
+            prev_column = 'poll_results_unsure'
+    
     try:
         with db_connect() as conn:
             cursor = conn.cursor()
-            cursor.execute(f'''
-            UPDATE bills
-            SET {column} = COALESCE({column}, 0) + 1
-            WHERE bill_id = ?
-            ''', (bill_id,))
+            
+            if pv:
+                # Decrement previous vote and increment new vote in one operation
+                cursor.execute(f'''
+                UPDATE bills
+                SET {prev_column} = CASE WHEN COALESCE({prev_column}, 0) > 0 THEN COALESCE({prev_column}, 0) - 1 ELSE 0 END,
+                    {new_column} = COALESCE({new_column}, 0) + 1
+                WHERE bill_id = ?
+                ''', (bill_id,))
+            else:
+                # Only increment new vote
+                cursor.execute(f'''
+                UPDATE bills
+                SET {new_column} = COALESCE({new_column}, 0) + 1
+                WHERE bill_id = ?
+                ''', (bill_id,))
+                
             if cursor.rowcount == 0:
                 logger.error(f"No bill found with id {bill_id} to update poll results")
                 return False
-        logger.info(f"Incremented {column} for bill {bill_id}")
+                
+        if pv:
+            logger.info(f"Changed vote from {pv} to {vt} for bill {bill_id}")
+        else:
+            logger.info(f"Incremented {vt} for bill {bill_id}")
         return True
     except Exception as e:
         logger.error(f"Error updating poll results for {bill_id}: {e}")
