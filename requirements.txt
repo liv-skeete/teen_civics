@@ -4,3 +4,4 @@ python-dotenv==1.0.0
 feedparser==6.0.10
 anthropic==0.25.4
 pytest==8.2.0
+httpx<0.28
