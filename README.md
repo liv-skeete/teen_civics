@@ -1,14 +1,14 @@
 # TeenCivics
 
-TeenCivics makes government accessible for young people by posting daily plain‑English summaries of congressional bills, executive actions, and court rulings.
+TeenCivics makes government accessible for young people by posting daily plain‑English summaries of congressional bills from Congress.gov.
 
 ## Features
 
-- Fetch data from Congress.gov API, WhiteHouse.gov RSS, and SupremeCourt.gov RSS
-- Summarize content using Claude AI for easy understanding
+- Fetch data from Congress.gov API for the most recent bills
+- Summarize content using Claude AI for easy understanding  
 - Post updates to X/Twitter using Tweepy
-- Store processed data in SQLite database for tracking
-- Automate daily and weekly posting with GitHub Actions
+- Store processed data in SQLite database for tracking and deduplication
+- Automate daily posting with GitHub Actions
 
 ## Project Structure
 
@@ -16,13 +16,12 @@ TeenCivics makes government accessible for young people by posting daily plain�
 teen_civics/
 ├── .github/workflows/    # GitHub Actions workflows
 ├── src/                  # Source code
-│   ├── fetchers/         # Data fetching modules
+│   ├── fetchers/         # Data fetching modules (Congress.gov)
 │   ├── processors/       # Data processing and summarization
 │   ├── publishers/       # Social media publishing
 │   └── database/         # Database management
 ├── config/               # Configuration files
 ├── data/                 # Data storage (SQLite)
-├── website/              # Optional web interface
 ├── tests/                # Test suites
 ├── .env.example          # Environment variables template
 ├── requirements.txt      # Python dependencies
@@ -60,22 +59,26 @@ teen_civics/
    - `TWITTER_ACCESS_TOKEN`
    - `TWITTER_ACCESS_SECRET`
 
-5. **Run the daily post script**
+5. **Run the orchestrator script**
    ```bash
-   python src/daily_post.py
+   python src/orchestrator.py
    ```
 
 ## GitHub Actions
 
 ### Daily Workflow
 - Runs every morning at 8:00 AM UTC
-- Fetches new bills, executive orders, and court rulings
+- Fetches new bills from Congress.gov
 - Generates summaries and posts to X/Twitter
+- Prevents duplicate posts using SQLite database
 
-### Weekly Digest Workflow
-- Runs every Sunday at 9:00 AM UTC
-- Creates a weekly summary of top stories
-- Posts a thread with key highlights
+## Database Features
+
+The SQLite database provides:
+- Bill deduplication to prevent reposting
+- Storage of both short tweet summaries and long-form explanations
+- Support for future website integration with slug-based URLs
+- Poll tracking for user engagement
 
 ## Contributing
 
