@@ -19,12 +19,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 def main() -> int:
     """
     Main orchestrator function:
-    1. Fetches the most recent bill from Congress.gov
-    2. Checks if bill already exists in database (prevents duplicates)
+    1. Fetches up to 5 most recent bills from Congress.gov
+    2. Checks each bill to find the first one not already in database (prevents duplicates)
     3. Summarizes it using Claude
     4. Stores summary in database
     5. Posts the tweet to X/Twitter
     6. Updates database with tweet information
+    If all bills are already processed, exits gracefully.
     """
     try:
         logger.info("Starting orchestrator: fetch → check → summarize → store → tweet")
@@ -35,23 +36,35 @@ def main() -> int:
         from src.publishers.twitter_publisher import post_tweet
         from src.database.db import bill_exists, insert_bill, update_tweet_info, generate_website_slug
         
-        # Step 1: Fetch the most recent bill with full text (no truncation)
-        logger.info("Fetching most recent bill from Congress.gov with full text...")
-        bills = get_recent_bills(limit=1, include_text=True, text_chars=2000000)
+        # Step 1: Fetch up to 5 most recent bills with full text
+        logger.info("Fetching up to 5 most recent bills from Congress.gov with full text...")
+        bills = get_recent_bills(limit=5, include_text=True, text_chars=2000000)
         
         if not bills:
             logger.error("No bills found to process")
             return 1
+        
+        # Step 2: Loop through bills to find the first unprocessed one
+        processed_bill = None
+        for bill in bills:
+            bill_id = bill.get("bill_id", "unknown")
+            logger.info(f"Checking bill: {bill_id}")
             
-        bill = bills[0]
+            if not bill_exists(bill_id):
+                logger.info(f"Bill {bill_id} is not in database. Processing...")
+                processed_bill = bill
+                break
+            else:
+                logger.info(f"Bill {bill_id} already exists in database. Skipping.")
+        
+        if not processed_bill:
+            logger.info("All fetched bills have already been processed. Nothing to do.")
+            return 0
+        
+        bill = processed_bill
         bill_id = bill.get("bill_id", "unknown")
         logger.info(f"Processing bill: {bill_id}")
         
-        # Step 2: Check if bill already exists in database (deduplication)
-        if bill_exists(bill_id):
-            logger.info(f"Bill {bill_id} already exists in database. Skipping to avoid duplicate.")
-            return 0
-            
         # Step 3: Summarize the bill
         logger.info("Summarizing bill...")
         summary = summarize_bill(bill)
