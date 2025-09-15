@@ -30,6 +30,18 @@ def main() -> int:
     try:
         logger.info("Starting orchestrator: fetch → check → summarize → store → tweet")
         
+        # Debug: Print all environment variables to see what's available
+        logger.info("---Dumping Environment Variables---")
+        for key, value in os.environ.items():
+            # Mask sensitive values
+            if "KEY" in key.upper() or "SECRET" in key.upper() or "TOKEN" in key.upper():
+                if len(value) > 8:
+                    value = f"{value[:4]}...{value[-4:]}"
+                else:
+                    value = "SET"
+            logger.info(f"{key}: {value}")
+        logger.info("------------------------------------")
+
         # Import modules
         from src.fetchers.congress_fetcher import get_recent_bills
         from src.processors.summarizer import summarize_bill
