@@ -396,34 +396,42 @@ def generate_website_slug(title: str, bill_id: str) -> str:
 
 def update_poll_results(bill_id: str, vote_type: str, previous_vote: str = None) -> bool:
     """
-    Update poll results counters for a given bill, handling vote changes.
+    Update poll results counters for a given bill, handling vote changes atomically.
 
     Args:
         bill_id: Unique bill identifier
         vote_type: 'yes', 'no', or 'unsure' (case-insensitive) for the new vote
-        previous_vote: Optional 'yes', 'no', or 'unsure' (case-insensitive) for the previous vote to decrement
+        previous_vote: Optional 'yes', 'no', or 'unsure' (case-insensitive). If provided and
+                       different from vote_type, decrement previous and increment new in one tx.
 
     Returns:
-        True on success, False otherwise
+        True on success (including idempotent no-op), False otherwise
     """
     vt = (vote_type or '').strip().lower()
+    # DB layer supports 'unsure', but app layer constrains to {'yes','no'} for now.
     if vt not in {'yes', 'no', 'unsure'}:
         logger.error(f"Invalid vote_type '{vote_type}'. Expected 'yes', 'no', or 'unsure'.")
         return False
-    
+
     pv = (previous_vote or '').strip().lower() if previous_vote else None
     if pv and pv not in {'yes', 'no', 'unsure'}:
         logger.error(f"Invalid previous_vote '{previous_vote}'. Expected 'yes', 'no', or 'unsure'.")
         return False
-    
-    # Determine columns
+
+    # Idempotent: if previous equals new, do nothing
+    if pv and pv == vt:
+        logger.info(f"No change for bill {bill_id}: vote remains {vt}")
+        return True
+
+    # Determine column names
     if vt == 'yes':
         new_column = 'poll_results_yes'
     elif vt == 'no':
         new_column = 'poll_results_no'
     else:  # 'unsure'
         new_column = 'poll_results_unsure'
-        
+
+    prev_column = None
     if pv:
         if pv == 'yes':
             prev_column = 'poll_results_yes'
@@ -431,13 +439,25 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: str = None)
             prev_column = 'poll_results_no'
         else:  # 'unsure'
             prev_column = 'poll_results_unsure'
-    
+
+    underflow = False
     try:
         with db_connect() as conn:
             cursor = conn.cursor()
-            
-            if pv:
-                # Decrement previous vote and increment new vote in one operation
+
+            if prev_column:
+                # Read previous count to detect potential underflow (for logging)
+                cursor.execute(f'''
+                SELECT COALESCE({prev_column}, 0) FROM bills WHERE bill_id = ?
+                ''', (bill_id,))
+                row = cursor.fetchone()
+                if row is None:
+                    logger.error(f"No bill found with id {bill_id} to update poll results")
+                    return False
+                prev_count = int(row[0] or 0)
+                underflow = prev_count <= 0
+
+                # Decrement previous vote (clamped at 0) and increment new vote atomically
                 cursor.execute(f'''
                 UPDATE bills
                 SET {prev_column} = CASE WHEN COALESCE({prev_column}, 0) > 0 THEN COALESCE({prev_column}, 0) - 1 ELSE 0 END,
@@ -451,15 +471,17 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: str = None)
                 SET {new_column} = COALESCE({new_column}, 0) + 1
                 WHERE bill_id = ?
                 ''', (bill_id,))
-                
+
             if cursor.rowcount == 0:
                 logger.error(f"No bill found with id {bill_id} to update poll results")
                 return False
-                
-        if pv:
-            logger.info(f"Changed vote from {pv} to {vt} for bill {bill_id}")
+
+        if prev_column and underflow:
+            logger.warning(f"Vote change underflow for bill {bill_id}: {pv} count was 0; clamped to 0")
+        if prev_column:
+            logger.info(f"Changed vote for bill {bill_id}: {pv}->{vt}")
         else:
-            logger.info(f"Incremented {vt} for bill {bill_id}")
+            logger.info(f"Recorded new vote {vt} for bill {bill_id}")
         return True
     except Exception as e:
         logger.error(f"Error updating poll results for {bill_id}: {e}")

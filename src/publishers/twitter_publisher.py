@@ -258,10 +258,13 @@ if __name__ == "__main__":
         
         # Post the tweet
         logger.info("Attempting to post tweet...")
-        success = post_tweet(tweet_text)
+        success, tweet_url = post_tweet(tweet_text)
         
         if success:
-            print("✅ Tweet posted successfully!")
+            if tweet_url:
+                print(f"✅ Tweet posted successfully! {tweet_url}")
+            else:
+                print("✅ Tweet posted successfully! (URL not available)")
         else:
             print("❌ Failed to post tweet")
             exit(1)

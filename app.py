@@ -105,23 +105,48 @@ def resources():
 
 @app.route('/api/vote', methods=['POST'])
 def vote():
-    """API endpoint for poll voting"""
+    """API endpoint for poll voting (supports changing vote)."""
     try:
         data = request.get_json(silent=True) or {}
         bill_id = data.get('bill_id')
-        vote_value = data.get('vote')
+        vote_value = (data.get('vote') or '').strip().lower()
         previous_vote = data.get('previous_vote')
+        previous_vote = (previous_vote or '').strip().lower() if previous_vote is not None else None
 
-        # Only support 'yes' and 'no' for v1 (DB tracks poll_results_yes/no)
+        # Validate inputs: Only 'yes' and 'no' are supported by the app layer
         if not bill_id or vote_value not in ('yes', 'no'):
             return jsonify({'error': 'Invalid vote data'}), 400
+        if previous_vote not in (None, 'yes', 'no'):
+            return jsonify({'error': 'Invalid previous_vote'}), 400
 
-        # Update poll results in database; returns False if bill not found or error
+        # Perform update (atomic change handled in DB layer)
         updated = update_poll_results(bill_id, vote_value, previous_vote)
         if not updated:
             return jsonify({'error': 'Bill not found or update failed'}), 404
 
-        return jsonify({'success': True, 'message': 'Vote recorded'})
+        # Fetch updated tallies to return with response
+        bill = get_bill_by_id(bill_id)
+        if not bill:
+            return jsonify({'error': 'Bill not found after update'}), 404
+
+        yes = int(bill.get('poll_results_yes', 0) or 0)
+        no = int(bill.get('poll_results_no', 0) or 0)
+        results = {
+            'yes': yes,
+            'no': no,
+            'total': yes + no,
+        }
+
+        # Message reflects whether this was a change or new record
+        if previous_vote is None:
+            msg = f"Recorded new vote {vote_value} for bill {bill_id}"
+        elif previous_vote == vote_value:
+            # Idempotent no-op; DB layer logs and returns True
+            msg = f"No change; vote already {vote_value} for bill {bill_id}"
+        else:
+            msg = f"Changed vote for bill {bill_id}: {previous_vote}->{vote_value}"
+
+        return jsonify({'success': True, 'message': msg, 'results': results}), 200
     except Exception as e:
         logger.error(f"Error processing vote: {e}")
         return jsonify({'error': 'Internal server error'}), 500

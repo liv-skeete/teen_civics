@@ -26,33 +26,32 @@ function initializePollWidgets() {
         const resultsContainer = widget.querySelector('.poll-results');
         const messageContainer = widget.querySelector('.poll-message');
         
-        // Check if user already voted on this bill and what they voted
+        // If user already voted, highlight and load results
         const currentVote = localStorage.getItem(`voted_${billId}`);
-        
         if (currentVote) {
-            // User already voted, highlight their selection and allow changing
             highlightCurrentVote(options, currentVote);
             fetchAndDisplayResults(billId, widget);
-            
-            // Set up click handlers for voting - allow changing vote
-            options.forEach(option => {
-                option.addEventListener('click', function() {
-                    const voteType = this.dataset.vote;
-                    // Only allow voting if changing selection
-                    if (voteType !== currentVote) {
-                        handleVote(billId, voteType, widget, currentVote);
-                    }
-                });
-            });
-        } else {
-            // Set up click handlers for first-time voting
-            options.forEach(option => {
-                option.addEventListener('click', function() {
-                    const voteType = this.dataset.vote;
-                    handleVote(billId, voteType, widget, null);
-                });
-            });
         }
+        
+        // Always set click handlers; compute latest stored vote at click time
+        options.forEach(option => {
+            option.addEventListener('click', function() {
+                const voteType = this.dataset.vote;
+                const storedVote = localStorage.getItem(`voted_${billId}`);
+                
+                // If clicking same as stored, no-op to avoid double-increment
+                if (storedVote && voteType === storedVote) {
+                    // Subtle, non-intrusive message then hide
+                    if (messageContainer) {
+                        showLoadingMessage(messageContainer, 'You already selected this option.');
+                        setTimeout(() => { messageContainer.style.display = 'none'; }, 1200);
+                    }
+                    return;
+                }
+                
+                handleVote(billId, voteType, widget, storedVote || null);
+            });
+        });
     });
 }
 
@@ -62,6 +61,7 @@ function initializePollWidgets() {
 function handleVote(billId, voteType, widget, previousVote) {
     const options = widget.querySelectorAll('.poll-option');
     const messageContainer = widget.querySelector('.poll-message');
+    const resultsContainer = widget.querySelector('.poll-results');
     
     // Show loading state
     disablePollOptions(options);
@@ -92,24 +92,35 @@ function handleVote(billId, voteType, widget, previousVote) {
         }
         return data;
     })
-    .then(() => {
+    .then((data) => {
         // Vote successful
-        if (previousVote) {
+        const isChange = !!previousVote && previousVote !== voteType;
+        if (isChange) {
             showSuccessMessage(messageContainer, 'Vote changed successfully!');
         } else {
             showSuccessMessage(messageContainer, 'Thanks for voting!');
         }
+        
+        // Persist new vote locally
         localStorage.setItem(`voted_${billId}`, voteType);
     
         // Update UI to show new selection
         highlightCurrentVote(options, voteType);
         
-        // Fetch and display updated results
-        fetchAndDisplayResults(billId, widget);
+        // Update results immediately from response if available; fall back to fetch
+        if (data && data.results && resultsContainer) {
+            updateResultsDisplay(data.results, resultsContainer);
+            resultsContainer.style.display = 'block';
+        } else {
+            fetchAndDisplayResults(billId, widget);
+        }
     })
     .catch(error => {
         console.error('Vote error:', error);
         showErrorMessage(messageContainer, error.message || 'Network error. Please check your connection and try again.');
+    })
+    .finally(() => {
+        // Always re-enable options after request completes
         enablePollOptions(options);
     });
 }
