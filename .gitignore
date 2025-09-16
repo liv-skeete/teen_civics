@@ -23,3 +23,4 @@ data/*.db
 
 # VSCode
 .vscode/.venv 3
+.venv2
