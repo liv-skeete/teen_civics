@@ -4,10 +4,15 @@ TeenCivics Flask Web Application
 A Congressional App Challenge project that summarizes congressional bills for teenagers.
 """
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file FIRST
+load_dotenv()
+
 import os
 import logging
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request, abort
+from flask import Flask, render_template, jsonify, request, abort, url_for
 from flask_cors import CORS
 
 # Configure logging
@@ -103,6 +108,30 @@ def resources():
     """Educational resources page"""
     return render_template('resources.html')
 
+@app.route('/contact')
+def contact():
+    """Contact page with ways to reach and give feedback"""
+    return render_template('contact.html')
+
+@app.route('/about')
+def about():
+    """About page with project information and creator bio"""
+    # Prefer a real photo if present; otherwise fall back to the SVG placeholder
+    candidates = [
+        'img/creator.jpg',
+        'img/creator.png',
+        'img/creator.webp',
+        'img/creator.svg',  # final fallback
+    ]
+    chosen = None
+    for rel in candidates:
+        abs_path = os.path.join(app.root_path, 'static', rel)
+        if os.path.exists(abs_path):
+            chosen = url_for('static', filename=rel)
+            break
+    if not chosen:
+        chosen = url_for('static', filename='img/creator.svg')
+    return render_template('about.html', creator_photo=chosen)
 @app.route('/api/vote', methods=['POST'])
 def vote():
     """API endpoint for poll voting (supports changing vote)."""
@@ -185,5 +214,6 @@ def inject_current_year():
     return {'current_year': datetime.now().year}
 
 if __name__ == '__main__':
-    # Development server
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Development server (disable reloader to avoid multiple processes)
+    port = int(os.environ.get('PORT', os.environ.get('FLASK_RUN_PORT', 5050)))
+    app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)

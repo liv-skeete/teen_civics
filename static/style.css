@@ -117,24 +117,46 @@ a:hover {
     background-color: var(--color-white);
     box-shadow: var(--shadow-sm);
     padding: var(--spacing-md) 0;
+    /* Ensure no horizontal inset from viewport edges */
+    padding-left: 0;
+    padding-right: 0;
     position: sticky;
     top: 0;
     z-index: 1000;
 }
 
 .nav-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-md);
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    /* Add slight horizontal inset for aesthetics (~32px each side) */
+    padding: 0 var(--spacing-xl);
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
+.nav-logo {
+    display: flex;
+    align-items: center;
+    margin-right: auto;
+    /* Explicitly remove any left offset on the logo link */
+    margin-left: 0;
+    padding-left: 0;
+}
+
 .nav-logo h1 {
-    color: var(--color-navy);
     font-size: var(--font-size-xl);
+    color: var(--color-navy);
     margin: 0;
+    font-weight: 600;
+    padding-left: 0;
+}
+
+.logo-img {
+    height: 50px;
+    width: auto;
+    object-fit: contain;
 }
 
 .nav-menu {
@@ -617,6 +639,9 @@ a:hover {
 
 .feature-card h3 {
     color: var(--color-navy);
+    white-space: nowrap;
+    margin-left: -13px; /* Tiny left adjustment for perfect centering */
+    text-align: center; /* Use text-align for better centering */
 }
 
 /* Error Page */
@@ -789,15 +814,6 @@ a:hover {
     }
     
     .hero-subtitle {
-        font-size: var(--font-size-md);
-    }
-    
-    .bill-meta {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .error-actions {
-        flex-direction: column;
+        font-size: var(--font-size-sm);
     }
 }
