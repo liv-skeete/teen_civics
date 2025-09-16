@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}TeenCivics - Congressional Bills for Teens{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
+    <meta name="keywords" content="congress, bills, government, politics, teens, education, civic engagement">
+    <meta name="author" content="TeenCivics">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{% block og_url %}https://teencivics.org/{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}https://teencivics.org/static/og-image.png{% endblock %}">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{% block twitter_url %}https://teencivics.org/{% endblock %}">
+    <meta name="twitter:title" content="{% block twitter_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}https://teencivics.org/static/og-image.png{% endblock %}">
+
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Analytics placeholder -->
+    <!-- <script>/* GA placeholder - add your GA tag here in production */</script> -->
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('index') }}" class="nav-logo">
+                <h1>TeenCivics</h1>
+            </a>
+            <div class="nav-menu">
+                <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+                <a href="{{ url_for('archive') }}" class="nav-link">Archive</a>
+                <a href="{{ url_for('resources') }}" class="nav-link">Resources</a>
+                <a href="{{ url_for('about') }}" class="nav-link">About</a>
+                <a href="{{ url_for('contact') }}" class="nav-link">Contact</a>
+            </div>
+            <div class="nav-toggle">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>TeenCivics</h3>
+                <p>Making congressional bills accessible and understandable for teenagers.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Quick Links</h4>
+                <a href="/">Home</a>
+                <a href="/archive">Bill Archive</a>
+                <a href="/resources">Resources</a>
+            </div>
+            <div class="footer-section">
+                <h4>Connect</h4>
+                <a href="https://twitter.com/TeenCivics" target="_blank" rel="noopener">Twitter</a>
+                <a href="{{ url_for('contact') }}">Contact</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; {{ current_year }} TeenCivics. A Congressional App Challenge Project.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
