@@ -444,7 +444,10 @@ def summarize_bill(bill: Dict[str, Any]) -> Dict[str, str]:
     logger.info("Preparing to summarize bill")
 
     _ensure_api_key()
-    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    # Create custom http_client to avoid proxy parameter incompatibility
+    import httpx
+    http_client = httpx.Client()
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], http_client=http_client)
 
     system = _build_system_prompt()
     # If we have a large full_text, use chunked map-reduce to avoid rate-limit acceleration
