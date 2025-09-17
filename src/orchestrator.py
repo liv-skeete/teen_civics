@@ -116,4 +116,26 @@ def main() -> int:
         # Step 6: Post to Twitter
         logger.info("Posting tweet to X/Twitter...")
         # Use the proper tweet formatting function
-        from s
+        from src.publishers.twitter_publisher import format_bill_tweet
+        formatted_tweet = format_bill_tweet(bill_data)
+        success, tweet_url = post_tweet(formatted_tweet)
+        
+        if success:
+            logger.info("✅ Tweet posted successfully!")
+            # Update database with tweet information
+            if tweet_url:
+                update_tweet_info(bill_id, tweet_url)
+            return 0
+        else:
+            logger.error("❌ Failed to post tweet")
+            return 1
+            
+    except ImportError as e:
+        logger.error(f"Import error: {e}")
+        return 1
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
