@@ -187,9 +187,9 @@ def format_bill_tweet(bill: Dict) -> str:
     latest_action = bill.get('latest_action', 'No action recorded')
     bill_id = bill.get('bill_id', 'Unknown ID')
     
-    # Truncate title and latest action if necessary
-    max_title_length = 150
-    max_action_length = 100
+    # Truncate title and latest action if necessary (reduced to account for new header/footer)
+    max_title_length = 120
+    max_action_length = 80
     
     if len(title) > max_title_length:
         title = title[:max_title_length - 3] + "..."
@@ -198,12 +198,15 @@ def format_bill_tweet(bill: Dict) -> str:
         latest_action = latest_action[:max_action_length - 3] + "..."
     
     # Construct the tweet
-    tweet_template = """🏛️ NEW BILL ALERT
+    tweet_template = """🏛️ Today in Congress
+
 {title}
 
 Latest Action: {latest_action}
 
-ID: {bill_id}"""
+ID: {bill_id}
+
+👉 Want to learn more? Link coming soon..."""
     
     tweet = tweet_template.format(
         title=title,
