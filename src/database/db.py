@@ -82,6 +82,9 @@ def init_db() -> None:
             )
             ''')
 
+            # Migrate to add new summary fields if they don't exist
+            _migrate_add_summary_fields(cursor)
+
             # Indexes for faster lookups
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_bill_id ON bills (bill_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_date_processed ON bills (date_processed)')
@@ -91,6 +94,31 @@ def init_db() -> None:
 
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
+        raise
+
+def _migrate_add_summary_fields(cursor: sqlite3.Cursor) -> None:
+    """
+    Add new summary fields to the bills table if they don't exist.
+    This ensures backward compatibility for existing databases.
+    """
+    try:
+        # Check if new columns exist by trying to query them
+        cursor.execute("PRAGMA table_info(bills)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        new_columns = [
+            ("summary_overview", "TEXT"),
+            ("summary_detailed", "TEXT"),
+            ("term_dictionary", "TEXT")
+        ]
+        
+        for column_name, column_type in new_columns:
+            if column_name not in columns:
+                logger.info(f"Adding column {column_name} to bills table")
+                cursor.execute(f"ALTER TABLE bills ADD COLUMN {column_name} {column_type}")
+                
+    except Exception as e:
+        logger.error(f"Error during summary fields migration: {e}")
         raise
 
 def bill_exists(bill_id: str) -> bool:
@@ -124,6 +152,9 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
         ...   "status": "Placed on Union Calendar",
         ...   "summary_tweet": "House bill proposes 2026 funding for Commerce, Justice, Science agencies...",
         ...   "summary_long": "Overview: This bill appropriates funds... Major provisions: ...",
+        ...   "summary_overview": "This bill proposes funding for various agencies...",
+        ...   "summary_detailed": "🔑 Key Provisions: ...",
+        ...   "term_dictionary": '[{"term":"appropriations","definition":"..."}]',
         ...   "congress_session": "119",
         ...   "date_introduced": "2025-07-12",
         ...   "source_url": "https://www.congress.gov/bill/119th-congress/house-bill/5342",
@@ -143,6 +174,9 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
         - status: Stage in legislative process
         - summary_tweet: AI-generated short summary (required)
         - summary_long: AI-generated long summary (required)
+        - summary_overview: Short paragraph overview (optional)
+        - summary_detailed: Structured detailed summary with emojis (optional)
+        - term_dictionary: JSON string of term definitions (optional)
         - congress_session: Congress session info
         - date_introduced: Date bill was introduced
         - source_url: Permalink to Congress.gov (required)
@@ -164,9 +198,10 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
             cursor.execute('''
             INSERT INTO bills (
                 bill_id, title, short_title, status, summary_tweet, summary_long,
+                summary_overview, summary_detailed, term_dictionary,
                 congress_session, date_introduced, date_processed, source_url,
                 website_slug, tags, tweet_url, tweet_posted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 bill_data.get('bill_id'),
                 bill_data.get('title'),
@@ -174,6 +209,9 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                 bill_data.get('status'),
                 bill_data.get('summary_tweet'),
                 bill_data.get('summary_long'),
+                bill_data.get('summary_overview'),
+                bill_data.get('summary_detailed'),
+                bill_data.get('term_dictionary'),
                 bill_data.get('congress_session'),
                 bill_data.get('date_introduced'),
                 current_time,
@@ -485,6 +523,114 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: str = None)
         return True
     except Exception as e:
         logger.error(f"Error updating poll results for {bill_id}: {e}")
+        return False
+def update_bill_summaries(bill_id: str, summary_overview: str = None,
+                          summary_detailed: str = None, summary_long: str = None) -> bool:
+    """
+    Update bill summary fields by bill_id.
+    Only updates fields that are not None.
+    """
+    if not any([summary_overview, summary_detailed, summary_long]):
+        logger.info("No summary fields provided to update.")
+        return True
+
+    try:
+        with db_connect() as conn:
+            cursor = conn.cursor()
+            
+            fields_to_update = []
+            params = []
+
+            if summary_overview is not None:
+                fields_to_update.append("summary_overview = ?")
+                params.append(summary_overview)
+            
+            if summary_detailed is not None:
+                fields_to_update.append("summary_detailed = ?")
+                params.append(summary_detailed)
+
+            if summary_long is not None:
+                fields_to_update.append("summary_long = ?")
+                params.append(summary_long)
+
+            params.append(bill_id)
+
+            query = f"UPDATE bills SET {', '.join(fields_to_update)} WHERE bill_id = ?"
+            
+            cursor.execute(query, tuple(params))
+            
+            if cursor.rowcount > 0:
+                logger.info(f"Successfully updated summaries for bill {bill_id}")
+                return True
+            else:
+                logger.warning(f"No bill found with id {bill_id} to update.")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error updating summaries for bill {bill_id}: {e}")
+        return False
+
+def update_bill_summaries(bill_id: str, summary_overview: str = None,
+                         summary_detailed: str = None, term_dictionary: str = None,
+                         summary_long: str = None) -> bool:
+    """
+    Update summary fields for an existing bill.
+    
+    Args:
+        bill_id: The unique bill identifier
+        summary_overview: Short paragraph overview
+        summary_detailed: Structured detailed summary with emojis
+        term_dictionary: JSON string of term definitions
+        summary_long: Updated long summary (concatenated from overview + detailed)
+        
+    Returns:
+        bool: True if update successful, False otherwise
+    """
+    try:
+        with db_connect() as conn:
+            cursor = conn.cursor()
+            
+            # Build dynamic update query based on provided fields
+            updates = []
+            values = []
+            
+            if summary_overview is not None:
+                updates.append("summary_overview = ?")
+                values.append(summary_overview)
+                
+            if summary_detailed is not None:
+                updates.append("summary_detailed = ?")
+                values.append(summary_detailed)
+                
+            if term_dictionary is not None:
+                updates.append("term_dictionary = ?")
+                values.append(term_dictionary)
+                
+            if summary_long is not None:
+                updates.append("summary_long = ?")
+                values.append(summary_long)
+                
+            if not updates:
+                logger.warning(f"No summary fields provided to update for bill {bill_id}")
+                return False
+                
+            values.append(bill_id)
+            
+            cursor.execute(f'''
+            UPDATE bills
+            SET {", ".join(updates)}
+            WHERE bill_id = ?
+            ''', values)
+            
+            if cursor.rowcount == 0:
+                logger.error(f"No bill found with id {bill_id} to update summaries")
+                return False
+                
+        logger.info(f"Updated summary fields for bill {bill_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error updating bill summaries for {bill_id}: {e}")
         return False
 
 # Initialize database when module is imported

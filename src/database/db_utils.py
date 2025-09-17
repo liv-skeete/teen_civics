@@ -18,6 +18,7 @@ from .db import (
     get_bills_by_date_range,
     generate_website_slug,
     update_poll_results,
+    update_bill_summaries,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     'get_bills_by_date_range',
     'generate_website_slug',
     'update_poll_results',
+    'update_bill_summaries',
 ]

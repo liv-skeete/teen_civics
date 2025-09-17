@@ -213,6 +213,108 @@ def inject_current_year():
     """Inject current year into all templates"""
     return {'current_year': datetime.now().year}
 
+@app.template_filter('format_date')
+def format_date_filter(date_string):
+    """Convert datetime string to just the date portion (YYYY-MM-DD)"""
+    if not date_string:
+        return 'N/A'
+    try:
+        # Handle both full datetime and date-only strings
+        if 'T' in date_string:
+            dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+            return dt.strftime('%Y-%m-%d')
+        else:
+            return date_string
+    except (ValueError, TypeError):
+        return date_string
+
+@app.template_filter('shorten_title')
+def shorten_title_filter(title, max_length=80):
+    """Shorten a title to a reasonable length"""
+    if not title or len(title) <= max_length:
+        return title
+    
+    # Try to break at sentence boundaries first
+    sentences = title.split(';')
+    if len(sentences) > 1 and len(sentences[0].strip()) <= max_length:
+        return sentences[0].strip()
+    
+    # Otherwise truncate at word boundaries
+    words = title.split()
+    shortened = []
+    current_length = 0
+    
+    for word in words:
+        if current_length + len(word) + 1 > max_length:
+            break
+        shortened.append(word)
+        current_length += len(word) + 1
+    
+    return ' '.join(shortened) + ('...' if len(words) > len(shortened) else '')
+
+@app.template_filter('generate_congress_url')
+def generate_congress_url_filter(bill_id, congress_session):
+    """Generate a robust congress.gov URL from a bill_id and congress_session."""
+    if not bill_id or not congress_session:
+        return '#'
+    try:
+        import re
+        bid = str(bill_id).strip().lower()
+        
+        # Map bill type abbreviations to congress.gov path segments
+        # Check longest patterns first to avoid "hr" matching "hres"
+        type_patterns = [
+            ('hconres', 'house-concurrent-resolution'),
+            ('hjres', 'house-joint-resolution'),
+            ('hres', 'house-resolution'),
+            ('hr', 'house-bill'),
+            ('sconres', 'senate-concurrent-resolution'),
+            ('sjres', 'senate-joint-resolution'),
+            ('sres', 'senate-resolution'),
+            ('s', 'senate-bill'),
+        ]
+        
+        bill_type = None
+        bill_number = None
+        full_type = None
+        
+        for pattern, congress_type in type_patterns:
+            if bid.startswith(pattern):
+                # Extract the number part after the bill type
+                remainder = bid[len(pattern):]
+                # Extract just the numeric part (before any dash or non-digit)
+                number_match = re.match(r'^(\d+)', remainder)
+                if number_match:
+                    bill_type = pattern
+                    bill_number = number_match.group(1)
+                    full_type = congress_type
+                    break
+        
+        if not bill_type or not bill_number or not full_type:
+            return f"https://www.congress.gov/search?q={bill_id}"
+
+        # Ensure numeric pieces are clean
+        try:
+            congress_int = int(str(congress_session).strip())
+            bill_num_int = int(bill_number)
+        except Exception:
+            return f"https://www.congress.gov/search?q={bill_id}"
+
+        return f"https://www.congress.gov/bill/{congress_int}th-congress/{full_type}/{bill_num_int}"
+    except Exception:
+        return f"https://www.congress.gov/search?q={bill_id}"
+
+@app.template_filter('from_json')
+def from_json_filter(json_str):
+    """Parse JSON string into Python object"""
+    if not json_str:
+        return None
+    try:
+        import json
+        return json.loads(json_str)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+
 if __name__ == '__main__':
     # Development server (disable reloader to avoid multiple processes)
     port = int(os.environ.get('PORT', os.environ.get('FLASK_RUN_PORT', 5050)))

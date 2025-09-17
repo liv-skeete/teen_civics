@@ -819,3 +819,135 @@ a:hover {
         font-size: var(--font-size-sm);
     }
 }
+
+/* New styles for UI fixes */
+.full-bill-title {
+    margin-top: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--color-dark-gray);
+    line-height: 1.4;
+}
+
+.bill-meta-bottom {
+    margin-top: var(--spacing-xl);
+    padding: var(--spacing-md);
+    background-color: var(--color-light-gray);
+    border-radius: var(--border-radius);
+    border-top: 2px solid var(--color-gray);
+}
+
+.meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid var(--color-gray);
+}
+
+.meta-item:last-child {
+    border-bottom: none;
+}
+
+.meta-label {
+    font-weight: 600;
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-sm);
+}
+
+.meta-value {
+    font-size: var(--font-size-sm);
+    color: var(--color-brown-black);
+}
+
+.tags-section {
+    margin: var(--spacing-lg) 0;
+}
+
+.tags-section h4 {
+    margin-bottom: var(--spacing-sm);
+    color: var(--color-brown-black);
+}
+
+/* Responsive adjustments for metadata */
+@media (max-width: 768px) {
+    .meta-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+    }
+    
+    .meta-label {
+        font-size: var(--font-size-xs);
+    }
+    
+    .meta-value {
+        font-size: var(--font-size-xs);
+    }
+}
+
+/* Summary formatting preservation */
+.overview-text,
+.detailed-summary-text,
+.term-content {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    line-height: 1.6;
+}
+
+.overview-text {
+    font-size: var(--font-size-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.detailed-summary-text {
+    font-size: var(--font-size-md);
+    line-height: 1.7;
+}
+
+/* Ensure proper spacing for emoji sections */
+.detailed-summary-text h4,
+.detailed-summary-text p {
+    margin-bottom: var(--spacing-sm);
+}
+
+/* Preserve bullet point formatting */
+.detailed-summary-text ul,
+.detailed-summary-text ol {
+    margin: var(--spacing-sm) 0;
+    padding-left: var(--spacing-lg);
+}
+
+.detailed-summary-text li {
+    margin-bottom: var(--spacing-xs);
+}
+/* Bill Detail Page */
+.bill-detail .overview-text p,
+.bill-detail .detailed-summary-text p {
+    white-space: pre-wrap;
+    margin-bottom: var(--spacing-md);
+}
+
+.bill-detail .detailed-summary-text strong {
+    display: block;
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-lg);
+}
+
+.bill-detail .detailed-summary-text ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.bill-detail .detailed-summary-text li {
+    margin-bottom: var(--spacing-sm);
+    padding-left: var(--spacing-md);
+    position: relative;
+}
+
+.bill-detail .detailed-summary-text li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--color-navy);
+}

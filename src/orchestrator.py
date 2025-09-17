@@ -44,7 +44,7 @@ def main() -> int:
 
         # Import modules
         from src.fetchers.congress_fetcher import get_recent_bills
-        from src.processors.summarizer import summarize_bill
+        from src.processors.summarizer import summarize_bill_enhanced
         from src.publishers.twitter_publisher import post_tweet
         from src.database.db import bill_exists, insert_bill, update_tweet_info, generate_website_slug
         
@@ -77,12 +77,15 @@ def main() -> int:
         bill_id = bill.get("bill_id", "unknown")
         logger.info(f"Processing bill: {bill_id}")
         
-        # Step 3: Summarize the bill
-        logger.info("Summarizing bill...")
-        summary = summarize_bill(bill)
+        # Step 3: Summarize the bill with enhanced format
+        logger.info("Summarizing bill with enhanced format...")
+        summary = summarize_bill_enhanced(bill)
         
         tweet_text = summary.get("tweet", "").strip()
         long_summary = summary.get("long", "").strip()
+        overview = summary.get("overview", "").strip()
+        detailed = summary.get("detailed", "").strip()
+        term_dictionary = summary.get("term_dictionary", "").strip()
         
         if not tweet_text or not long_summary:
             logger.error("No valid summary generated from bill")
@@ -99,6 +102,9 @@ def main() -> int:
             "status": bill.get("status", ""),
             "summary_tweet": tweet_text,
             "summary_long": long_summary,
+            "summary_overview": overview,
+            "summary_detailed": detailed,
+            "term_dictionary": term_dictionary,
             "congress_session": bill.get("congress", ""),
             "date_introduced": bill.get("introduced_date", ""),
             "source_url": bill.get("congressdotgov_url", ""),

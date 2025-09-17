@@ -15,48 +15,59 @@
 <div class="container bill-detail">
     <article class="bill-card">
         <div class="bill-header">
-            <div class="bill-meta">
-                <span class="bill-id">{{ bill.bill_id }}</span>
-                <span class="bill-date">Introduced {{ bill.date_introduced }}</span>
-                <span class="bill-status {{ bill.status|lower|replace(' ', '-') }}">{{ bill.status }}</span>
-            </div>
-            <h1 class="bill-title">{{ bill.title }}</h1>
+            <h1 class="bill-title">{{ bill.title|shorten_title }}</h1>
+            {% if bill.title|length > 80 %}
+            <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
+            {% endif %}
             {% if bill.short_title %}
             <h2 class="bill-short-title">{{ bill.short_title }}</h2>
             {% endif %}
         </div>
 
         <div class="bill-content">
-            <div class="summary-section">
-                <h3>Summary</h3>
-                <div class="summary-text">
-                    {{ bill.summary_long|e|replace('\n', '<br>')|safe }}
+            <div class="overview-section">
+                <h3>Overview</h3>
+                <div class="overview-text">
+                    {% if bill.summary_overview %}
+                        <p>{{ bill.summary_overview|safe }}</p>
+                    {% else %}
+                        <p>{{ bill.summary_long|safe }}</p>
+                    {% endif %}
                 </div>
             </div>
 
-            <div class="bill-details">
-                <div class="detail-item">
-                    <h4>Congress Session</h4>
-                    <p>{{ bill.congress_session or 'Not specified' }}</p>
+            <div class="detailed-summary-section">
+                <h3>Detailed Summary</h3>
+                <div class="detailed-summary-text">
+                    {% if bill.summary_detailed %}
+                        <div>{{ bill.summary_detailed
+                            |replace('🔎 Overview', '<h4>🔎 Overview</h4>')
+                            |replace('🔑 Key Provisions', '<h4>🔑 Key Provisions</h4>')
+                            |replace('⚖️ Policy Riders or Key Rules', '<h4>⚖️ Policy Riders or Key Rules</h4>')
+                            |replace('📌 Procedural/Administrative Notes', '<h4>📌 Procedural/Administrative Notes</h4>')
+                            |replace('👉 In short', '<h4>👉 In short</h4>')
+                            |replace('• ', '<br>• ')
+                            |replace('- ', '<br>&nbsp;&nbsp;- ')
+                            |safe }}</div>
+                    {% else %}
+                        <p>{{ bill.summary_long|replace('\n', '<br>')|safe }}</p>
+                    {% endif %}
                 </div>
-                <div class="detail-item">
-                    <h4>Date Processed</h4>
-                    <p>{{ bill.date_processed }}</p>
-                </div>
-                {% if bill.tags %}
-                <div class="detail-item">
-                    <h4>Tags</h4>
-                    <div class="tags">
-                        {% for tag in bill.tags.split(',') %}
-                        <span class="tag">{{ tag.strip() }}</span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
             </div>
+
+            {% if bill.tags %}
+            <div class="tags-section">
+                <h4>Tags</h4>
+                <div class="tags">
+                    {% for tag in bill.tags.split(',') %}
+                    <span class="tag">{{ tag.strip() }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
 
             <div class="bill-actions">
-                <a href="{{ bill.source_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+                <a href="{{ bill.bill_id|generate_congress_url(bill.congress_session) }}" target="_blank" rel="noopener" class="btn btn-primary">
                     Read Full Bill on Congress.gov
                 </a>
                 {% if bill.tweet_url %}
@@ -107,6 +118,66 @@
             </div>
             <div class="poll-message"></div>
         </div>
+
+        <!-- Bill metadata moved to bottom -->
+        <div class="bill-meta-bottom">
+            <div class="meta-item">
+                <span class="meta-label">Bill ID:</span>
+                <span class="meta-value">{{ bill.bill_id }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Congress Session:</span>
+                <span class="meta-value">{{ bill.congress_session or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Date Processed:</span>
+                <span class="meta-value">{{ bill.date_processed|format_date }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Introduced:</span>
+                <span class="meta-value">{{ bill.date_introduced or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Status:</span>
+                <span class="meta-value bill-status {{ (bill.status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.status or 'Unknown' }}</span>
+            </div>
+        </div>
+
+        <!-- Term Dictionary Section -->
+        <div class="term-dictionary-section">
+            <h3>Term Dictionary</h3>
+            <div class="term-dictionary-content">
+                {% if bill.term_dictionary %}
+                    {% set term_data = bill.term_dictionary|from_json %}
+                    {% if term_data and term_data is iterable %}
+                        <div class="term-content">
+                            <dl class="term-list">
+                                {% for term_item in term_data %}
+                                    {% if term_item.term and term_item.definition %}
+                                        <dt class="term-name">{{ term_item.term }}</dt>
+                                        <dd class="term-definition">{{ term_item.definition }}</dd>
+                                    {% endif %}
+                                {% endfor %}
+                            </dl>
+                        </div>
+                    {% else %}
+                        <div class="term-content">
+                            {{ bill.term_dictionary|e }}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p><em>Terms will be defined here to help explain complex legislative language.</em></p>
+                {% endif %}
+                
+                <div class="term-resources">
+                    <p><strong>Additional Resources:</strong></p>
+                    <ul>
+                        <li><a href="https://www.congress.gov/help/legislative-glossary" target="_blank" rel="noopener">📚 Congress.gov Legislative Glossary</a> - Comprehensive congressional terms</li>
+                        <li><a href="https://www.nvfc.org/glossary-of-congressional-terms/" target="_blank" rel="noopener">📖 NVFC Congressional Terms Glossary</a> - Concise, easy-to-understand definitions</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
     </article>
 
     <div class="navigation-links">
@@ -121,7 +192,8 @@
 
 <script>
 function shareOnTwitter() {
-    const text = "Check out this congressional bill summary on TeenCivics: {{ bill.title }}";
+    const title = "{{ bill.title|truncate(120) }}";
+    const text = `Check out this bill summary: ${title}`;
     const url = window.location.href;
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
 }

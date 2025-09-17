@@ -16,12 +16,10 @@
     {% if bill %}
     <article class="bill-card featured-bill">
         <div class="bill-header">
-            <div class="bill-meta">
-                <span class="bill-id">{{ bill.bill_id }}</span>
-                <span class="bill-date">Introduced {{ bill.date_introduced or 'N/A' }}</span>
-                <span class="bill-status {{ (bill.status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.status or 'Unknown' }}</span>
-            </div>
-            <h2 class="bill-title">{{ bill.title }}</h2>
+            <h2 class="bill-title">{{ bill.title|shorten_title }}</h2>
+            {% if bill.title|length > 80 %}
+            <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
+            {% endif %}
             {% if bill.short_title %}
             <h3 class="bill-short-title">{{ bill.short_title }}</h3>
             {% endif %}
@@ -36,7 +34,7 @@
             </div>
 
             <div class="bill-actions">
-                <a href="{{ bill.source_url }}" target="_blank" rel="noopener" class="btn btn-primary">
+                <a href="{{ bill.bill_id|generate_congress_url(bill.congress_session) }}" target="_blank" rel="noopener" class="btn btn-primary">
                     Read Full Bill on Congress.gov
                 </a>
                 <a href="/bills/{{ bill.website_slug }}" class="btn btn-secondary">
@@ -76,6 +74,30 @@
                 <p class="total-votes">Total votes: <span class="votes-count">0</span></p>
             </div>
             <div class="poll-message"></div>
+        </div>
+
+        <!-- Bill metadata moved to bottom -->
+        <div class="bill-meta-bottom">
+            <div class="meta-item">
+                <span class="meta-label">Bill ID:</span>
+                <span class="meta-value">{{ bill.bill_id }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Congress Session:</span>
+                <span class="meta-value">{{ bill.congress_session or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Date Processed:</span>
+                <span class="meta-value">{{ bill.date_processed|format_date }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Introduced:</span>
+                <span class="meta-value">{{ bill.date_introduced or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Status:</span>
+                <span class="meta-value bill-status {{ (bill.status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.status or 'Unknown' }}</span>
+            </div>
         </div>
     </article>
     {% else %}

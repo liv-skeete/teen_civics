@@ -38,17 +38,22 @@
         {% for bill in bills %}
         <article class="bill-card">
             <div class="bill-header">
-                <div class="bill-meta">
-                    <span class="bill-id">{{ bill.bill_id }}</span>
-                    <span class="bill-date">{{ bill.date_introduced }}</span>
-                    <span class="bill-status {{ bill.status|lower|replace(' ', '-') }}">{{ bill.status }}</span>
-                </div>
                 <h2 class="bill-title">
-                    <a href="/bills/{{ bill.website_slug }}">{{ bill.title }}</a>
+                    <a href="/bills/{{ bill.website_slug }}">{{ bill.title|shorten_title }}</a>
                 </h2>
+                {% if bill.title|length > 80 %}
+                <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
+                {% endif %}
                 {% if bill.short_title %}
                 <h3 class="bill-short-title">{{ bill.short_title }}</h3>
                 {% endif %}
+                
+                <!-- Bill metadata moved here -->
+                <div class="bill-meta">
+                    <span class="bill-id">{{ bill.bill_id }}</span>
+                    <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
+                    <span class="bill-status {{ bill.status|lower|replace(' ', '-') }}">{{ bill.status }}</span>
+                </div>
             </div>
 
             <div class="bill-content">
