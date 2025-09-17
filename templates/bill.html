@@ -29,9 +29,9 @@
                 <h3>Overview</h3>
                 <div class="overview-text">
                     {% if bill.summary_overview %}
-                        <p>{{ bill.summary_overview|safe }}</p>
+                        <div>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</div>
                     {% else %}
-                        <p>{{ bill.summary_long|safe }}</p>
+                        <div>{{ bill.summary_long|e|replace('\n', '<br>')|safe }}</div>
                     {% endif %}
                 </div>
             </div>
@@ -40,17 +40,9 @@
                 <h3>Detailed Summary</h3>
                 <div class="detailed-summary-text">
                     {% if bill.summary_detailed %}
-                        <div>{{ bill.summary_detailed
-                            |replace('🔎 Overview', '<h4>🔎 Overview</h4>')
-                            |replace('🔑 Key Provisions', '<h4>🔑 Key Provisions</h4>')
-                            |replace('⚖️ Policy Riders or Key Rules', '<h4>⚖️ Policy Riders or Key Rules</h4>')
-                            |replace('📌 Procedural/Administrative Notes', '<h4>📌 Procedural/Administrative Notes</h4>')
-                            |replace('👉 In short', '<h4>👉 In short</h4>')
-                            |replace('• ', '<br>• ')
-                            |replace('- ', '<br>&nbsp;&nbsp;- ')
-                            |safe }}</div>
+                        <div>{{ bill.summary_detailed|format_detailed_html }}</div>
                     {% else %}
-                        <p>{{ bill.summary_long|replace('\n', '<br>')|safe }}</p>
+                        <div>{{ bill.summary_long|format_detailed_html }}</div>
                     {% endif %}
                 </div>
             </div>

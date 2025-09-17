@@ -267,55 +267,105 @@ def _select_best_text_url(text_meta: dict) -> tuple[str | None, str | None]:
 def _download_plain_text(url: str, fmt: str, limit: int) -> str | None:
     """
     Download and extract plain text from URL.
-    
-    Args:
-        url: URL to download text from
-        fmt: Format type ('html', 'txt', etc.)
-        limit: Maximum characters to return
-        
-    Returns:
-        Plain text content or None if download fails
+
+    Supports:
+      - html (BeautifulSoup if available; fallback to regex)
+      - txt
+      - xml (BeautifulSoup xml parser if available; fallback to regex)
+      - pdf (pdfminer.six)
+
+    Returns truncated text to 'limit' characters.
     """
     try:
         logger.info(f"Downloading text from: {url}")
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=45)
         response.raise_for_status()
-        
+
         content_type = response.headers.get('content-type', '').lower()
         logger.info(f"Content-Type: {content_type}, Format: {fmt}")
-        
-        # Determine processing method based on content-type and format
-        if 'html' in content_type or fmt == 'html':
-            # Simple HTML tag removal
-            import re
-            html_content = response.text
-            plain_text = re.sub(r"<[^>]+>", " ", html_content)
-            # Collapse whitespace
-            plain_text = re.sub(r"\s+", " ", plain_text).strip()
-            logger.info(f"Processed as HTML, extracted {len(plain_text)} characters")
+
+        plain_text: str | None = None
+
+        if 'pdf' in content_type or fmt == 'pdf':
+            # PDF extraction
+            try:
+                from io import BytesIO
+                from pdfminer.high_level import extract_text as pdf_extract_text
+                pdf_bytes = BytesIO(response.content)
+                pdf_text = pdf_extract_text(pdf_bytes) or ""
+                # Normalize whitespace but keep line breaks
+                import re
+                pdf_text = re.sub(r"[ \t]+", " ", pdf_text)
+                pdf_text = re.sub(r"\n{3,}", "\n\n", pdf_text)
+                plain_text = pdf_text.strip()
+                logger.info(f"Processed as PDF, extracted {len(plain_text)} characters")
+            except Exception as e:
+                logger.error(f"PDF extraction failed: {e}")
+                plain_text = None
+
+        elif 'html' in content_type or fmt == 'html':
+            # Prefer BeautifulSoup to preserve structure
+            try:
+                from bs4 import BeautifulSoup
+                html_content = response.text
+                soup = BeautifulSoup(html_content, "html.parser")
+                # Remove scripts/styles
+                for tag in soup(["script", "style", "noscript"]):
+                    tag.decompose()
+                text = soup.get_text(separator="\n")
+                import re
+                text = re.sub(r"[ \t]+", " ", text)
+                text = re.sub(r"\n{3,}", "\n\n", text)
+                plain_text = text.strip()
+                logger.info(f"Processed as HTML via BeautifulSoup, extracted {len(plain_text)} characters")
+            except Exception as e:
+                logger.warning(f"BeautifulSoup unavailable or failed ({e}); falling back to regex")
+                import re
+                html_content = response.text
+                text = re.sub(r"<[^>]+>", " ", html_content)
+                text = re.sub(r"\s+", " ", text).strip()
+                plain_text = text
+                logger.info(f"Processed as HTML via regex, extracted {len(plain_text)} characters")
+
         elif 'text/plain' in content_type or fmt == 'txt':
             plain_text = response.text.strip()
             logger.info(f"Processed as plain text, extracted {len(plain_text)} characters")
+
         elif 'xml' in content_type or fmt == 'xml':
-            # Simple XML tag removal (similar to HTML)
-            import re
-            xml_content = response.text
-            plain_text = re.sub(r"<[^>]+>", " ", xml_content)
-            plain_text = re.sub(r"\s+", " ", plain_text).strip()
-            logger.info(f"Processed as XML, extracted {len(plain_text)} characters")
+            try:
+                from bs4 import BeautifulSoup
+                xml_content = response.text
+                soup = BeautifulSoup(xml_content, "xml")
+                text = soup.get_text(separator="\n")
+                import re
+                text = re.sub(r"[ \t]+", " ", text)
+                text = re.sub(r"\n{3,}", "\n\n", text)
+                plain_text = text.strip()
+                logger.info(f"Processed as XML via BeautifulSoup, extracted {len(plain_text)} characters")
+            except Exception as e:
+                logger.warning(f"BeautifulSoup XML parse failed ({e}); falling back to regex")
+                import re
+                xml_content = response.text
+                text = re.sub(r"<[^>]+>", " ", xml_content)
+                text = re.sub(r"\s+", " ", text).strip()
+                plain_text = text
+                logger.info(f"Processed as XML via regex, extracted {len(plain_text)} characters")
         else:
             logger.warning(f"Cannot extract plain text from format: {fmt} with content-type: {content_type}")
             return None
-            
+
+        if plain_text is None:
+            return None
+
         # Truncate to safe limit
         if len(plain_text) > limit:
             original_len = len(plain_text)
             plain_text = plain_text[:limit]
             logger.info(f"Truncated text from {original_len} to {limit} characters")
-            
+
         logger.info(f"Successfully downloaded {len(plain_text)} characters of plain text")
         return plain_text
-        
+
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to download text: {e}")
         return None
@@ -327,54 +377,87 @@ def _download_plain_text(url: str, fmt: str, limit: int) -> str | None:
 def _enrich_bill_with_text(bill: dict, text_chars: int) -> dict:
     """
     Enrich bill data with full text content.
-    
-    Args:
-        bill: Processed bill dictionary
-        text_chars: Maximum characters to include
-        
-    Returns:
-        Enriched bill dictionary
+
+    Strategy:
+      1) Fetch latest text metadata
+      2) Try preferred formats in order: html → txt → xml → pdf
+      3) If first attempt yields no text or very short text, iterate all available formats and
+         pick the longest successful extraction.
     """
     congress = bill.get('congress')
     bill_type = bill.get('bill_type')
     bill_number = bill.get('bill_number')
-    
+
     if not all([congress, bill_type, bill_number]):
         logger.warning("Missing required identifiers for text enrichment")
         return bill
-        
+
     # Fetch text metadata
     text_meta = _fetch_text_metadata(congress, bill_type, bill_number)
     if not text_meta:
         logger.warning(f"No text metadata found for {bill_type}{bill_number}-{congress}")
         return bill
-        
-    # Select best text URL
-    format_type, text_url = _select_best_text_url(text_meta)
-    if not text_url:
-        logger.warning(f"No suitable text URL found for {bill_type}{bill_number}-{congress}")
-        return bill
-        
-    logger.info(f"Selected text format: {format_type}, URL: {text_url}")
-        
-    # Download and process text if format is suitable
-    full_text = None
-    if format_type and format_type in ['html', 'txt', 'xml']:
-        full_text = _download_plain_text(text_url, format_type, text_chars)
-    
-    # Add text information to bill
-    bill['text_url'] = text_url
-    bill['text_format'] = format_type
-    
-    if full_text:
-        bill['full_text'] = full_text
-        logger.info(f"Added {len(full_text)} characters of text to bill {bill['bill_id']}")
-        # Log a small snippet for verification
-        snippet = full_text[:200] + "..." if len(full_text) > 200 else full_text
+
+    # Gather all candidate formats/urls (keep order preference)
+    candidates: list[tuple[str, str]] = []
+    try:
+        text_versions = text_meta.get("textVersions", [])
+        latest = text_versions[0] if text_versions else {}
+        fmts = latest.get("formats", [])
+        # Normalize and prioritize
+        # Preference order
+        preferred = ["html", "txt", "xml", "pdf"]
+        normalized = []
+        for f in fmts:
+            original = (f.get("type") or "").lower()
+            normalized_type = _normalize_format_type(original)
+            url = f.get("url")
+            if url:
+                normalized.append((normalized_type, url))
+        # Sort by preference rank
+        rank = {t: i for i, t in enumerate(preferred)}
+        normalized.sort(key=lambda t: rank.get(t[0], 999))
+        candidates = normalized
+    except Exception as e:
+        logger.warning(f"Failed to enumerate formats from metadata: {e}")
+        # Fallback to selector
+        fmt, url = _select_best_text_url(text_meta)
+        if url:
+            candidates = [(fmt, url)]
+
+    best_text = None
+    best_fmt = None
+    best_url = None
+
+    # Try candidates until we get a decent-sized text
+    for fmt, url in candidates:
+        text = None
+        try:
+            text = _download_plain_text(url, fmt, text_chars)
+        except Exception as e:
+            logger.warning(f"Extraction failed for {fmt} at {url}: {e}")
+            continue
+
+        if text:
+            if best_text is None or len(text) > len(best_text):
+                best_text, best_fmt, best_url = text, fmt, url
+            # Early accept if reasonably large (heuristic)
+            if len(text) >= 5000:
+                break
+
+    # Record results
+    if best_url:
+        bill['text_url'] = best_url
+        bill['text_format'] = best_fmt
+
+    if best_text:
+        bill['full_text'] = best_text
+        logger.info(f"Attached full text (fmt={best_fmt}) with {len(best_text)} chars to bill {bill.get('bill_id')}")
+        snippet = best_text[:200] + "..." if len(best_text) > 200 else best_text
         logger.info(f"Text snippet: {snippet}")
     else:
-        logger.info(f"Added text URL ({format_type}) but no plain text content for bill {bill['bill_id']}")
-        
+        logger.info(f"Added text URL metadata but no extractable text for bill {bill.get('bill_id')}")
+
     return bill
 
 

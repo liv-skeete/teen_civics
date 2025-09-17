@@ -68,7 +68,10 @@ def _build_enhanced_system_prompt() -> str:
         "- Do not invent facts or numbers. Only use information present in the provided bill data.\n"
         "- Keep summaries clear, neutral, and accessible for a teen civic audience.\n"
         "- Avoid partisan framing, speculation, direct address to reader (no 'you', 'Liv', etc.).\n"
-        "- No exclamations or opinion language. Maintain neutral, factual tone.\n\n"
+        "- No exclamations or opinion language. Maintain neutral, factual tone.\n"
+        "- Do NOT use hedging/uncertainty words (e.g., 'may', 'could', 'might', 'likely', 'appears'). State only what the bill or metadata explicitly says.\n"
+        "- If a detail is not present in the bill text or provided metadata, omit it rather than speculate.\n"
+        "- Use present-tense factual verbs (e.g., 'specifies', 'includes', 'authorizes', 'requires').\n\n"
         "**overview (short summary):**\n"
         "- One short paragraph in plain language that identifies the bill type, scope, and purpose.\n"
         "- Should be concise but informative, setting context for the detailed summary.\n\n"
@@ -660,7 +663,9 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     tweet = str(parsed.get("tweet", "")).strip()
     
     # Apply post-processing to detailed summary
-    logger.info("Applying post-processing validators to detailed summary...")
+    logger.info("Applying post-processing validators to enhanced summary...")
+    overview = enforce_non_speculative_language(overview)
+    detailed = enforce_non_speculative_language(detailed)
     detailed = clean_summary_formatting(detailed)
     detailed = ensure_emoji_sections(detailed, bill)
     detailed = normalize_detail_length(detailed, bill)
@@ -884,6 +889,73 @@ def clean_summary_formatting(detailed: str) -> str:
     cleaned = re.sub(r'\n-([^\s])', r'\n- \1', cleaned)
     cleaned = re.sub(r'\n•([^\s])', r'\n• \1', cleaned)
     
+def enforce_non_speculative_language(text: str) -> str:
+    """
+    Remove hedging/uncertainty language from model output while preserving content.
+    Targets words like: may, could, might, likely, appears (to), potentially, possibly.
+    Keeps structure (emoji headers, bullets, newlines) intact.
+
+    This is a conservative pass: it removes hedge tokens rather than trying to
+    conjugate verbs, to avoid introducing hallucinated certainty. Example:
+      "may restrict" -> "restrict"
+      "could include" -> "include"
+    """
+    if not text:
+        return text
+    import re
+
+    # Normalize newlines to operate line-by-line
+    s = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    lines = s.split("\n")
+    out_lines = []
+
+    # Pre-compile patterns (case-insensitive)
+    # Order matters: handle multi-word phrases first
+    replacements = [
+        (re.compile(r"\bappears\s+to\b", re.IGNORECASE), ""),      # "appears to"
+        (re.compile(r"\bkind\s+of\b", re.IGNORECASE), ""),         # misc hedge
+        (re.compile(r"\bsort\s+of\b", re.IGNORECASE), ""),         # misc hedge
+        (re.compile(r"\b(?:may|could|might|likely|potentially|possibly)\b", re.IGNORECASE), ""),
+        (re.compile(r"\bappears\b", re.IGNORECASE), ""),
+        # Clean duplicated spaces
+    ]
+
+    def clean_spaces(t: str) -> str:
+        # Collapse multiple spaces, fix " -  " etc., preserve leading bullet symbols.
+        t = re.sub(r"[ \t]+", " ", t)
+        t = re.sub(r" ?-  ?", "- ", t)
+        t = re.sub(r" ?•  ?", "• ", t)
+        return t.strip()
+
+    for ln in lines:
+        original = ln
+        # Skip empty lines quickly
+        if not ln.strip():
+            out_lines.append(ln)
+            continue
+
+        # Do not alter emoji headers other than trimming spaces
+        if ln.lstrip().startswith(("🔎", "🔑", "⚖️", "📌", "👉", "📋", "🏛️")):
+            out_lines.append(ln.strip())
+            continue
+
+        # Process regular/bullet lines: remove hedges conservatively
+        t = ln
+        for pat, repl in replacements:
+            t = pat.sub(repl, t)
+
+        # Normalize leftover "  " and spacing near bullets/dashes
+        t = clean_spaces(t)
+
+        # Minor grammar cleanup: drop dangling "that" if it follows removed hedge (rare)
+        t = re.sub(r"\bthat\s+that\b", "that", t, flags=re.IGNORECASE)
+
+        # If line is a bullet without space after symbol, fix it
+        t = re.sub(r"^(\s*)([-•])([^\s])", r"\1\2 \3", t)
+
+        out_lines.append(t if t else original)
+
+    return "\n".join(out_lines)
     # Clean up final spacing
     cleaned = cleaned.strip()
     

@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, abort, url_for
 from flask_cors import CORS
+from markupsafe import Markup, escape
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -314,6 +315,58 @@ def from_json_filter(json_str):
         return json.loads(json_str)
     except (ValueError, TypeError, json.JSONDecodeError):
         return None
+
+@app.template_filter('format_detailed_html')
+def format_detailed_html_filter(text: str) -> Markup:
+    """
+    Convert structured plain text summary (with emoji headers and bullets) into clean HTML.
+    - Emoji headers (🔎 🔑 ⚖️ 📌 👉 📋 🏛️) -> <h4> ... </h4>
+    - Bullets starting with "• " or "- " -> <ul><li>...</li> groups
+    - Other lines -> <p>...</p>
+    - Collapses blank lines between blocks.
+    Returns Markup to allow safe HTML rendering.
+    """
+    if not text:
+        return Markup("")
+
+    s = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    lines = [ln.strip() for ln in s.split("\n")]
+
+    html_parts = []
+    in_list = False
+
+    def close_list():
+        nonlocal in_list
+        if in_list:
+            html_parts.append("</ul>")
+            in_list = False
+
+    for ln in lines:
+        if not ln:
+            # blank line -> close any open list, skip adding empty paragraph
+            close_list()
+            continue
+
+        if ln.startswith(("🔎", "🔑", "⚖️", "📌", "👉", "📋", "🏛️")):
+            close_list()
+            html_parts.append(f"<h4>{escape(ln)}</h4>")
+            continue
+
+        stripped = ln.lstrip()
+        if stripped.startswith("• ") or stripped.startswith("- "):
+            if not in_list:
+                html_parts.append("<ul>")
+                in_list = True
+            bullet = stripped[2:].strip()
+            html_parts.append(f"<li>{escape(bullet)}</li>")
+            continue
+
+        # Default: regular paragraph line
+        close_list()
+        html_parts.append(f"<p>{escape(ln)}</p>")
+
+    close_list()
+    return Markup("".join(html_parts))
 
 if __name__ == '__main__':
     # Development server (disable reloader to avoid multiple processes)
