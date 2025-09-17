@@ -640,8 +640,10 @@ a:hover {
 .feature-card h3 {
     color: var(--color-navy);
     white-space: nowrap;
-    margin-left: -13px; /* Tiny left adjustment for perfect centering */
     text-align: center; /* Use text-align for better centering */
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 /* Error Page */
