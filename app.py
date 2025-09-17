@@ -133,6 +133,7 @@ def about():
     if not chosen:
         chosen = url_for('static', filename='img/creator.svg')
     return render_template('about.html', creator_photo=chosen)
+
 @app.route('/api/vote', methods=['POST'])
 def vote():
     """API endpoint for poll voting (supports changing vote)."""
@@ -320,52 +321,134 @@ def from_json_filter(json_str):
 def format_detailed_html_filter(text: str) -> Markup:
     """
     Convert structured plain text summary (with emoji headers and bullets) into clean HTML.
-    - Emoji headers (🔎 🔑 ⚖️ 📌 👉 📋 🏛️) -> <h4> ... </h4>
-    - Bullets starting with "• " or "- " -> <ul><li>...</li> groups
-    - Other lines -> <p>...</p>
-    - Collapses blank lines between blocks.
-    Returns Markup to allow safe HTML rendering.
+
+    Improvements:
+    - Inserts virtual line breaks before emoji section headers and bullet symbols when content
+      is delivered as one long line (so headers don't bold the entire paragraph).
+    - Converts inline bullets (… • A • B • C) into <ul><li>…</li></ul>.
+    - Supports simple hyphen sub-bullets inside a bullet using ' - ' as delimiter.
+    - Ensures lists are opened/closed correctly and blank lines collapse safely.
     """
     if not text:
         return Markup("")
 
+    import re
     s = str(text).replace("\r\n", "\n").replace("\r", "\n")
+
+    # 1) Normalize: ensure emoji headers and bullets start on their own lines
+    #    - Insert a newline before any emoji header if not already at line start
+    s = re.sub(r'(?<!^)([🔎🔑⚖️⚖📌👉📋🏛️])', r'\n\1', s)
+    #    - Insert a newline before each bullet symbol so bullets don't run inline
+    s = s.replace('•', '\n•')
+
     lines = [ln.strip() for ln in s.split("\n")]
 
-    html_parts = []
-    in_list = False
+    html_parts: list[str] = []
+    in_list_stack: list[bool] = []
 
-    def close_list():
-        nonlocal in_list
-        if in_list:
+    def open_list():
+        html_parts.append("<ul>")
+        in_list_stack.append(True)
+
+    def close_all_lists():
+        while in_list_stack:
             html_parts.append("</ul>")
-            in_list = False
+            in_list_stack.pop()
+
+    def emit_bullets_from_text(t: str):
+        """
+        Split text on '•' and render bullets. Sub-bullets split on ' - ' become nested <ul>.
+        """
+        tt = re.sub(r"[ \t]+", " ", (t or "").strip())
+        if not tt:
+            return
+
+        parts = [p.strip() for p in tt.split('•') if p.strip() != ""]
+        if not parts:
+            return
+
+        # If first part looks like a sentence and the rest are bullets, emit as paragraph then list
+        preface = ""
+        if not tt.startswith('•') and len(parts) > 1:
+            preface = parts[0]
+            bullets = parts[1:]
+        else:
+            bullets = parts
+
+        if preface:
+            html_parts.append(f"<p>{escape(preface)}</p>")
+
+        if bullets:
+            open_list()
+            for bt in bullets:
+                subparts = [sp.strip() for sp in re.split(r"\s+-\s+", bt) if sp.strip()]
+                if not subparts:
+                    continue
+                main = subparts[0]
+                html_parts.append(f"<li>{escape(main)}")
+                if len(subparts) > 1:
+                    html_parts.append("<ul>")
+                    for sp in subparts[1:]:
+                        html_parts.append(f"<li>{escape(sp)}</li>")
+                    html_parts.append("</ul>")
+                html_parts.append("</li>")
+            close_all_lists()
+
+    known_headers = [
+        "🔎 Overview",
+        "🔑 Key Provisions",
+        "⚖️ Policy Riders or Key Rules",
+        "⚖️ Policy Riders or Key Rules/Changes",
+        "📌 Procedural/Administrative Notes",
+        "👉 In short",
+        "📋 House Resolution Procedures",
+        "📋 Senate Resolution Procedures",
+        "📋 House Bill Legislative Process",
+        "📋 Senate Bill Legislative Process",
+        "🏛️ Legislative Status Context",
+    ]
+    header_body_re = re.compile(r'^([🔎🔑⚖️📌👉📋🏛️][^:]*?)(?::\s*|\s+)?(.*)$')
 
     for ln in lines:
         if not ln:
-            # blank line -> close any open list, skip adding empty paragraph
-            close_list()
+            close_all_lists()
             continue
 
+        # Section header anywhere at the start of the line
         if ln.startswith(("🔎", "🔑", "⚖️", "📌", "👉", "📋", "🏛️")):
-            close_list()
-            html_parts.append(f"<h4>{escape(ln)}</h4>")
+            close_all_lists()
+            header = None
+            body = ""
+            for kh in known_headers:
+                if ln.startswith(kh):
+                    header = kh
+                    body = ln[len(kh):].strip()
+                    break
+            if header is None:
+                m = header_body_re.match(ln)
+                if m:
+                    header = m.group(1).strip()
+                    body = m.group(2).strip()
+                else:
+                    header = ln.strip()
+                    body = ""
+            html_parts.append(f"<h4>{escape(header)}</h4>")
+            if body:
+                # body might contain inline bullets after normalization
+                if '•' in body:
+                    emit_bullets_from_text(body)
+                else:
+                    html_parts.append(f"<p>{escape(body)}</p>")
             continue
 
-        stripped = ln.lstrip()
-        if stripped.startswith("• ") or stripped.startswith("- "):
-            if not in_list:
-                html_parts.append("<ul>")
-                in_list = True
-            bullet = stripped[2:].strip()
-            html_parts.append(f"<li>{escape(bullet)}</li>")
-            continue
+        # Non-header: either bullets or a plain paragraph
+        if '•' in ln:
+            emit_bullets_from_text(ln)
+        else:
+            close_all_lists()
+            html_parts.append(f"<p>{escape(ln)}</p>")
 
-        # Default: regular paragraph line
-        close_list()
-        html_parts.append(f"<p>{escape(ln)}</p>")
-
-    close_list()
+    close_all_lists()
     return Markup("".join(html_parts))
 
 if __name__ == '__main__':

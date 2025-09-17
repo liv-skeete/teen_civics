@@ -29,7 +29,18 @@
             <div class="summary-section">
                 <h3>Summary</h3>
                 <div class="summary-text">
-                    {{ bill.summary_long|e|replace('\n', '<br>')|safe }}
+                    {% if bill.summary_overview or bill.summary_detailed %}
+                        {% if bill.summary_overview %}
+                            <p>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</p>
+                        {% endif %}
+                        {% if bill.summary_detailed %}
+                            <div>{{ bill.summary_detailed|format_detailed_html }}</div>
+                        {% else %}
+                            <div>{{ bill.summary_long|format_detailed_html }}</div>
+                        {% endif %}
+                    {% else %}
+                        <div>{{ bill.summary_long|format_detailed_html }}</div>
+                    {% endif %}
                 </div>
             </div>
 

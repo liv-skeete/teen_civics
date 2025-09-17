@@ -356,6 +356,34 @@ a:hover {
 
 .summary-text {
     line-height: 1.8;
+    font-weight: 400; /* ensure body copy is not bold */
+}
+
+/* Ensure headings inside summary are distinct but do not bold entire body */
+.summary-text h4 {
+    font-weight: 600;
+    margin: var(--spacing-md) 0 var(--spacing-xs);
+}
+
+/* Proper list styling for parsed bullets */
+.summary-text ul {
+    list-style: disc outside;
+    margin: var(--spacing-sm) 0 var(--spacing-md) var(--spacing-lg);
+    padding-left: var(--spacing-lg);
+}
+.summary-text ul ul {
+    list-style: circle outside;
+    margin-top: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+}
+.summary-text li {
+    margin: 0 0 var(--spacing-xs) 0;
+    font-weight: 400; /* keep list items regular weight */
+}
+
+/* Paragraphs in summary remain regular weight */
+.summary-text p {
+    font-weight: 400;
 }
 
 .bill-actions {
@@ -950,4 +978,49 @@ a:hover {
     position: absolute;
     left: 0;
     color: var(--color-navy);
+}
+/* Term Dictionary styling */
+.term-dictionary-section {
+    margin: var(--spacing-lg) 0;
+    padding: var(--spacing-lg);
+    background-color: var(--color-light-gray);
+    border: var(--border-width) solid var(--color-gray);
+    border-radius: var(--border-radius-lg);
+}
+
+.term-dictionary-section h3 {
+    margin-bottom: var(--spacing-md);
+}
+
+.term-dictionary-content {
+    margin-top: var(--spacing-sm);
+}
+
+.term-list {
+    margin: 0;
+    padding: 0;
+}
+
+.term-name {
+    font-weight: 600;
+    margin-top: var(--spacing-sm);
+    color: var(--color-brown-black);
+}
+
+.term-definition {
+    margin: 0 0 var(--spacing-sm) var(--spacing-md);
+    color: var(--color-dark-gray);
+}
+
+/* Ensure emoji-heavy text doesn't appear bold by default */
+.emoji-safe p,
+.emoji-safe li {
+    font-weight: 400;
+}
+
+/* Slight spacing tweak under h4 headers produced by summary formatter */
+.summary-text h4,
+.detailed-summary-text h4 {
+    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
 }

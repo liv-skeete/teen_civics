@@ -25,20 +25,55 @@
         </div>
 
         <div class="bill-content">
+            <!-- Term Dictionary Section -->
+            <div class="term-dictionary-section">
+                <h3>Term Dictionary</h3>
+                <div class="term-dictionary-content">
+                    {% if bill.term_dictionary %}
+                        {% set term_data = bill.term_dictionary|from_json %}
+                        {% if term_data and term_data is iterable %}
+                            <div class="term-content">
+                                <dl class="term-list">
+                                    {% for term_item in term_data %}
+                                        {% if term_item.term and term_item.definition %}
+                                            <dt class="term-name">{{ term_item.term }}</dt>
+                                            <dd class="term-definition">{{ term_item.definition }}</dd>
+                                        {% endif %}
+                                    {% endfor %}
+                                </dl>
+                            </div>
+                        {% else %}
+                            <div class="term-content">
+                                {{ bill.term_dictionary|e }}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <p><em>Terms will be defined here to help explain complex legislative language.</em></p>
+                    {% endif %}
+                    
+                    <div class="term-resources">
+                        <p><strong>Additional Resources:</strong></p>
+                        <ul>
+                            <li><a href="https://www.congress.gov/help/legislative-glossary" target="_blank" rel="noopener">📚 Congress.gov Legislative Glossary</a> - Comprehensive congressional terms</li>
+                            <li><a href="https://www.nvfc.org/glossary-of-congressional-terms/" target="_blank" rel="noopener">📖 NVFC Congressional Terms Glossary</a> - Concise, easy-to-understand definitions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
             <div class="overview-section">
                 <h3>Overview</h3>
-                <div class="overview-text">
+                <div class="overview-text emoji-safe">
                     {% if bill.summary_overview %}
-                        <div>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</div>
+                        <div>{{ bill.summary_overview|format_detailed_html }}</div>
                     {% else %}
-                        <div>{{ bill.summary_long|e|replace('\n', '<br>')|safe }}</div>
+                        <div>{{ bill.summary_long|format_detailed_html }}</div>
                     {% endif %}
                 </div>
             </div>
 
             <div class="detailed-summary-section">
                 <h3>Detailed Summary</h3>
-                <div class="detailed-summary-text">
+                <div class="detailed-summary-text emoji-safe">
                     {% if bill.summary_detailed %}
                         <div>{{ bill.summary_detailed|format_detailed_html }}</div>
                     {% else %}
@@ -135,41 +170,6 @@
             </div>
         </div>
 
-        <!-- Term Dictionary Section -->
-        <div class="term-dictionary-section">
-            <h3>Term Dictionary</h3>
-            <div class="term-dictionary-content">
-                {% if bill.term_dictionary %}
-                    {% set term_data = bill.term_dictionary|from_json %}
-                    {% if term_data and term_data is iterable %}
-                        <div class="term-content">
-                            <dl class="term-list">
-                                {% for term_item in term_data %}
-                                    {% if term_item.term and term_item.definition %}
-                                        <dt class="term-name">{{ term_item.term }}</dt>
-                                        <dd class="term-definition">{{ term_item.definition }}</dd>
-                                    {% endif %}
-                                {% endfor %}
-                            </dl>
-                        </div>
-                    {% else %}
-                        <div class="term-content">
-                            {{ bill.term_dictionary|e }}
-                        </div>
-                    {% endif %}
-                {% else %}
-                    <p><em>Terms will be defined here to help explain complex legislative language.</em></p>
-                {% endif %}
-                
-                <div class="term-resources">
-                    <p><strong>Additional Resources:</strong></p>
-                    <ul>
-                        <li><a href="https://www.congress.gov/help/legislative-glossary" target="_blank" rel="noopener">📚 Congress.gov Legislative Glossary</a> - Comprehensive congressional terms</li>
-                        <li><a href="https://www.nvfc.org/glossary-of-congressional-terms/" target="_blank" rel="noopener">📖 NVFC Congressional Terms Glossary</a> - Concise, easy-to-understand definitions</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
     </article>
 
     <div class="navigation-links">
