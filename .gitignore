@@ -9,9 +9,9 @@ __pycache__/
 .env
 venv/
 ENV/
-.venv*/
-venv*/
-.env*/
+.venv*
+venv*
+.env*
 
 # OS files
 .DS_Store
@@ -22,5 +22,3 @@ Thumbs.db
 data/*.db
 
 # VSCode
-.vscode/.venv 3
-.venv2

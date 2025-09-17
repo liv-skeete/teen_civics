@@ -257,4 +257,23 @@ if __name__ == "__main__":
         logger.info(f"Formatted tweet: {tweet_text}")
         
         # Post the tweet
-       
+        logger.info("Attempting to post tweet...")
+        success, tweet_url = post_tweet(tweet_text)
+        
+        if success:
+            if tweet_url:
+                print(f"✅ Tweet posted successfully! {tweet_url}")
+            else:
+                print("✅ Tweet posted successfully! (URL not available)")
+        else:
+            print("❌ Failed to post tweet")
+            exit(1)
+            
+    except ImportError as e:
+        logger.error(f"Could not import congress_fetcher module: {e}")
+        print("❌ Congress fetcher module not available")
+        exit(1)
+    except Exception as e:
+        logger.error(f"Error in main execution: {e}")
+        print(f"❌ Error: {e}")
+        exit(1)
