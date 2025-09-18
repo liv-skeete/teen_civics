@@ -18,7 +18,7 @@ load_dotenv()
 
 # Prefer Claude 4 by default, allow override via environment variables
 PREFERRED_MODEL = os.getenv("ANTHROPIC_MODEL_PREFERRED", "claude-4")
-FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-3-5-sonnet-20241022")
+FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-3-haiku-20240307")
 
 
 def _ensure_api_key() -> str:

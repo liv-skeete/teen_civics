@@ -329,7 +329,9 @@ def format_detailed_html_filter(text: str) -> Markup:
         return Markup("")
 
     import re
-    s = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    # Strip any embedded HTML tags from the source text to prevent literal tags showing in output
+    s_raw = Markup(str(text)).striptags()
+    s = s_raw.replace("\r\n", "\n").replace("\r", "\n")
 
     # Normalize: ensure known emoji header tokens and bullets start on their own lines
     header_tokens = [
