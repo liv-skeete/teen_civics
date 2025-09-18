@@ -507,9 +507,11 @@ def _normalize_structured_text(value: Any) -> str:
     # Remove standalone quotes and commas on their own lines
     text = re.sub(r"^\s*[',\"]\s*$", "", text, flags=re.MULTILINE)
     
-    # Repair split header variants (case-insensitive)
-    text = re.sub(r"(Key Rules)\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
-    text = re.sub(r"(Policy Riders or Key Rules)\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
+    # Repair split header variants (case-insensitive) - handle newlines and spaces
+    text = re.sub(r"(Key Rules)\s*\n?\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
+    text = re.sub(r"(Policy Riders or Key Rules)\s*\n?\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
+    # Also handle the specific case where /Changes appears on its own line
+    text = re.sub(r"(⚖️ Policy Riders or Key Rules)\s*\n\s*/Changes", r"\1/Changes", text, flags=re.IGNORECASE)
     
     # Clean up excessive whitespace and blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
