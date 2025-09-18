@@ -32,4 +32,6 @@ __all__ = [
     'get_bill_by_slug',
     'get_bills_by_date_range',
     'generate_website_slug',
- 
+    'update_poll_results',
+    'update_bill_summaries',
+]

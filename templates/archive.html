@@ -129,4 +129,9 @@
     {% else %}
     <div class="no-bills-message">
         <h2>No bills found</h2>
-        <p>{% if 
+        <p>{% if status_filter != 'all' %}No bills with status "{{ status_filter }}" found.{% else %}No bills available in the archive yet.{% endif %}</p>
+        <a href="/archive?status=all" class="btn btn-primary">View All Bills</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

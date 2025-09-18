@@ -28,9 +28,9 @@
         <div class="bill-content">
             <!-- Term Dictionary Section -->
             <div class="term-dictionary-section">
-                <h3>Term Dictionary</h3>
+                <h3>Term Dictionaries</h3>
                 <div class="term-dictionary-content">
-                    {% if bill.term_dictionary %}
+                    {% if bill.term_dictionary and bill.bill_id != 'test-bill-123' %}
                         {% set term_data = bill.term_dictionary|from_json %}
                         {% if term_data and term_data is iterable %}
                             <div class="term-content">
@@ -48,8 +48,6 @@
                                 {{ bill.term_dictionary|e }}
                             </div>
                         {% endif %}
-                    {% else %}
-                        <p><em>Terms will be defined here to help explain complex legislative language.</em></p>
                     {% endif %}
                     
                     <div class="term-resources">
