@@ -14,10 +14,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -28,7 +28,7 @@ jobs:
 
     - name: Debug secrets presence
       env:
-        CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY || secrets.CONGRESS_GOV_API_KEY }}
+        CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY || secrets.CONGRESS_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
         TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
