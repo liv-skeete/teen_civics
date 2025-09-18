@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 # Load environment variables at import time for CLI and function usage
 load_dotenv()
 
-PREFERRED_MODEL = "claude-3-5-sonnet-20240620"
-FALLBACK_MODEL = "claude-3-haiku-20240307"
+PREFERRED_MODEL = "claude-3-5-sonnet-20241022"  # Claude Sonnet 4
+FALLBACK_MODEL = "claude-3-haiku-20240307"      # Claude Haiku
 
 
 def _ensure_api_key() -> str:
@@ -439,6 +439,8 @@ def _coherent_tighten_tweet(client: Anthropic, raw_tweet: str, bill: Dict[str, A
     except Exception as e:
         logger.warning(f"Model tighten failed, using heuristic tightening: {e}")
         return _tighten_tweet_heuristic(raw_tweet, limit=limit)
+
+
 def _repair_pass(client: Anthropic, bill: Dict[str, Any]) -> str:
     system = (
         _build_system_prompt()
@@ -532,6 +534,83 @@ def _summarize_full_text_via_chunks(client: Anthropic, bill: Dict[str, Any], ful
     combined = "\n\n---\n\n".join(notes_parts).strip()
     logger.info(f"Combined notes length from chunks: {len(combined)} chars")
     return combined
+
+
+def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Enhanced summarization that returns overview, detailed, term_dictionary, tweet, and long.
+    Uses the enhanced system prompt and includes full_text when available.
+    """
+    start = time.monotonic()
+    logger.info("Preparing to generate enhanced bill summary (restored function)")
+
+    _ensure_api_key()
+    import httpx
+    http_client = httpx.Client()
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], http_client=http_client)
+
+    system = _build_enhanced_system_prompt()
+
+    # Build user with optional full_text (no truncation)
+    bill_json = json.dumps(bill, ensure_ascii=False)
+    full_text_section = ""
+    if bill.get("full_text"):
+        try:
+            tf = bill.get("text_format")
+            tu = bill.get("text_url")
+            ft = bill["full_text"]
+            logger.info(f"include_text=True; using attached full_text (no truncation). chars={len(ft)}; text_format={tf}; text_url={tu}")
+            full_text_section = f"\n\nFull bill text (no truncation):\n{ft}"
+        except Exception as e:
+            logger.warning(f"Error while building full_text section: {e}")
+
+    user = (
+        "Summarize the following bill object under the constraints above.\n"
+        "Return ONLY a strict JSON object with keys 'overview', 'detailed', 'term_dictionary', and 'tweet'.\n"
+        f"Bill JSON:\n{bill_json}{full_text_section}"
+    )
+
+    # Primary attempt with simple repair
+    try:
+        raw = _model_call_with_fallback(client, system, user)
+        parsed = _try_parse_json_strict(raw)
+    except Exception as e:
+        logger.warning(f"Enhanced parse failed; retrying once: {e}")
+        try:
+            raw2 = _model_call_with_fallback(client, system, user)
+            parsed = _try_parse_json_strict(raw2)
+        except Exception as e2:
+            logger.error(f"Enhanced retry failed: {e2}")
+            raise
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Enhanced model did not return a JSON object")
+
+    # Required keys with defaults
+    overview = str(parsed.get("overview", "") or "").strip()
+    detailed = str(parsed.get("detailed", "") or "").strip()
+    term_dict = parsed.get("term_dictionary", [])
+    tweet = str(parsed.get("tweet", "") or "").strip()
+
+    # Normalize term_dictionary to JSON string for DB compatibility
+    if isinstance(term_dict, (list, dict)):
+        term_dictionary_str = json.dumps(term_dict, ensure_ascii=False)
+    else:
+        term_dictionary_str = str(term_dict).strip()
+
+    # Backward-compatible long = overview + gap + detailed
+    summary_long = f"{overview}\n\n{detailed}" if overview and detailed else (overview or detailed)
+
+    dur = time.monotonic() - start
+    logger.info(f"Enhanced summarization complete in {dur:.2f}s")
+
+    return {
+        "overview": overview,
+        "detailed": detailed,
+        "term_dictionary": term_dictionary_str,
+        "tweet": tweet,
+        "long": summary_long,
+    }
 
 
 def summarize_bill(bill: Dict[str, Any]) -> Dict[str, str]:

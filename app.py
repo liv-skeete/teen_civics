@@ -20,19 +20,12 @@ from markupsafe import Markup, escape
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import database utilities
+# Import database utilities as a module for safer binding
 try:
-    from src.database.db_utils import (
-        init_db,
-        get_latest_bill,
-        get_bill_by_slug,
-        get_all_bills,
-        get_bill_by_id,
-        update_poll_results,
-    )
+    from src.database import db_utils as DB
 except ImportError as e:
     logger.error(f"Database import error: {e}")
-    # Fallback for development - we'll handle this gracefully
+    DB = None  # allow app to run with graceful fallbacks
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -43,8 +36,11 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Initialize database
 try:
-    init_db()
-    logger.info("Database initialized successfully")
+    if DB:
+        DB.init_db()
+        logger.info("Database initialized successfully")
+    else:
+        logger.warning("Database utils not available; skipping init_db()")
 except Exception as e:
     logger.warning(f"Database initialization warning: {e}")
 
@@ -52,7 +48,7 @@ except Exception as e:
 def index():
     """Homepage showing the latest bill with poll widget"""
     try:
-        latest_bill = get_latest_bill()
+        latest_bill = DB.get_latest_bill() if DB else None
         if not latest_bill:
             return render_template('index.html', bill=None, error="No bills available yet")
         
@@ -69,7 +65,7 @@ def archive():
         status_filter = request.args.get('status', 'all')
         
         # Get all bills
-        all_bills = get_all_bills()
+        all_bills = DB.get_all_bills() if DB else []
         
         # Apply status filter
         if status_filter != 'all':
@@ -95,7 +91,7 @@ def archive():
 def bill_detail(slug):
     """Individual bill details page"""
     try:
-        bill = get_bill_by_slug(slug)
+        bill = DB.get_bill_by_slug(slug) if DB else None
         if not bill:
             abort(404)
         
@@ -151,12 +147,12 @@ def vote():
             return jsonify({'error': 'Invalid previous_vote'}), 400
 
         # Perform update (atomic change handled in DB layer)
-        updated = update_poll_results(bill_id, vote_value, previous_vote)
+        updated = DB.update_poll_results(bill_id, vote_value, previous_vote) if DB else False
         if not updated:
             return jsonify({'error': 'Bill not found or update failed'}), 404
 
         # Fetch updated tallies to return with response
-        bill = get_bill_by_id(bill_id)
+        bill = DB.get_bill_by_id(bill_id) if DB else None
         if not bill:
             return jsonify({'error': 'Bill not found after update'}), 404
 
@@ -186,7 +182,7 @@ def vote():
 def poll_results(bill_id):
     """API endpoint to get poll results for a specific bill"""
     try:
-        bill = get_bill_by_id(bill_id)
+        bill = DB.get_bill_by_id(bill_id) if DB else None
         if not bill:
             return jsonify({'error': 'Bill not found'}), 404
 
@@ -335,11 +331,24 @@ def format_detailed_html_filter(text: str) -> Markup:
     import re
     s = str(text).replace("\r\n", "\n").replace("\r", "\n")
 
-    # 1) Normalize: ensure emoji headers and bullets start on their own lines
-    #    - Insert a newline before any emoji header if not already at line start
-    s = re.sub(r'(?<!^)([🔎🔑⚖️⚖📌👉📋🏛️])', r'\n\1', s)
-    #    - Insert a newline before each bullet symbol so bullets don't run inline
-    s = s.replace('•', '\n•')
+    # Normalize: ensure known emoji header tokens and bullets start on their own lines
+    header_tokens = [
+        "🔎 Overview",
+        "🔑 Key Provisions",
+        "⚖️ Policy Riders or Key Rules/Changes",
+        "⚖️ Policy Riders or Key Rules",
+        "📌 Procedural/Administrative Notes",
+        "👉 In short",
+        "📋 House Resolution Procedures",
+        "📋 Senate Resolution Procedures",
+        "📋 House Bill Legislative Process",
+        "📋 Senate Bill Legislative Process",
+        "🏛️ Legislative Status Context",
+    ]
+    for ht in header_tokens:
+        s = re.sub(rf'(?<!^)\s*{re.escape(ht)}', "\n" + ht, s)
+    # Normalize bullets to start on their own lines
+    s = re.sub(r'\s*•\s*', '\n• ', s)
 
     lines = [ln.strip() for ln in s.split("\n")]
 
