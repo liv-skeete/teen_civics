@@ -474,8 +474,8 @@ def _normalize_structured_text(value: Any) -> str:
     """
     Normalize structured summary content that may arrive as a Python list
     (or a stringified list). Keeps emojis, removes stray brackets/quotes,
-    and joins items with newlines. Also fixes split headers like
-    'Key Rules\\n/Changes' -> 'Key Rules/Changes'.
+    and joins items with newlines. Also fixes split headers and cleans
+    up formatting artifacts.
     """
     import ast
     # If already a list/tuple, join items as lines
@@ -498,11 +498,23 @@ def _normalize_structured_text(value: Any) -> str:
 
     # Normalize newlines
     text = text.replace("\r\n", "\n").replace("\r", "\n")
+    
+    # Clean up formatting artifacts from list parsing
+    # Remove stray quotes at start/end of lines
+    text = re.sub(r"^['\"]|['\"]$", "", text, flags=re.MULTILINE)
+    # Remove stray commas at start of lines (like "', 'This bill...")
+    text = re.sub(r"^[',]\s*", "", text, flags=re.MULTILINE)
+    # Remove standalone quotes and commas on their own lines
+    text = re.sub(r"^\s*[',\"]\s*$", "", text, flags=re.MULTILINE)
+    
     # Repair split header variants (case-insensitive)
     text = re.sub(r"(Key Rules)\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
     text = re.sub(r"(Policy Riders or Key Rules)\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
-    # Collapse excessive blank lines
+    
+    # Clean up excessive whitespace and blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)  # Normalize spaces/tabs
+    
     return text.strip()
 
 
