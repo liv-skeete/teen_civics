@@ -316,19 +316,26 @@ def from_json_filter(json_str):
 @app.template_filter('format_detailed_html')
 def format_detailed_html_filter(text: str) -> Markup:
     """
-    Convert structured plain text summary (with emoji headers and bullets) into clean HTML.
-
-    Improvements:
-    - Inserts virtual line breaks before emoji section headers and bullet symbols when content
-      is delivered as one long line (so headers don't bold the entire paragraph).
-    - Converts inline bullets (… • A • B • C) into <ul><li>…</li></ul>.
-    - Supports simple hyphen sub-bullets inside a bullet using ' - ' as delimiter.
-    - Ensures lists are opened/closed correctly and blank lines collapse safely.
+    Convert structured summary into clean HTML. Handles both:
+    1. JSON/dict format from new AI summaries
+    2. Plain text format with emoji headers from legacy summaries
     """
     if not text:
         return Markup("")
 
+    import json
     import re
+    
+    # Try to parse as JSON first (new format)
+    try:
+        if isinstance(text, str) and (text.strip().startswith('{') or text.strip().startswith("{'")) :
+            # Handle Python dict string format
+            data = eval(text) if text.strip().startswith("{'") else json.loads(text)
+            return _format_json_summary(data)
+    except (json.JSONDecodeError, SyntaxError, ValueError):
+        pass
+    
+    # Fall back to plain text processing (legacy format)
     # Strip any embedded HTML tags from the source text to prevent literal tags showing in output
     s_raw = Markup(str(text)).striptags()
     s = s_raw.replace("\r\n", "\n").replace("\r", "\n")
@@ -460,6 +467,29 @@ def format_detailed_html_filter(text: str) -> Markup:
             html_parts.append(f"<p>{escape(ln)}</p>")
 
     close_all_lists()
+    return Markup("".join(html_parts))
+
+def _format_json_summary(data: dict) -> Markup:
+    """Format JSON/dict summary data into clean HTML"""
+    if not isinstance(data, dict):
+        return Markup("")
+    
+    html_parts = []
+    
+    for key, value in data.items():
+        # Add section header
+        html_parts.append(f"<h4>{escape(key)}</h4>")
+        
+        if isinstance(value, list):
+            # Format as bulleted list
+            html_parts.append("<ul>")
+            for item in value:
+                html_parts.append(f"<li>{escape(str(item))}</li>")
+            html_parts.append("</ul>")
+        else:
+            # Format as paragraph
+            html_parts.append(f"<p>{escape(str(value))}</p>")
+    
     return Markup("".join(html_parts))
 
 if __name__ == '__main__':

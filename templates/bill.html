@@ -60,6 +60,7 @@
                     </div>
                 </div>
             </div>
+            
             <div class="overview-section">
                 <h3>Overview</h3>
                 <div class="overview-text emoji-safe">
@@ -99,4 +100,63 @@
                 </a>
                 {% if bill.tweet_url %}
                 <a href="{{ bill.tweet_url }}" target="_blank" rel="noopener" class="btn btn-twitter">
-        
+                    View on Twitter
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Poll Widget -->
+        <div class="poll-widget" data-bill-id="{{ bill.bill_id }}">
+            <h3>What do you think about this bill?</h3>
+            <div class="poll-options">
+                <button class="poll-option" data-vote="yes">
+                    👍 Yes, support it
+                </button>
+                <button class="poll-option" data-vote="no">
+                    👎 No, oppose it
+                </button>
+            </div>
+            <div class="poll-results" style="display: none;">
+                <h4>Community Results</h4>
+                <div class="result-bar">
+                    <div class="result-fill yes-fill" style="width: 0%">
+                        <span class="result-label">Yes: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <div class="result-bar">
+                    <div class="result-fill no-fill" style="width: 0%">
+                        <span class="result-label">No: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <p class="total-votes">Total votes: <span class="votes-count">0</span></p>
+            </div>
+            <div class="poll-message"></div>
+        </div>
+
+        <!-- Bill metadata moved to bottom -->
+        <div class="bill-meta-bottom">
+            <div class="meta-item">
+                <span class="meta-label">Bill ID:</span>
+                <span class="meta-value">{{ bill.bill_id }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Congress Session:</span>
+                <span class="meta-value">{{ bill.congress_session or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Date Processed:</span>
+                <span class="meta-value">{{ bill.date_processed|format_date }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Introduced:</span>
+                <span class="meta-value">{{ bill.date_introduced or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Status:</span>
+                <span class="meta-value bill-status {{ (bill.status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.status or 'Unknown' }}</span>
+            </div>
+        </div>
+    </article>
+</div>
+{% endblock %}

@@ -30,25 +30,7 @@
             <div class="term-dictionary-section">
                 <h3>Term Dictionaries</h3>
                 <div class="term-dictionary-content">
-                    {% if bill.term_dictionary and bill.bill_id != 'test-bill-123' %}
-                        {% set term_data = bill.term_dictionary|from_json %}
-                        {% if term_data and term_data is iterable %}
-                            <div class="term-content">
-                                <dl class="term-list">
-                                    {% for term_item in term_data %}
-                                        {% if term_item.term and term_item.definition %}
-                                            <dt class="term-name">{{ term_item.term }}</dt>
-                                            <dd class="term-definition">{{ term_item.definition }}</dd>
-                                        {% endif %}
-                                    {% endfor %}
-                                </dl>
-                            </div>
-                        {% else %}
-                            <div class="term-content">
-                                {{ bill.term_dictionary|e }}
-                            </div>
-                        {% endif %}
-                    {% endif %}
+                    {# Hide term dictionary definitions for visual appeal - keep only educational resources #}
                     
                     <div class="term-resources">
                         <p><em>If you come across any unfamiliar words while reading, these resources can help make everything clearer. Pick whichever one works best for you!</em></p>
