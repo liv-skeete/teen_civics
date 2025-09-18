@@ -18,7 +18,8 @@ venv*
 Thumbs.db
 
 # Databases / Data
-*.db
-data/*.db
+# Note: bills.db is tracked to sync between GitHub Actions and local environment
+# *.db
+# data/*.db
 
 # VSCode

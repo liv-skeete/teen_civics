@@ -6,7 +6,7 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   daily-post:
@@ -56,3 +56,11 @@ jobs:
         TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
       run: |
         python -m src.orchestrator
+
+    - name: Commit and push database changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add data/bills.db
+        git diff --staged --quiet || git commit -m "Update database with new bill data [skip ci]"
+        git push
