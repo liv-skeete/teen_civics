@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Load environment variables at import time for CLI and function usage
 load_dotenv()
 
-PREFERRED_MODEL = "claude-3-5-sonnet-20241022"  # Claude Sonnet 4
+PREFERRED_MODEL = "claude-3-5-sonnet-20241022"  # Claude 3.5 Sonnet (latest)
 FALLBACK_MODEL = "claude-3-haiku-20240307"      # Claude Haiku
 
 
