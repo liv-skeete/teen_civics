@@ -29,27 +29,7 @@
             <div class="term-dictionary-section">
                 <h3>Term Dictionary</h3>
                 <div class="term-dictionary-content">
-                    {% if bill.term_dictionary %}
-                        {% set term_data = bill.term_dictionary|from_json %}
-                        {% if term_data and term_data is iterable %}
-                            <div class="term-content">
-                                <dl class="term-list">
-                                    {% for term_item in term_data %}
-                                        {% if term_item.term and term_item.definition %}
-                                            <dt class="term-name">{{ term_item.term }}</dt>
-                                            <dd class="term-definition">{{ term_item.definition }}</dd>
-                                        {% endif %}
-                                    {% endfor %}
-                                </dl>
-                            </div>
-                        {% else %}
-                            <div class="term-content">
-                                {{ bill.term_dictionary|e }}
-                            </div>
-                        {% endif %}
-                    {% else %}
-                        <p><em>Terms will be defined here to help explain complex legislative language.</em></p>
-                    {% endif %}
+                    {# Hide term dictionary definitions for visual appeal - keep only educational resources #}
                     
                     <div class="term-resources">
                         <p><em>If you come across any unfamiliar words while reading, these resources can help make everything clearer. Pick whichever one works best for you!</em></p>
@@ -61,27 +41,24 @@
                 </div>
             </div>
             
-            <div class="overview-section">
-                <h3>Overview</h3>
-                <div class="overview-text emoji-safe">
-                    {% if bill.summary_overview %}
-                        <div>{{ bill.summary_overview|format_detailed_html }}</div>
+            <div class="summary-section">
+                <h3>Summary</h3>
+                <div class="summary-text">
+                    {% if bill.summary_overview or bill.summary_detailed %}
+                        {% if bill.summary_overview %}
+                            <p>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</p>
+                        {% endif %}
+                        {% if bill.summary_detailed %}
+                            <div>{{ bill.summary_detailed|format_detailed_html }}</div>
+                        {% else %}
+                            <div>{{ bill.summary_long|format_detailed_html }}</div>
+                        {% endif %}
                     {% else %}
                         <div>{{ bill.summary_long|format_detailed_html }}</div>
                     {% endif %}
                 </div>
             </div>
 
-            <div class="detailed-summary-section">
-                <h3>Detailed Summary</h3>
-                <div class="detailed-summary-text emoji-safe">
-                    {% if bill.summary_detailed %}
-                        <div>{{ bill.summary_detailed|format_detailed_html }}</div>
-                    {% else %}
-                        <div>{{ bill.summary_long|format_detailed_html }}</div>
-                    {% endif %}
-                </div>
-            </div>
 
             {% if bill.tags %}
             <div class="tags-section">
