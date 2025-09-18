@@ -334,6 +334,18 @@ def format_detailed_html_filter(text: str) -> Markup:
             return _format_json_summary(data)
     except (json.JSONDecodeError, SyntaxError, ValueError):
         pass
+
+    # New: handle Python list-of-strings (e.g., "['🔎 Overview', '...']") by joining into plain text
+    try:
+        if isinstance(text, str) and text.strip().startswith('['):
+            import ast
+            maybe_list = ast.literal_eval(text)
+            if isinstance(maybe_list, list):
+                # Join list items into lines; keep emojis; drop empty parts
+                text = "\n".join(str(p).strip() for p in maybe_list if str(p).strip())
+    except Exception:
+        # If parsing fails, fall through to legacy plain text processing
+        pass
     
     # Fall back to plain text processing (legacy format)
     # Strip any embedded HTML tags from the source text to prevent literal tags showing in output

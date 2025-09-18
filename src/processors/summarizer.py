@@ -470,6 +470,41 @@ def _sanitize_output(obj: Dict[str, Any]) -> Dict[str, str]:
     long_s = str(obj.get("long", "")).strip()
     return {"tweet": tweet, "long": long_s}
 
+def _normalize_structured_text(value: Any) -> str:
+    """
+    Normalize structured summary content that may arrive as a Python list
+    (or a stringified list). Keeps emojis, removes stray brackets/quotes,
+    and joins items with newlines. Also fixes split headers like
+    'Key Rules\\n/Changes' -> 'Key Rules/Changes'.
+    """
+    import ast
+    # If already a list/tuple, join items as lines
+    if isinstance(value, (list, tuple)):
+        parts = [str(p).strip() for p in value if str(p).strip()]
+        text = "\n".join(parts)
+    else:
+        # If it's a string that looks like a Python list, parse it safely
+        s = str(value or "").strip()
+        if s.startswith('[') and s.endswith(']'):
+            try:
+                maybe = ast.literal_eval(s)
+                if isinstance(maybe, (list, tuple)):
+                    parts = [str(p).strip() for p in maybe if str(p).strip()]
+                    s = "\n".join(parts)
+            except Exception:
+                # Leave original string if parsing fails
+                pass
+        text = s
+
+    # Normalize newlines
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # Repair split header variants (case-insensitive)
+    text = re.sub(r"(Key Rules)\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
+    text = re.sub(r"(Policy Riders or Key Rules)\s*/\s*Changes", r"\1/Changes", text, flags=re.IGNORECASE)
+    # Collapse excessive blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
 
 def _chunk_text(text: str, max_chars: int = 50000, overlap: int = 1000) -> List[str]:
     """
@@ -588,8 +623,9 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         raise ValueError("Enhanced model did not return a JSON object")
 
     # Required keys with defaults
-    overview = str(parsed.get("overview", "") or "").strip()
-    detailed = str(parsed.get("detailed", "") or "").strip()
+    # Normalize fields that may be lists or stringified lists
+    overview = _normalize_structured_text(parsed.get("overview", ""))
+    detailed = _normalize_structured_text(parsed.get("detailed", ""))
     term_dict = parsed.get("term_dictionary", [])
     tweet = str(parsed.get("tweet", "") or "").strip()
 
