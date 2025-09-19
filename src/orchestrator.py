@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 def main() -> int:
     """
     Main orchestrator function:
-    1. Fetches up to 5 most recent bills from Congress.gov
+    1. Fetches up to 10 most recent bills from Congress.gov
     2. Checks each bill to find the first one not already in database (prevents duplicates)
     3. Summarizes it using Claude
     4. Stores summary in database
@@ -48,9 +48,9 @@ def main() -> int:
         from src.publishers.twitter_publisher import post_tweet
         from src.database.db import bill_exists, insert_bill, update_tweet_info, generate_website_slug
         
-        # Step 1: Fetch up to 5 most recent bills with full text
-        logger.info("Fetching up to 5 most recent bills from Congress.gov with full text...")
-        bills = get_recent_bills(limit=5, include_text=True, text_chars=2000000)
+        # Step 1: Fetch up to 10 most recent bills with full text
+        logger.info("Fetching up to 10 most recent bills from Congress.gov with full text...")
+        bills = get_recent_bills(limit=10, include_text=True, text_chars=2000000)
         
         if not bills:
             logger.error("No bills found to process")

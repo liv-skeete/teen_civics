@@ -1,6 +1,6 @@
 """
 Congress.gov API fetcher for retrieving recent bills.
-This module provides functionality to fetch the 5 most recent bills from the Congress.gov API.
+This module provides functionality to fetch the 10 most recent bills from the Congress.gov API.
 """
 
 import os
@@ -24,12 +24,12 @@ BASE_URL = "https://api.congress.gov/v3/"
 
 
 
-def get_recent_bills(limit: int = 5, include_text: bool = False, text_chars: int = 15000) -> List[Dict[str, str]]:
+def get_recent_bills(limit: int = 10, include_text: bool = False, text_chars: int = 15000) -> List[Dict[str, str]]:
     logger.info("get_recent_bills function called")
     """
     Fetch the most recent bills from the Congress.gov API.
     Args:
-        limit (int): Number of bills to retrieve (default: 5)
+        limit (int): Number of bills to retrieve (default: 10)
         
     Returns:
         List of dictionaries containing bill information with keys:
