@@ -494,4 +494,12 @@ def _format_json_summary(data: dict) -> Markup:
         
         if isinstance(value, list):
             # Format as bulleted list
-           
+            html_parts.append("<ul>")
+            for item in value:
+                html_parts.append(f"<li>{escape(str(item))}</li>")
+            html_parts.append("</ul>")
+        else:
+            # Format as paragraph
+            html_parts.append(f"<p>{escape(str(value))}</p>")
+    
+    return Markup("".join(html_parts))

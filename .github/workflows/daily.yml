@@ -55,4 +55,4 @@ jobs:
         TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
         TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
       run: |
-        python -m src.orchestrato
+        python -m src.orchestrator
