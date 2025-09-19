@@ -46,8 +46,12 @@ def main() -> int:
         from src.fetchers.congress_fetcher import get_recent_bills
         from src.processors.summarizer import summarize_bill_enhanced
         from src.publishers.twitter_publisher import post_tweet
-        from src.database.db import bill_exists, insert_bill, update_tweet_info, generate_website_slug
+        from src.database.db import bill_exists, insert_bill, update_tweet_info, generate_website_slug, init_db
         
+        # Ensure database exists and schema is up to date
+        logger.info("Initializing database (ensure tables exist)...")
+        init_db()
+
         # Step 1: Fetch up to 10 most recent bills with full text
         logger.info("Fetching up to 10 most recent bills from Congress.gov with full text...")
         bills = get_recent_bills(limit=10, include_text=True, text_chars=2000000)

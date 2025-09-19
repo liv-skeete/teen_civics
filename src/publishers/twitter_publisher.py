@@ -114,12 +114,9 @@ logger.info(f"API v2 initialized: {client_v2 is not None}")
 def post_tweet(text: str) -> tuple[bool, str | None]:
     """
     Post a tweet with the given text.
-    
-    Args:
-        text (str): The text to post as a tweet
-        
+
     Returns:
-        tuple: (success: bool, tweet_url: str | None) - True and URL if successful, False and None otherwise
+        (success, tweet_url) where tweet_url can be a generic web URL if screen name is unknown.
     """
     if api_v1 is None and client_v2 is None:
         logger.error("Twitter API not initialized - cannot post tweet")
@@ -133,37 +130,37 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
         logger.error(f"Tweet text exceeds 280 characters ({len(text)} chars)")
         return False, None
 
-    # Try v1.1 API first
-    if api_v1:
-        try:
-            logger.info(f"Attempting to post tweet via v1.1 API: {text[:50]}...")
-            tweet = api_v1.update_status(text)
-            tweet_url = f"https://twitter.com/user/status/{tweet.id}"
-            logger.info(f"Tweet posted successfully via v1.1 API: {tweet_url}")
-            return True, tweet_url
-        except tweepy.TweepyException as e:
-            logger.warning(f"v1.1 API failed: {e}")
-            # Continue to try v2 if available
-        except Exception as e:
-            logger.error(f"Unexpected error with v1.1 API: {e}")
-
-    # Try v2 API if v1.1 failed or not available
+    # Prefer v2 API first (generally better supported)
     if client_v2:
         try:
             logger.info(f"Attempting to post tweet via v2 API: {text[:50]}...")
             response = client_v2.create_tweet(text=text)
-            if response and response.data:
-                tweet_id = response.data['id']
-                tweet_url = f"https://twitter.com/user/status/{tweet_id}"
+            if response and getattr(response, "data", None):
+                # Tweepy v2 returns response.data as a dict-like structure
+                tweet_id = response.data.get("id") if isinstance(response.data, dict) else response.data["id"]
+                tweet_url = f"https://twitter.com/i/web/status/{tweet_id}"
                 logger.info(f"Tweet posted successfully via v2 API: {tweet_url}")
                 return True, tweet_url
             else:
                 logger.error("v2 API response missing tweet data")
-                return True, None  # Posted but no URL available
+                # Consider this a failure to allow fallback to v1
         except tweepy.TweepyException as e:
             logger.error(f"v2 API failed: {e}")
         except Exception as e:
             logger.error(f"Unexpected error with v2 API: {e}")
+
+    # Fallback to v1.1 API if v2 failed or unavailable
+    if api_v1:
+        try:
+            logger.info(f"Attempting to post tweet via v1.1 API: {text[:50]}...")
+            tweet = api_v1.update_status(status=text)
+            tweet_url = f"https://twitter.com/i/web/status/{tweet.id}"
+            logger.info(f"Tweet posted successfully via v1.1 API: {tweet_url}")
+            return True, tweet_url
+        except tweepy.TweepyException as e:
+            logger.warning(f"v1.1 API failed: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error with v1.1 API: {e}")
 
     logger.error("All Twitter API posting methods failed")
     return False, None
@@ -173,29 +170,38 @@ def format_bill_tweet(bill: Dict) -> str:
     """
     Format a bill dictionary into a tweet string.
 
-    Returns a string <= 280 chars, with a fixed header and footer.
+    Strategy:
+    - Compact single-line header.
+    - No footer (saves space and reduces risk of weighted-length overflow).
+    - Keep a conservative cap (≤240) to account for Unicode weighting on X.
     """
     if not bill:
         bill = {}
 
-    # Prefer model-provided short/tweet summary, then fall back to title
-    summary = bill.get('summary_tweet') or bill.get('summary_short') or bill.get('title') or "No summary available"
+    summary = bill.get("summary_tweet") or bill.get("summary_short") or bill.get("title") or "No summary available"
 
-    header = "🏛️ Today in Congress\n\n"
-    footer = "\n\n👉 Want to learn more? Link coming soon..."
+    # Compact header on one line
+    header = "🏛️ Today in Congress: "
 
-    max_len = 280
-    allowed_summary = max_len - len(header) - len(footer)
+    # Conservative total cap to avoid X weighted-length issues
+    max_total = 240
+    allowed_summary = max_total - len(header)
     if allowed_summary < 0:
         allowed_summary = 0
 
-    if len(summary) > allowed_summary:
+    text = (summary or "").strip()
+    if len(text) > allowed_summary:
         if allowed_summary >= 3:
-            summary = summary[:allowed_summary - 3] + "..."
+            text = text[: allowed_summary - 3].rstrip() + "..."
         else:
-            summary = summary[:allowed_summary]
+            text = text[: allowed_summary].rstrip()
 
-    tweet = f"{header}{summary}{footer}"
+    tweet = f"{header}{text}"
+
+    # Final safety cap (hard cut) to ensure we never exceed ~260 chars even if header/surrogates miscount
+    if len(tweet) > 260:
+        tweet = tweet[:257].rstrip() + "..."
+
     return tweet
 
 
