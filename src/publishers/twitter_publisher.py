@@ -168,24 +168,28 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
 
 def format_bill_tweet(bill: Dict) -> str:
     """
-    Format a bill dictionary into a tweet string.
+    Format a bill dictionary into a tweet string with multi-line format.
 
     Strategy:
-    - Compact single-line header.
-    - No footer (saves space and reduces risk of weighted-length overflow).
-    - Keep a conservative cap (≤240) to account for Unicode weighting on X.
+    - Multi-line format with header, bill summary, and footer
+    - Keep a conservative cap (≤240) for content to account for Unicode weighting on X
+    - Use 260 character safety cap for the entire tweet
     """
     if not bill:
         bill = {}
 
     summary = bill.get("summary_tweet") or bill.get("summary_short") or bill.get("title") or "No summary available"
 
-    # Compact header on one line
-    header = "🏛️ Today in Congress: "
+    # Multi-line format components
+    header = "🏛️ Today in Congress\n\n"
+    footer = "\n\n👉 Want to learn more? Link coming soon..."
 
-    # Conservative total cap to avoid X weighted-length issues
+    # Calculate available space for summary (240 chars total - header and footer lengths)
+    header_len = len(header)
+    footer_len = len(footer)
     max_total = 240
-    allowed_summary = max_total - len(header)
+    allowed_summary = max_total - header_len - footer_len
+    
     if allowed_summary < 0:
         allowed_summary = 0
 
@@ -196,7 +200,7 @@ def format_bill_tweet(bill: Dict) -> str:
         else:
             text = text[: allowed_summary].rstrip()
 
-    tweet = f"{header}{text}"
+    tweet = f"{header}{text}{footer}"
 
     # Final safety cap (hard cut) to ensure we never exceed ~260 chars even if header/surrogates miscount
     if len(tweet) > 260:
