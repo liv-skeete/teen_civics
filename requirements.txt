@@ -11,5 +11,4 @@ beautifulsoup4==4.12.3
 lxml==5.1.0
 PyMuPDF==1.24.0
 pdfminer.six==20231228
-regex==2024.5.15
-psycopg2-bi
+regex==2024.

@@ -25,6 +25,8 @@ def ping_database():
     
     if not database_url:
         logger.error("DATABASE_URL environment variable not set")
+        logger.error("Please check that DATABASE_URL secret is configured in GitHub repository settings")
+        logger.error("Go to: Settings → Secrets and variables → Actions → Repository secrets")
         return False
     
     logger.info(f"Attempting to connect to database: {database_url.split('@')[1] if '@' in database_url else database_url}")

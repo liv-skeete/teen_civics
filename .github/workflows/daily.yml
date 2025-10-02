@@ -76,10 +76,4 @@ jobs:
       run: |
         python src/orchestrator.py
 
-    - name: Archive logs (if exists)
-      if: always()
-      run: |
-        if [ -f orchestrator.log ]; then
-          echo "Orchestrator log found, archiving..."
-          cp orchestrator.log orchestrator_$(date +%Y%m%d_%H%M%S).log
-        fi
+    - name: Archive logs (i
