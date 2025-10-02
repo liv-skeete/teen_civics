@@ -165,7 +165,7 @@ def main(dry_run: bool = False) -> int:
         else:
             # Generate new summaries
             logger.info("🧠 Generating new summaries with enhanced format...")
-            summary = summarize_bill_enhanced(selected_bill.get("full_text", ""))
+            summary = summarize_bill_enhanced(selected_bill)
             logger.info("✅ Summaries generated successfully")
             
             # Create bill_data for insertion with new fields
