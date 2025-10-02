@@ -2,7 +2,7 @@ name: Daily TeenCivics Bill Processing (Feed-Based)
 
 on:
   schedule:
-    - cron: '0 11 * * *'  # Run at 11:00 UTC (8:00 AM ET) every day
+    - cron: '0 12 * * *'  # Run at 12:00 UTC (8:00 AM ET) every day
   workflow_dispatch:  # Allow manual triggering
 
 concurrency:
@@ -32,6 +32,12 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         python scripts/ping_database.py
+
+    - name: Run database migration (if needed)
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        python scripts/migrate_database_schema.py
 
   daily-bill-processing:
     needs: ping-database
