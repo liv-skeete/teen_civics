@@ -52,7 +52,7 @@ jobs:
         from src.load_env import load_env
         from src.database.db import init_db
         load_env()
-        init_db()
+        init_db();
         print('Database initialized successfully')
         "
 
