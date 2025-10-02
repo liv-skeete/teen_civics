@@ -76,4 +76,10 @@ jobs:
       run: |
         python src/orchestrator.py
 
-    - name: Archive logs (i
+    - name: Archive logs if exists
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: orchestrator-logs
+        path: orchestrator*.log
+        if-no-files-found: ignore
