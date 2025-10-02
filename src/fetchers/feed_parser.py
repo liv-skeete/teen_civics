@@ -6,6 +6,7 @@ Parses the HTML feed to extract bills with full text available.
 
 import logging
 import re
+import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -18,6 +19,20 @@ logger = logging.getLogger(__name__)
 
 # Feed URL
 BILL_TEXTS_FEED_URL = "https://www.congress.gov/bill-texts-received-today"
+
+# Enhanced headers to avoid 403 errors
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Cache-Control': 'max-age=0'
+}
 
 def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
     """
@@ -42,18 +57,41 @@ def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
     """
     logger.info(f"Fetching bill texts feed from: {BILL_TEXTS_FEED_URL}")
     
-    try:
-        # Fetch the feed with timeout and proper headers
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(BILL_TEXTS_FEED_URL, headers=headers, timeout=30)
-        response.raise_for_status()
-        logger.info(f"Feed fetched successfully (status: {response.status_code})")
-        
-    except requests.RequestException as e:
-        logger.error(f"Failed to fetch bill texts feed: {e}")
-        raise
+    # Try to fetch the feed with retry logic
+    bills = []
+    feed_success = False
+    
+    for attempt in range(3):
+        try:
+            logger.info(f"Attempt {attempt + 1}/3 to fetch feed")
+            
+            # Add delay between retries
+            if attempt > 0:
+                delay = 2 ** attempt  # Exponential backoff: 2, 4 seconds
+                logger.info(f"Waiting {delay} seconds before retry...")
+                time.sleep(delay)
+            
+            # Fetch the feed with timeout and enhanced headers
+            response = requests.get(BILL_TEXTS_FEED_URL, headers=HEADERS, timeout=30)
+            response.raise_for_status()
+            logger.info(f"Feed fetched successfully (status: {response.status_code})")
+            feed_success = True
+            break
+            
+        except requests.HTTPError as e:
+            if e.response.status_code == 403:
+                logger.warning(f"403 Forbidden error on attempt {attempt + 1}/3")
+                if attempt == 2:  # Last attempt
+                    logger.error("All feed fetch attempts failed with 403. Will fall back to API.")
+            else:
+                logger.error(f"HTTP error on attempt {attempt + 1}/3: {e}")
+        except requests.RequestException as e:
+            logger.error(f"Request error on attempt {attempt + 1}/3: {e}")
+    
+    # If feed fetch failed, fall back to API
+    if not feed_success:
+        logger.warning("Feed fetch failed after all retries. Falling back to Congress.gov API...")
+        return _fetch_bills_from_api(limit)
     
     # Parse HTML with lxml parser
     try:
@@ -202,6 +240,93 @@ def _extract_bill_data(item) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error extracting bill data: {e}")
         return None
+
+
+def _fetch_bills_from_api(limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Fallback method to fetch bills using the Congress.gov API.
+    This is used when the feed parser encounters 403 errors.
+    
+    Args:
+        limit: Maximum number of bills to return
+    
+    Returns:
+        List of bill dictionaries
+    """
+    import os
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    api_key = os.getenv('CONGRESS_API_KEY')
+    
+    if not api_key:
+        logger.error("CONGRESS_API_KEY not found in environment. Cannot use API fallback.")
+        return []
+    
+    logger.info(f"Fetching bills from Congress.gov API (limit={limit})")
+    
+    try:
+        # Fetch recent bills from the API
+        # Use the /bill endpoint with recent bills
+        api_url = f"https://api.congress.gov/v3/bill"
+        params = {
+            'api_key': api_key,
+            'format': 'json',
+            'limit': limit,
+            'sort': 'updateDate+desc'
+        }
+        
+        response = requests.get(api_url, params=params, headers=HEADERS, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        bills = []
+        
+        if 'bills' in data:
+            for bill_data in data['bills']:
+                try:
+                    # Extract bill information
+                    bill_type = bill_data.get('type', '').lower()
+                    bill_number = bill_data.get('number', '')
+                    congress = bill_data.get('congress', '')
+                    
+                    if not all([bill_type, bill_number, congress]):
+                        continue
+                    
+                    bill_id = f"{bill_type}{bill_number}-{congress}"
+                    title = bill_data.get('title', f"Bill {bill_id}")
+                    
+                    # Get the latest action date as text_received_date
+                    latest_action = bill_data.get('latestAction', {})
+                    action_date = latest_action.get('actionDate', datetime.now().isoformat())
+                    
+                    # Construct text URL (may not have actual text yet)
+                    text_url = f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}ih.pdf"
+                    
+                    bills.append({
+                        'bill_id': bill_id,
+                        'title': title,
+                        'text_url': text_url,
+                        'text_version': 'Introduced',
+                        'text_received_date': action_date,
+                        'congress': str(congress),
+                        'bill_type': bill_type,
+                        'bill_number': str(bill_number)
+                    })
+                    
+                except Exception as e:
+                    logger.warning(f"Error processing API bill data: {e}")
+                    continue
+        
+        logger.info(f"Successfully fetched {len(bills)} bills from API")
+        return bills
+        
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch bills from API: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error processing API response: {e}")
+        return []
 
 
 if __name__ == "__main__":

@@ -32,6 +32,8 @@ def migrate_schema():
     - text_version: Version of the bill text (e.g., 'Introduced', 'Engrossed')
     - text_received_date: Date when full text was received
     - processing_attempts: Number of times processing was attempted
+    - problematic: Flag indicating if bill has processing issues
+    - problem_reason: Description of the processing problem
     """
     logger.info("🚀 Starting database schema migration...")
     
@@ -43,18 +45,18 @@ def migrate_schema():
                 # Check if migration is needed
                 logger.info("📋 Checking current schema...")
                 cursor.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'bills' 
-                    AND column_name IN ('text_source', 'text_version', 'text_received_date', 'processing_attempts')
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'bills'
+                    AND column_name IN ('text_source', 'text_version', 'text_received_date', 'processing_attempts', 'problematic', 'problem_reason')
                 """)
                 existing_columns = {row[0] for row in cursor.fetchall()}
                 
-                if len(existing_columns) == 4:
+                if len(existing_columns) == 6:
                     logger.info("✅ All new columns already exist. No migration needed.")
                     return True
                 
-                logger.info(f"📊 Found {len(existing_columns)} of 4 new columns. Proceeding with migration...")
+                logger.info(f"📊 Found {len(existing_columns)} of 6 new columns. Proceeding with migration...")
                 
                 # Add text_source column
                 if 'text_source' not in existing_columns:
@@ -92,6 +94,24 @@ def migrate_schema():
                     """)
                     logger.info("✅ processing_attempts column added")
                 
+                # Add problematic column
+                if 'problematic' not in existing_columns:
+                    logger.info("➕ Adding problematic column...")
+                    cursor.execute("""
+                        ALTER TABLE bills
+                        ADD COLUMN IF NOT EXISTS problematic BOOLEAN DEFAULT FALSE
+                    """)
+                    logger.info("✅ problematic column added")
+                
+                # Add problem_reason column
+                if 'problem_reason' not in existing_columns:
+                    logger.info("➕ Adding problem_reason column...")
+                    cursor.execute("""
+                        ALTER TABLE bills
+                        ADD COLUMN IF NOT EXISTS problem_reason TEXT
+                    """)
+                    logger.info("✅ problem_reason column added")
+                
                 # Create indexes for performance
                 logger.info("📇 Creating indexes...")
                 
@@ -102,19 +122,27 @@ def migrate_schema():
                 logger.info("✅ Index on text_received_date created")
                 
                 cursor.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_bills_processing_attempts 
+                    CREATE INDEX IF NOT EXISTS idx_bills_processing_attempts
                     ON bills (processing_attempts)
                 """)
                 logger.info("✅ Index on processing_attempts created")
                 
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_bills_problematic
+                    ON bills (problematic)
+                """)
+                logger.info("✅ Index on problematic created")
+                
                 # Update existing bills with default values
                 logger.info("🔄 Updating existing bills with default values...")
                 cursor.execute("""
-                    UPDATE bills 
+                    UPDATE bills
                     SET text_source = 'api',
                         text_version = 'Introduced',
                         text_received_date = date_introduced::timestamp with time zone,
-                        processing_attempts = 0
+                        processing_attempts = 0,
+                        problematic = FALSE,
+                        problem_reason = NULL
                     WHERE text_source IS NULL
                 """)
                 updated_count = cursor.rowcount
@@ -128,9 +156,9 @@ def migrate_schema():
                 logger.info("🔍 Verifying migration...")
                 cursor.execute("""
                     SELECT column_name, data_type, column_default
-                    FROM information_schema.columns 
-                    WHERE table_name = 'bills' 
-                    AND column_name IN ('text_source', 'text_version', 'text_received_date', 'processing_attempts')
+                    FROM information_schema.columns
+                    WHERE table_name = 'bills'
+                    AND column_name IN ('text_source', 'text_version', 'text_received_date', 'processing_attempts', 'problematic', 'problem_reason')
                     ORDER BY column_name
                 """)
                 
@@ -139,11 +167,11 @@ def migrate_schema():
                 for col_name, data_type, default in columns:
                     logger.info(f"  - {col_name}: {data_type} (default: {default})")
                 
-                if len(columns) == 4:
+                if len(columns) == 6:
                     logger.info("✅ Migration completed successfully!")
                     return True
                 else:
-                    logger.error(f"❌ Migration verification failed. Expected 4 columns, found {len(columns)}")
+                    logger.error(f"❌ Migration verification failed. Expected 6 columns, found {len(columns)}")
                     return False
                     
     except Exception as e:
@@ -174,10 +202,13 @@ def rollback_migration():
                 cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS text_version")
                 cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS text_received_date")
                 cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS processing_attempts")
+                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS problematic")
+                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS problem_reason")
                 
                 logger.info("🗑️ Dropping indexes...")
                 cursor.execute("DROP INDEX IF EXISTS idx_bills_text_received")
                 cursor.execute("DROP INDEX IF EXISTS idx_bills_processing_attempts")
+                cursor.execute("DROP INDEX IF EXISTS idx_bills_problematic")
                 
                 conn.commit()
                 logger.info("✅ Rollback completed successfully")
