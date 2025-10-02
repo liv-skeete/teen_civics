@@ -77,4 +77,8 @@ jobs:
 
     - name: Archive logs if exists
       if: always()
-      uses: 
+      uses: actions/upload-artifact@v4
+      with:
+        name: orchestrator-logs
+        path: orchestrator*.log
+        if-no-files-found: ignore

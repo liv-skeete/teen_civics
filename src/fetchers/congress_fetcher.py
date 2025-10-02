@@ -70,7 +70,7 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                     text_url = bill.get('text_url')
                     if text_url:
                         logger.info(f"Downloading text for {bill['bill_id']} from {text_url}")
-                        full_text = download_bill_text(text_url)
+                        full_text = download_bill_text(text_url, bill['bill_id'])
                         
                         # Validate text was successfully downloaded
                         if full_text and len(full_text.strip()) > 100:
@@ -116,13 +116,15 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
         return []
 
 
-def download_bill_text(url: str) -> str:
+def download_bill_text(url: str, bill_id: Optional[str] = None) -> str:
     """
     Download bill text from a given URL (PDF or TXT format).
     Supports both direct URLs and Congress.gov URLs.
+    If the URL fails, tries alternative patterns for the same bill.
     
     Args:
         url: URL to the bill text (PDF or TXT)
+        bill_id: Optional bill ID for generating alternative URLs
     
     Returns:
         Extracted text content or empty string on failure
@@ -130,38 +132,89 @@ def download_bill_text(url: str) -> str:
     if not url:
         return ""
     
-    try:
-        # Ensure URL is absolute
-        if not url.startswith('http'):
-            url = f"https://www.congress.gov{url}"
-        
-        logger.debug(f"Downloading bill text from: {url}")
-        
-        # Download with timeout
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        # Handle PDF files
-        if url.endswith('.pdf'):
-            return _extract_text_from_pdf(response.content)
-        
-        # Handle TXT files
-        elif url.endswith('.txt'):
-            return response.text
-        
-        # Try to detect format from content-type
-        content_type = response.headers.get('content-type', '').lower()
-        if 'pdf' in content_type:
-            return _extract_text_from_pdf(response.content)
-        elif 'text' in content_type:
-            return response.text
-        
-        # Default: try as text
-        return response.text
-        
-    except Exception as e:
-        logger.error(f"Failed to download bill text from {url}: {e}")
-        return ""
+    urls_to_try = [url]
+    
+    # If we have a bill ID and the URL looks like a constructed pattern,
+    # try alternative URL patterns
+    if bill_id and 'BILLS-' in url:
+        # Parse bill ID to extract components
+        match = re.match(r'([a-z]+)(\d+)-(\d+)', bill_id)
+        if match:
+            bill_type, bill_number, congress = match.groups()
+            
+            # Generate alternative URL patterns
+            patterns = [
+                f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}ih.pdf",  # Introduced in House
+                f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}is.pdf",  # Introduced in Senate
+                f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}enr.pdf", # Enrolled
+                f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}eh.pdf",   # Engrossed in House
+                f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}es.pdf",   # Engrossed in Senate
+                f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}rs.pdf",   # Received in Senate
+                f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}rh.pdf"    # Received in House
+            ]
+            
+            # Remove duplicates and the original URL if it's in the list
+            urls_to_try = [url] + [pattern for pattern in patterns if pattern != url]
+    
+    for attempt_url in urls_to_try:
+        try:
+            # Ensure URL is absolute
+            if not attempt_url.startswith('http'):
+                attempt_url = f"https://www.congress.gov{attempt_url}"
+            
+            logger.debug(f"Downloading bill text from: {attempt_url}")
+            
+            # Download with timeout
+            response = requests.get(attempt_url, timeout=30)
+            response.raise_for_status()
+            
+            # Handle PDF files
+            if attempt_url.endswith('.pdf'):
+                text = _extract_text_from_pdf(response.content)
+                if text and len(text.strip()) > 100:  # Validate we got meaningful text
+                    logger.info(f"Successfully downloaded text from {attempt_url}")
+                    return text
+            
+            # Handle TXT files
+            elif attempt_url.endswith('.txt'):
+                text = response.text
+                if text and len(text.strip()) > 100:  # Validate we got meaningful text
+                    logger.info(f"Successfully downloaded text from {attempt_url}")
+                    return text
+            
+            # Try to detect format from content-type
+            content_type = response.headers.get('content-type', '').lower()
+            if 'pdf' in content_type:
+                text = _extract_text_from_pdf(response.content)
+                if text and len(text.strip()) > 100:
+                    logger.info(f"Successfully downloaded text from {attempt_url}")
+                    return text
+            elif 'text' in content_type:
+                text = response.text
+                if text and len(text.strip()) > 100:
+                    logger.info(f"Successfully downloaded text from {attempt_url}")
+                    return text
+            
+            # Default: try as text
+            text = response.text
+            if text and len(text.strip()) > 100:
+                logger.info(f"Successfully downloaded text from {attempt_url}")
+                return text
+            else:
+                logger.warning(f"Downloaded text from {attempt_url} is too short or empty")
+                
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                logger.debug(f"URL not found: {attempt_url}")
+                continue  # Try next URL
+            else:
+                logger.error(f"HTTP error downloading from {attempt_url}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to download bill text from {attempt_url}: {e}")
+            continue  # Try next URL
+    
+    logger.error(f"All download attempts failed for bill {bill_id or 'unknown'}")
+    return ""
 
 
 def _extract_text_from_pdf(pdf_content: bytes) -> str:

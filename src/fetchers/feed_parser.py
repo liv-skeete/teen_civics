@@ -104,12 +104,23 @@ def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
     # Extract bills from the feed
     bills = []
     
-    # Find the main content area - the feed uses a table or list structure
+    # Find the main content area - the feed uses a table structure
     # Look for bill entries in the page
-    bill_items = soup.find_all('li', class_='expanded')
+    bill_items = []
+    
+    # First try the standard table structure
+    table = soup.find('table', {'class': 'table'})
+    if table:
+        logger.info("Found bill texts table")
+        rows = table.find('tbody').find_all('tr')
+        bill_items = rows[:limit]
     
     if not bill_items:
-        # Try alternative selectors
+        # Try alternative selectors - list structure
+        bill_items = soup.find_all('li', class_='expanded')
+    
+    if not bill_items:
+        # Try alternative selectors - item wrappers
         bill_items = soup.find_all('div', class_='item-wrapper')
     
     if not bill_items:
@@ -201,8 +212,10 @@ def _extract_bill_data(item) -> Optional[Dict[str, Any]]:
             if version_text:
                 text_version = version_text
         
-        # Find text URL (PDF or TXT)
+        # Find text URL (PDF or TXT) - look for actual text links in the item
         text_url = None
+        
+        # Look for direct text links first (most reliable)
         text_links = item.find_all('a', href=re.compile(r'\.(pdf|txt)$'))
         if text_links:
             # Prefer PDF, fallback to TXT
@@ -214,9 +227,29 @@ def _extract_bill_data(item) -> Optional[Dict[str, Any]]:
             elif txt_link:
                 text_url = txt_link.get('href')
         
-        # If no direct text link found, construct from bill ID
+        # If no direct text links found, try to find text URLs in other elements
         if not text_url:
-            # Congress.gov text URL pattern
+            # Look for text URLs in span elements or other containers
+            text_spans = item.find_all('span', string=re.compile(r'\.(pdf|txt)$'))
+            for span in text_spans:
+                if span.text.endswith(('.pdf', '.txt')):
+                    text_url = span.text
+                    break
+        
+        # If still no text URL found, check if this is a table row structure
+        if not text_url and hasattr(item, 'find_all') and item.name == 'tr':
+            # For table rows, text links are typically in specific columns
+            cols = item.find_all('td')
+            if len(cols) >= 4:  # Text link is usually in column 2 or 3
+                for col in cols[1:3]:  # Check columns 2 and 3
+                    col_links = col.find_all('a', href=re.compile(r'\.(pdf|txt)$'))
+                    if col_links:
+                        text_url = col_links[0].get('href')
+                        break
+        
+        # As a last resort, construct from bill ID (but this should rarely be needed)
+        if not text_url:
+            logger.warning(f"No text URL found for {bill_id}, constructing from pattern")
             text_url = f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}ih.pdf"
         
         # Ensure URL is absolute
@@ -300,8 +333,31 @@ def _fetch_bills_from_api(limit: int = 50) -> List[Dict[str, Any]]:
                     latest_action = bill_data.get('latestAction', {})
                     action_date = latest_action.get('actionDate', datetime.now().isoformat())
                     
-                    # Construct text URL (may not have actual text yet)
-                    text_url = f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}ih.pdf"
+                    # Try to get actual text URLs from the bill data if available
+                    text_url = None
+                    
+                    # Check if text versions are available in the API response
+                    if 'textVersions' in bill_data and bill_data['textVersions']:
+                        # Get the first text version (usually Introduced)
+                        text_version = bill_data['textVersions'][0]
+                        if 'formats' in text_version and text_version['formats']:
+                            # Look for PDF format first
+                            pdf_format = next((fmt for fmt in text_version['formats'] if fmt.get('type') == 'PDF'), None)
+                            if pdf_format and 'url' in pdf_format:
+                                text_url = pdf_format['url']
+                    
+                    # If no text URL found in API, construct from bill ID but try multiple patterns
+                    if not text_url:
+                        # Try multiple common URL patterns for bill texts
+                        url_patterns = [
+                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}ih.pdf",
+                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}is.pdf",
+                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}enr.pdf",
+                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}eh.pdf"
+                        ]
+                        
+                        # We'll let the download function try these patterns
+                        text_url = url_patterns[0]  # Use first pattern as default
                     
                     bills.append({
                         'bill_id': bill_id,
@@ -311,7 +367,8 @@ def _fetch_bills_from_api(limit: int = 50) -> List[Dict[str, Any]]:
                         'text_received_date': action_date,
                         'congress': str(congress),
                         'bill_type': bill_type,
-                        'bill_number': str(bill_number)
+                        'bill_number': str(bill_number),
+                        'api_data': bill_data  # Include full API data for debugging
                     })
                     
                 except Exception as e:
