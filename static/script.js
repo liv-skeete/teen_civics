@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize archive mini-results widths (no inline styles)
     initArchiveMiniResults();
+    
+    // Initialize bill filtering on archive page
+    initializeBillFiltering();
 });
 
 /**
@@ -75,7 +78,7 @@ function handleVote(billId, voteType, widget, previousVote) {
         },
         body: JSON.stringify({
             bill_id: billId,
-            vote: voteType,
+            vote_type: voteType,
             previous_vote: previousVote  // Send previous vote for change tracking
         })
     })
@@ -167,8 +170,8 @@ function fetchAndDisplayResults(billId, widget) {
  * Update the results display with new data (yes/no only)
  */
 function updateResultsDisplay(results, container) {
-    const yes = Number(results.yes || 0);
-    const no = Number(results.no || 0);
+    const yes = Number(results.yes_votes || 0);
+    const no = Number(results.no_votes || 0);
     const total = Number(results.total != null ? results.total : (yes + no));
 
     // Calculate percentages safely
@@ -333,6 +336,102 @@ function initArchiveMiniResults() {
             noEl.style.width = `${Math.max(0, Math.min(100, no))}%`;
         }
     });
+}
+
+/**
+ * Initialize bill filtering on archive page
+ */
+function initializeBillFiltering() {
+    const filterSelect = document.getElementById('status-filter');
+    
+    if (!filterSelect) {
+        return; // Not on archive page
+    }
+    
+    // Load saved filter from localStorage or URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlStatus = urlParams.get('status');
+    const savedFilter = localStorage.getItem('archive_filter') || 'all';
+    const initialFilter = urlStatus || savedFilter;
+    
+    // Set initial filter value
+    if (initialFilter && initialFilter !== 'all') {
+        filterSelect.value = initialFilter;
+        filterBills(initialFilter);
+    }
+    
+    // Add change event listener
+    filterSelect.addEventListener('change', function() {
+        const selectedStatus = this.value;
+        
+        // Save filter preference
+        localStorage.setItem('archive_filter', selectedStatus);
+        
+        // Update URL without reload
+        const newUrl = new URL(window.location);
+        if (selectedStatus === 'all') {
+            newUrl.searchParams.delete('status');
+        } else {
+            newUrl.searchParams.set('status', selectedStatus);
+        }
+        window.history.pushState({}, '', newUrl);
+        
+        // Apply filter
+        filterBills(selectedStatus);
+    });
+}
+
+/**
+ * Filter bills by status
+ */
+function filterBills(status) {
+    const billCards = document.querySelectorAll('.bill-card');
+    const noBillsMessage = document.querySelector('.no-bills-message');
+    let visibleCount = 0;
+    
+    // Normalize status for comparison (case-insensitive)
+    const normalizedStatus = status.toLowerCase();
+    
+    billCards.forEach(card => {
+        const cardStatus = (card.dataset.status || '').toLowerCase();
+        
+        if (normalizedStatus === 'all' || cardStatus === normalizedStatus) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Show/hide "no bills" message
+    const billsGrid = document.querySelector('.bills-grid');
+    if (visibleCount === 0 && billsGrid) {
+        if (!noBillsMessage) {
+            // Create no bills message if it doesn't exist
+            const message = document.createElement('div');
+            message.className = 'no-bills-message';
+            message.innerHTML = `
+                <h2>No bills found</h2>
+                <p>No bills with status "${status}" found.</p>
+                <button class="btn btn-primary" onclick="document.getElementById('status-filter').value='all'; document.getElementById('status-filter').dispatchEvent(new Event('change'));">View All Bills</button>
+            `;
+            billsGrid.parentNode.insertBefore(message, billsGrid.nextSibling);
+        } else {
+            noBillsMessage.style.display = 'block';
+            const messageText = noBillsMessage.querySelector('p');
+            if (messageText && status !== 'all') {
+                messageText.textContent = `No bills with status "${status}" found.`;
+            }
+        }
+        billsGrid.style.display = 'none';
+    } else {
+        if (noBillsMessage) {
+            noBillsMessage.style.display = 'none';
+        }
+        if (billsGrid) {
+            billsGrid.style.display = '';
+        }
+    }
 }
 
 /**

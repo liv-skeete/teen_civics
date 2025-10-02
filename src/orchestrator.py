@@ -16,22 +16,27 @@ logger = logging.getLogger(__name__)
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-def main() -> int:
+def main(dry_run: bool = False) -> int:
     """
     Main orchestrator function:
-    1. Fetches up to 10 most recent bills from Congress.gov
-    2. Checks each bill to find the first one not already in database (prevents duplicates)
-    3. Summarizes it using Claude
-    4. Stores summary in database
-    5. Posts the tweet to X/Twitter
-    6. Updates database with tweet information
-    If all bills are already processed, exits gracefully.
+    1. Fetches recent bills from Congress.gov
+    2. Checks each bill to find the first one not already tweeted
+    3. Summarizes it using Claude if needed
+    4. Stores summary in database if needed
+    5. Posts the tweet to X/Twitter (unless dry-run mode)
+    6. Updates database with tweet information (unless dry-run mode)
+    If all bills are already processed, checks DB for unposted bills.
+    
+    Args:
+        dry_run: If True, skips actual Twitter posting and database updates
     """
     try:
-        logger.info("Starting orchestrator: fetch → check → summarize → store → tweet")
+        logger.info("🚀 Starting orchestrator: fetch → check → summarize → store → tweet")
+        logger.info(f"📊 Dry-run mode: {dry_run}")
         
         # Debug: Print all environment variables to see what's available
-        logger.info("---Dumping Environment Variables---")
+        logger.info("🔍 ---Dumping Environment Variables---")
+        env_vars_set = 0
         for key, value in os.environ.items():
             # Mask sensitive values
             if "KEY" in key.upper() or "SECRET" in key.upper() or "TOKEN" in key.upper():
@@ -39,106 +44,241 @@ def main() -> int:
                     value = f"{value[:4]}...{value[-4:]}"
                 else:
                     value = "SET"
-            logger.info(f"{key}: {value}")
-        logger.info("------------------------------------")
+                env_vars_set += 1
+            logger.info(f"   {key}: {value}")
+        logger.info(f"🔍 Found {env_vars_set} sensitive environment variables")
+        logger.info("🔍 ------------------------------------")
 
         # Import modules
         from src.fetchers.congress_fetcher import get_recent_bills
         from src.processors.summarizer import summarize_bill_enhanced
         from src.publishers.twitter_publisher import post_tweet
-        from src.database.db import bill_exists, insert_bill, update_tweet_info, generate_website_slug, init_db
+        from src.database.db import (
+            bill_exists, bill_already_posted, get_bill_by_id, get_most_recent_unposted_bill,
+            insert_bill, update_tweet_info, generate_website_slug, init_db,
+            normalize_bill_id, select_and_lock_unposted_bill
+        )
         
         # Ensure database exists and schema is up to date
-        logger.info("Initializing database (ensure tables exist)...")
+        logger.info("🗄️ Initializing database (ensure tables exist)...")
         init_db()
+        logger.info("✅ Database initialization complete")
 
-        # Step 1: Fetch up to 10 most recent bills with full text
-        logger.info("Fetching up to 10 most recent bills from Congress.gov with full text...")
-        bills = get_recent_bills(limit=10, include_text=True, text_chars=2000000)
-        
+        # Step 1: Fetch recent bills from feed
+        logger.info("📥 Fetching recent bills from 'Bill Texts Received Today' feed...")
+        bills = get_recent_bills(limit=5, include_text=True)  # Only fetch 5 for efficiency
+        logger.info(f"📊 Retrieved {len(bills)} bills from feed")
+
         if not bills:
-            logger.error("No bills found to process")
-            return 1
+            logger.info("ℹ️ No bills returned from feed (feed may be empty today)")
+            logger.info("📭 Checking database for any unposted bills...")
+            unposted = select_and_lock_unposted_bill()
+            if unposted:
+                logger.info(f"   🔄 Found and locked unposted bill in DB: {unposted['bill_id']}")
+                selected_bill = {"bill_id": unposted["bill_id"]}
+                selected_bill_data = unposted
+                # Skip to step 3 (processing)
+                bills = []
+            else:
+                logger.info("📭 No unposted bills available. Nothing to do today.")
+                return 0
         
-        # Step 2: Loop through bills to find the first unprocessed one
-        processed_bill = None
-        for bill in bills:
-            bill_id = bill.get("bill_id", "unknown")
-            logger.info(f"Checking bill: {bill_id}")
+        # Step 1.5: Validate bills have full text
+        if bills:
+            logger.info("🔍 Validating bill text availability...")
+            valid_bills = []
+            for bill in bills:
+                full_text = bill.get('full_text', '')
+                if full_text and len(full_text.strip()) > 100:
+                    valid_bills.append(bill)
+                    logger.info(f"   ✅ {bill['bill_id']}: Text validated ({len(full_text)} chars)")
+                else:
+                    logger.warning(f"   ⚠️ {bill['bill_id']}: Insufficient text ({len(full_text)} chars) - skipping")
             
-            if not bill_exists(bill_id):
-                logger.info(f"Bill {bill_id} is not in database. Processing...")
-                processed_bill = bill
+            bills = valid_bills
+            logger.info(f"📊 {len(bills)} bills passed text validation")
+            
+            if not bills:
+                logger.warning("⚠️ No bills with valid text found. Checking DB for unposted bills...")
+                unposted = select_and_lock_unposted_bill()
+                if unposted:
+                    logger.info(f"   🔄 Found and locked unposted bill in DB: {unposted['bill_id']}")
+                    selected_bill = {"bill_id": unposted["bill_id"]}
+                    selected_bill_data = unposted
+                else:
+                    logger.info("📭 No unposted bills available. Nothing to do.")
+                    return 0
+
+        # Step 2: Find first unprocessed bill
+        selected_bill = None
+        selected_bill_data = None
+        logger.info("🔍 Scanning bills for unprocessed content...")
+
+        for bill in bills:
+            raw_bill_id = bill.get("bill_id", "unknown")
+            bill_id = normalize_bill_id(raw_bill_id)
+            logger.info(f"   📋 Checking bill: {bill_id} (normalized from: {raw_bill_id})")
+            
+            # Check if bill exists in DB
+            if bill_already_posted(bill_id):
+                logger.info(f"   ✅ Bill {bill_id} already tweeted. Skipping.")
+                continue
+
+            existing_bill = get_bill_by_id(bill_id)
+            
+            if existing_bill:
+                logger.info(f"   🎯 Bill {bill_id} exists but not tweeted. Selecting for tweet.")
+                selected_bill = bill
+                selected_bill_data = existing_bill
                 break
             else:
-                logger.info(f"Bill {bill_id} already exists in database. Skipping.")
-        
-        if not processed_bill:
-            logger.info("All fetched bills have already been processed. Nothing to do.")
-            return 0
-        
-        bill = processed_bill
-        bill_id = bill.get("bill_id", "unknown")
-        logger.info(f"Processing bill: {bill_id}")
-        
-        # Step 3: Summarize the bill with enhanced format
-        logger.info("Summarizing bill with enhanced format...")
-        summary = summarize_bill_enhanced(bill)
-        
-        tweet_text = summary.get("tweet", "").strip()
-        long_summary = summary.get("long", "").strip()
-        overview = summary.get("overview", "").strip()
-        detailed = summary.get("detailed", "").strip()
-        term_dictionary = summary.get("term_dictionary", "").strip()
-        
-        if not tweet_text or not long_summary:
-            logger.error("No valid summary generated from bill")
-            return 1
+                # New bill - needs full processing
+                logger.info(f"   🆕 Bill {bill_id} is new. Selecting for full processing.")
+                selected_bill = bill
+                selected_bill_data = None
+                break
+
+        # If no unprocessed bills found, check DB for any unposted bills with locking
+        if not selected_bill:
+            logger.info("📭 All recent bills already posted. Checking DB for unposted bills...")
+            logger.info("🔒 Using SELECT FOR UPDATE SKIP LOCKED to prevent race conditions...")
+            unposted = select_and_lock_unposted_bill()
+            if unposted:
+                logger.info(f"   🔄 Found and locked unposted bill in DB: {unposted['bill_id']}")
+                selected_bill = {"bill_id": unposted["bill_id"]}
+                selected_bill_data = unposted
+            else:
+                logger.info("📭 No unposted bills available (all locked or processed). Nothing to do.")
+                return 0
+
+        # Step 3: Process the selected bill
+        raw_bill_id = selected_bill.get("bill_id", "unknown")
+        bill_id = normalize_bill_id(raw_bill_id)
+        logger.info(f"⚙️ Processing selected bill: {bill_id} (normalized from: {raw_bill_id})")
+
+        if selected_bill_data:
+            # Use existing data from DB
+            logger.info("💾 Using existing summaries from database")
+            bill_data = selected_bill_data
+            tweet_text = bill_data.get("summary_tweet", "")
+            logger.info(f"📝 Existing tweet summary length: {len(tweet_text)} characters")
+        else:
+            # Generate new summaries
+            logger.info("🧠 Generating new summaries with enhanced format...")
+            summary = summarize_bill_enhanced(selected_bill.get("full_text", ""))
+            logger.info("✅ Summaries generated successfully")
             
-        logger.info(f"Generated tweet: {tweet_text}")
-        logger.info(f"Tweet length: {len(tweet_text)}/280 characters")
-        
-        # Step 4: Prepare bill data for database storage
-        bill_data = {
-            "bill_id": bill_id,
-            "title": bill.get("title", ""),
-            "short_title": bill.get("short_title", ""),
-            "status": bill.get("status", ""),
-            "summary_tweet": tweet_text,
-            "summary_long": long_summary,
-            "summary_overview": overview,
-            "summary_detailed": detailed,
-            "term_dictionary": term_dictionary,
-            "congress_session": bill.get("congress", ""),
-            "date_introduced": bill.get("introduced_date", ""),
-            "source_url": bill.get("congressdotgov_url", ""),
-            "website_slug": generate_website_slug(bill.get("title", ""), bill_id),
-            "tags": "",  # Can be populated later based on bill content
-            "tweet_posted": False,
-            "tweet_url": None
-        }
-        
-        # Step 5: Store bill in database (before posting tweet)
-        if not insert_bill(bill_data):
-            logger.error("Failed to insert bill into database")
-            return 1
+            # Create bill_data for insertion with new fields
+            bill_data = {
+                "bill_id": bill_id,
+                "title": selected_bill.get("title", ""),
+                "short_title": selected_bill.get("short_title", ""),
+                "status": selected_bill.get("status", ""),
+                "summary_tweet": summary.get("tweet", ""),
+                "summary_long": summary.get("long", ""),
+                "summary_overview": summary.get("overview", ""),
+                "summary_detailed": summary.get("detailed", ""),
+                "term_dictionary": summary.get("term_dictionary", ""),
+                "congress_session": selected_bill.get("congress", ""),
+                "date_introduced": selected_bill.get("introduced_date", ""),
+                "source_url": selected_bill.get("source_url", ""),
+                "website_slug": generate_website_slug(selected_bill.get("title", ""), bill_id),
+                "tags": "",
+                "tweet_posted": False,
+                "tweet_url": None,
+                "text_source": selected_bill.get("text_source", "feed"),
+                "text_version": selected_bill.get("text_version", "Introduced"),
+                "text_received_date": selected_bill.get("text_received_date"),
+                "processing_attempts": 0
+            }
             
-        # Step 6: Post to Twitter
-        logger.info("Posting tweet to X/Twitter...")
-        # Use the proper tweet formatting function
+            logger.info(f"📊 New tweet summary length: {len(bill_data['summary_tweet'])} characters")
+            
+            # Insert into database
+            logger.info("💾 Inserting new bill into database...")
+            if not insert_bill(bill_data):
+                logger.error(f"❌ Failed to insert bill {bill_id}")
+                return 1
+            logger.info("✅ Bill inserted into database successfully")
+
+        # Step 4: Post tweet (or simulate in dry-run mode)
+        logger.info("🐦 Preparing to post tweet...")
         from src.publishers.twitter_publisher import format_bill_tweet
         formatted_tweet = format_bill_tweet(bill_data)
-        success, tweet_url = post_tweet(formatted_tweet)
+        logger.info(f"📝 Formatted tweet length: {len(formatted_tweet)} characters")
         
-        if success:
-            logger.info("✅ Tweet posted successfully!")
-            # Update database with tweet information
-            if tweet_url:
-                update_tweet_info(bill_id, tweet_url)
+        if dry_run:
+            logger.info("🔶 DRY-RUN MODE: Simulating tweet post")
+            logger.info(f"🔶 DRY-RUN: Would post tweet (length: {len(formatted_tweet)}):")
+            logger.info(f"🔶 DRY-RUN: {formatted_tweet}")
+            logger.info("🔶 DRY-RUN: Skipping actual Twitter post and database update")
+            logger.info("✅ Dry-run completed successfully")
             return 0
         else:
-            logger.error("❌ Failed to post tweet")
-            return 1
+            logger.info("🚀 Posting tweet to Twitter...")
+            logger.info(f"📝 Tweet content: {formatted_tweet[:100]}...")
+            
+            success, tweet_url = post_tweet(formatted_tweet)
+
+            if success:
+                logger.info(f"✅ Tweet posted successfully: {tweet_url}")
+                
+                # CRITICAL: Update database immediately with row-level locking
+                logger.info("💾 Updating database with tweet information (with row lock)...")
+                logger.debug(f"DEBUG: Calling update_tweet_info(bill_id='{bill_id}', tweet_url='{tweet_url}')")
+                
+                update_success = update_tweet_info(bill_id, tweet_url)
+                
+                if update_success:
+                    logger.info("✅ Database updated successfully with row-level locking")
+                    
+                    # Post-update verification: re-query the bill to confirm changes
+                    logger.debug("🔍 Performing post-update verification...")
+                    updated_bill = get_bill_by_id(bill_id)
+                    
+                    if updated_bill:
+                        tweet_posted = updated_bill.get('tweet_posted', False)
+                        saved_tweet_url = updated_bill.get('tweet_url', '')
+                        
+                        logger.debug(f"DEBUG: Post-update verification - tweet_posted: {tweet_posted}, tweet_url: {saved_tweet_url}")
+                        
+                        if tweet_posted and saved_tweet_url == tweet_url:
+                            logger.info("✅ Database update verified successfully - tweet_posted=True and tweet_url matches")
+                            logger.info("🎉 Orchestrator completed successfully!")
+                            return 0
+                        else:
+                            logger.error(f"❌ DATABASE UPDATE FAILED VERIFICATION: tweet_posted={tweet_posted}, tweet_url match={saved_tweet_url == tweet_url}")
+                            logger.error("❌ This should not happen with row-level locking!")
+                            logger.error("❌ Bill will be marked as problematic to prevent duplicate tweets")
+                            
+                            # Mark this bill as problematic to prevent future selection
+                            from src.database.db import mark_bill_as_problematic
+                            mark_bill_as_problematic(bill_id, f"Tweet update verification failed despite locking: posted={tweet_posted}, url_match={saved_tweet_url == tweet_url}")
+                            
+                            return 1
+                    else:
+                        logger.error("❌ DATABASE VERIFICATION FAILED: Could not retrieve updated bill")
+                        logger.error("❌ Bill will be marked as problematic to prevent duplicate tweets")
+                        
+                        # Mark this bill as problematic to prevent future selection
+                        from src.database.db import mark_bill_as_problematic
+                        mark_bill_as_problematic(bill_id, "Could not retrieve bill for verification after update")
+                        
+                        return 1
+                else:
+                    logger.error("❌ Database update failed - update_tweet_info() returned False")
+                    logger.error("❌ This indicates the bill may have been updated by another process")
+                    logger.error("❌ Bill will be marked as problematic to prevent duplicate tweets")
+                    
+                    # Mark this bill as problematic to prevent future selection
+                    from src.database.db import mark_bill_as_problematic
+                    mark_bill_as_problematic(bill_id, "update_tweet_info() returned False - possible concurrent update")
+                    
+                    return 1
+            else:
+                logger.error("❌ Failed to post tweet to Twitter")
+                logger.error("❌ The bill remains unposted and will be retried in the next run")
+                return 1
             
     except ImportError as e:
         logger.error(f"Import error: {e}")
@@ -148,4 +288,10 @@ def main() -> int:
         return 1
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="TeenCivics Orchestrator - Fetch, summarize, and post bills")
+    parser.add_argument("--dry-run", action="store_true", help="Run in dry-run mode (no Twitter posting or DB updates)")
+    
+    args = parser.parse_args()
+    sys.exit(main(dry_run=args.dry_run))

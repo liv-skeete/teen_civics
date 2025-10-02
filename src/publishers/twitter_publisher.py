@@ -168,45 +168,89 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
 
 def format_bill_tweet(bill: Dict) -> str:
     """
-    Format a bill dictionary into a tweet string with multi-line format.
+    Build a formatted tweet with emojis and structure from a bill record.
 
-    Strategy:
-    - Multi-line format with header, bill summary, and footer
-    - Keep a conservative cap (≤240) for content to account for Unicode weighting on X
-    - Use 260 character safety cap for the entire tweet
+    Format:
+    🏛️ Today in Congress
+    
+    [Summary text]
+    
+    👉 Want to learn more? Link coming soon...
+
+    Rules:
+    - Include emoji header and footer
+    - Prefer the model-generated short summary when available
+    - Ensure the complete formatted tweet fits within Twitter's 280-character limit
     """
     if not bill:
         bill = {}
 
-    summary = bill.get("summary_tweet") or bill.get("summary_short") or bill.get("title") or "No summary available"
+    # Choose best available short summary
+    summary_text = (
+        bill.get("summary_tweet")
+        or bill.get("summary_overview")
+        or bill.get("summary_short")
+        or bill.get("title")
+        or "No summary available"
+    )
 
-    # Multi-line format components
+    # Normalize whitespace and strip
+    summary_text = (summary_text or "").replace("\n", " ").replace("\r", " ").strip()
+
+    # Defensive cleanup: remove hashtags and leading decorative symbols if any slipped in
+    try:
+        import re
+        # Drop hashtag tokens like '#Something'
+        summary_text = re.sub(r"\s#[\w_]+", "", summary_text)
+        # Trim leading non-word decorative characters
+        summary_text = re.sub(r"^[^\w]+", "", summary_text).strip()
+        # Collapse multiple spaces
+        summary_text = re.sub(r"\s{2,}", " ", summary_text)
+    except Exception:
+        # If regex fails for any reason, keep original normalized text
+        pass
+
+    # Build the formatted tweet with header and footer
     header = "🏛️ Today in Congress\n\n"
     footer = "\n\n👉 Want to learn more? Link coming soon..."
-
-    # Calculate available space for summary (240 chars total - header and footer lengths)
-    header_len = len(header)
-    footer_len = len(footer)
-    max_total = 240
-    allowed_summary = max_total - header_len - footer_len
     
-    if allowed_summary < 0:
-        allowed_summary = 0
-
-    text = (summary or "").strip()
-    if len(text) > allowed_summary:
-        if allowed_summary >= 3:
-            text = text[: allowed_summary - 3].rstrip() + "..."
+    # Calculate available space for summary (280 total - header - footer)
+    header_length = len(header)
+    footer_length = len(footer)
+    available_space = 280 - header_length - footer_length
+    
+    # Trim summary if needed to fit within available space
+    if len(summary_text) > available_space:
+        # Sentence-aware trimming
+        cut = summary_text[:available_space].rstrip()
+        # Prefer cutting at sentence boundary if reasonably far into the text
+        for p in [".", "!", "?"]:
+            idx = cut.rfind(p)
+            if idx != -1 and idx >= 60:
+                summary_text = cut[: idx + 1]
+                break
         else:
-            text = text[: allowed_summary].rstrip()
-
-    tweet = f"{header}{text}{footer}"
-
-    # Final safety cap (hard cut) to ensure we never exceed ~260 chars even if header/surrogates miscount
-    if len(tweet) > 260:
-        tweet = tweet[:257].rstrip() + "..."
-
-    return tweet
+            # Else cut at last space and add a period if needed
+            sp = cut.rfind(" ")
+            if sp >= 60:
+                cut = cut[:sp].rstrip()
+            if not cut.endswith((".", "!", "?")):
+                cut += "."
+            summary_text = cut[:available_space]
+    
+    # Construct the final tweet
+    formatted_tweet = f"{header}{summary_text}{footer}"
+    
+    # Final safety check - ensure we're within 280 characters
+    if len(formatted_tweet) > 280:
+        # Emergency trim - this shouldn't happen but just in case
+        overflow = len(formatted_tweet) - 280
+        summary_text = summary_text[:-overflow].rstrip()
+        if not summary_text.endswith((".", "!", "?")):
+            summary_text += "."
+        formatted_tweet = f"{header}{summary_text}{footer}"
+    
+    return formatted_tweet
 
 
 if __name__ == "__main__":

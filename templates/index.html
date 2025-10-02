@@ -64,7 +64,7 @@
                 <a href="{{ bill.bill_id|generate_congress_url(bill.congress_session) }}" target="_blank" rel="noopener" class="btn btn-primary">
                     Read Full Bill on Congress.gov
                 </a>
-                <a href="/bills/{{ bill.website_slug }}" class="btn btn-secondary">
+                <a href="/bill/{{ bill.website_slug }}" class="btn btn-secondary">
                     View Bill Details
                 </a>
                 {% if bill.tweet_url %}

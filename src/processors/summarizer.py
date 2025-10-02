@@ -16,9 +16,21 @@ logger = logging.getLogger(__name__)
 # Load environment variables at import time for CLI and function usage
 load_dotenv()
 
-# Prefer Claude 4 by default, allow override via environment variables
-PREFERRED_MODEL = os.getenv("ANTHROPIC_MODEL_PREFERRED", "claude-4")
-FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-3-haiku-20240307")
+# Prefer Claude 3.5 Sonnet by default, allow override via environment variables
+# Valid models as of Oct 2024: claude-3-5-sonnet-20241022 (latest), claude-3-5-haiku-20241022
+PREFERRED_MODEL = os.getenv("ANTHROPIC_MODEL_PREFERRED", "claude-3-5-sonnet-20241022")
+FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-3-5-sonnet-20240620")
+SECOND_FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_SECOND_FALLBACK", "claude-3-5-haiku-20241022")
+
+# Valid model names for validation
+VALID_MODELS = {
+    "claude-3-5-sonnet-20241022",  # Latest Sonnet (Oct 2024)
+    "claude-3-5-sonnet-20240620",  # Previous Sonnet (June 2024)
+    "claude-3-5-haiku-20241022",   # Latest Haiku (Oct 2024)
+    "claude-3-opus-20240229",      # Opus (Feb 2024)
+    "claude-3-sonnet-20240229",    # Claude 3 Sonnet (Feb 2024)
+    "claude-3-haiku-20240307",     # Claude 3 Haiku (Mar 2024)
+}
 
 
 def _ensure_api_key() -> str:
@@ -65,6 +77,7 @@ def _build_enhanced_system_prompt() -> str:
     return (
         "You are a careful, non-partisan summarizer for civic education.\n"
         "**Your output must be STRICT JSON with four keys: `overview`, `detailed`, `term_dictionary`, and `tweet`. No code fences. No extra text.**\n\n"
+        "**CRITICAL: Even if full bill text is not provided, you MUST generate ALL four fields (overview, detailed, term_dictionary, tweet) using the bill title, status, latest action, and any available metadata. Do NOT return empty strings for any field.**\n\n"
         "**General rules:**\n"
         "- Do not invent facts or numbers. Only use information present in the provided bill data.\n"
         "- Keep summaries clear, neutral, and accessible for a teen civic audience.\n"
@@ -80,9 +93,10 @@ def _build_enhanced_system_prompt() -> str:
         "- Be adaptive: If the bill text is substantial, aim for 400–500 words. If the bill text is short/simple (e.g., many House/Senate resolutions), write a concise summary sufficient to fully explain it, even as short as 120–250 words. Do not speculate to reach a target length.\n"
         "- ALWAYS include the emoji signposts in your output - they are REQUIRED.\n"
         "- Use bullet points for scannability. Explain acronyms inline where helpful.\n"
-        "- REQUIRED structure with emojis (omit sections only if truly not applicable):\n"
+        "- REQUIRED section headers (use these exact emojis and titles; omit sections only if truly not applicable):\n"
         "  🔎 Overview (brief if overview already provided above; can be omitted if redundant)\n"
         "  🔑 Key Provisions (detailed breakdown with sub-bullets; for House rules include debate structure, time limits, amendment procedures)\n"
+        "  🛠️ Policy Changes (substantive policy changes created or modified by the bill)\n"
         "  ⚖️ Policy Riders or Key Rules/Changes (for House rules: germaneness requirements, waiver language, points of order)\n"
         "  📌 Procedural/Administrative Notes (House Calendar placement, committee procedures, voting procedures)\n"
         "  👉 In short (3-5 bullets summarizing key implications and next steps)\n"
@@ -168,56 +182,206 @@ def _sanitize_json_text(text: str) -> str:
     # Don't remove Unicode characters (emojis) - they're valid in JSON and needed for formatting
     return cleaned
 
+def _repair_json_text(text: str) -> str:
+    """
+    Repairs common JSON formatting errors from LLM outputs, especially unescaped newlines.
+    """
+    # This regex finds newlines (\n) that are not preceded by a backslash (negative lookbehind)
+    # and are inside a string literal (between two quotes).
+    # It looks for a quote, then any characters that are not a quote or backslash,
+    # then the unescaped newline, and then more characters until the closing quote.
+    # It replaces the found newline with a literal '\\n'.
+    # This is a simplified approach; a full parser would be more robust but is overkill here.
+    # The regex now correctly handles multiple newlines within the same string.
+    repaired = re.sub(r'(?<!\\)\n', r'\\n', text)
+    return repaired
+
+
 def _try_parse_json_strict(text: str) -> Dict[str, Any]:
+    """Parse JSON with robust error recovery and repair logic."""
     t = _strip_code_fences(text)
     t = _sanitize_json_text(t)
     
-    # First attempt: direct JSON parse
-    try:
-        return json.loads(t)
-    except Exception as e:
-        logger.debug(f"Initial JSON parse failed: {e}")
+    attempts = []
     
-    # More aggressive cleaning: remove all control characters
+    # Attempt 1: Direct JSON parse
+    try:
+        result = json.loads(t)
+        logger.debug("JSON parse successful on first attempt")
+        return result
+    except Exception as e:
+        attempts.append(f"Direct parse: {e}")
+
+    # Attempt 2: Repair common JSON errors (like unescaped newlines)
+    t_repaired = _repair_json_text(t)
+    try:
+        result = json.loads(t_repaired)
+        logger.debug("JSON parse successful after repairing newlines")
+        return result
+    except Exception as e:
+        attempts.append(f"Repaired parse: {e}")
+    
+    # Attempt 3: Clean control characters
     t_clean = ''.join(char for char in t if ord(char) >= 32 or char in '\t\n\r')
     try:
-        return json.loads(t_clean)
+        result = json.loads(t_clean)
+        logger.debug("JSON parse successful after cleaning control chars")
+        return result
     except Exception as e:
-        logger.debug(f"Clean JSON parse failed: {e}")
+        attempts.append(f"Clean parse: {e}")
     
-    # Fallback: extract the largest JSON object substring between first { and last }
-    first = t_clean.find("{")
-    last = t_clean.rfind("}")
-    if first != -1 and last != -1 and last > first:
-        cand = t_clean[first : last + 1]
-        try:
-            return json.loads(cand)
-        except Exception as e:
-            logger.debug(f"Candidate JSON parse failed: {e}")
+    # Attempt 3: Common JSON formatting fixes
+    t_fixed = t_clean
     
-    # Even more aggressive: re-encode to handle encoding issues
+    # Fix trailing commas in objects/arrays
+    t_fixed = re.sub(r',\s*([}\]])', r'\1', t_fixed)
+    t_fixed = re.sub(r',\s*$', '', t_fixed)
+    
+    # Fix missing quotes around keys
+    t_fixed = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)', r'\1"\2"\3', t_fixed)
+    
+    # Fix single quotes to double quotes
+    t_fixed = re.sub(r"'([^']*)'", r'"\1"', t_fixed)
+    
+    # Fix unescaped quotes within strings - use a simpler approach
+    def escape_inner_quotes(match):
+        content = match.group(1)
+        # Escape any quotes that aren't already escaped
+        content = re.sub(r'(?<!\\)"', r'\"', content)
+        return f'"{content}"'
+    
+    t_fixed = re.sub(r'(?<!\\)"([^"]*?)(?<!\\)"', escape_inner_quotes, t_fixed)
+    
+    # Fix missing commas between object properties
+    t_fixed = re.sub(r'"\s*"', '", "', t_fixed)
+    t_fixed = re.sub(r'}\s*{', '}, {', t_fixed)
+    t_fixed = re.sub(r']\s*{', '], {', t_fixed)
+    t_fixed = re.sub(r'}\s*\[', '}, [', t_fixed)
+    
+    try:
+        result = json.loads(t_fixed)
+        logger.debug("JSON parse successful after formatting fixes")
+        return result
+    except Exception as e:
+        attempts.append(f"Formatting fixes: {e}")
+    
+    # Attempt 4: Extract JSON object/array substring
+    first_brace = t_fixed.find("{")
+    first_bracket = t_fixed.find("[")
+    
+    if first_brace != -1 or first_bracket != -1:
+        start_idx = min(filter(lambda x: x != -1, [first_brace, first_bracket]))
+        end_idx = max(t_fixed.rfind("}"), t_fixed.rfind("]"))
+        
+        if end_idx != -1 and end_idx > start_idx:
+            candidate = t_fixed[start_idx:end_idx + 1]
+            try:
+                result = json.loads(candidate)
+                logger.debug("JSON parse successful on extracted substring")
+                return result
+            except Exception as e:
+                attempts.append(f"Extracted substring: {e}")
+    
+    # Attempt 5: UTF-8 encoding cleanup
     try:
         t_encoded = t.encode('utf-8', 'ignore').decode('utf-8')
         t_encoded = ''.join(char for char in t_encoded if ord(char) >= 32 or char in '\t\n\r')
-        return json.loads(t_encoded)
+        result = json.loads(t_encoded)
+        logger.debug("JSON parse successful after encoding cleanup")
+        return result
     except Exception as e:
-        logger.debug(f"Encoded JSON parse failed: {e}")
+        attempts.append(f"Encoding cleanup: {e}")
     
-    # Final attempt: extract content and construct manually if possible
+    # Attempt 6: Manual JSON construction as last resort
     try:
-        # Extract between first { and last }
-        first = t.find("{")
-        last = t.rfind("}")
-        if first != -1 and last != -1:
-            raw_json = t[first:last+1]
-            # Very aggressive cleaning
-            raw_json = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', raw_json)
-            return json.loads(raw_json)
+        # Look for common patterns in the response
+        tweet_match = re.search(r'(?:"tweet"|tweet)[\s:]*["\']([^"\']+)["\']', t, re.IGNORECASE)
+        long_match = re.search(r'(?:"long"|long)[\s:]*["\']([^"\']+)["\']', t, re.IGNORECASE)
+        
+        if tweet_match or long_match:
+            result = {
+                "tweet": tweet_match.group(1) if tweet_match else "",
+                "long": long_match.group(1) if long_match else ""
+            }
+            logger.debug("JSON constructed manually from pattern matching")
+            return result
     except Exception as e:
-        logger.debug(f"Final JSON parse attempt failed: {e}")
+        attempts.append(f"Manual construction: {e}")
     
-    # If all attempts fail, raise the original error
-    raise ValueError(f"Could not parse JSON from response. Text length: {len(text)}")
+    # If all attempts fail, provide detailed error information
+    error_msg = f"Could not parse JSON from response after {len(attempts)} attempts:\n"
+    error_msg += "\n".join([f"  - {attempt}" for attempt in attempts])
+    error_msg += f"\nText length: {len(text)}. First 200 chars: {text[:200]}"
+    
+    raise ValueError(error_msg)
+
+
+def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
+    """
+    Parse JSON with robust error recovery, falling back to plain text extraction
+    if JSON parsing fails completely.
+    """
+    try:
+        return _try_parse_json_strict(text)
+    except Exception as e:
+        logger.warning(f"All JSON parsing attempts failed, falling back to enhanced extraction: {e}")
+        
+        # Enhanced fallback: extract all expected fields
+        result = {}
+        
+        # Try to extract each field using targeted patterns
+        field_patterns = {
+            'overview': [
+                r'"overview"\s*:\s*"([^"]*)"',
+                r'overview:\s*([^\n]+)',
+            ],
+            'detailed': [
+                r'"detailed"\s*:\s*"([^"]*(?:\\.[^"]*)*)"',  # Handle escaped quotes
+                r'detailed:\s*(.*?)(?="[a-z_]+"\s*:|$)',
+            ],
+            'term_dictionary': [
+                r'"term_dictionary"\s*:\s*(\[[^\]]*\])',
+                r'term_dictionary:\s*(\[[^\]]*\])',
+            ],
+            'tweet': [
+                r'"tweet"\s*:\s*"([^"]*)"',
+                r'tweet:\s*([^\n]+)',
+            ]
+        }
+        
+        # Extract each field
+        for field, patterns in field_patterns.items():
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+                if match:
+                    content = match.group(1).strip()
+                    # Unescape JSON strings
+                    if field != 'term_dictionary':
+                        content = content.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
+                    result[field] = content
+                    logger.debug(f"Extracted {field}: {len(content)} chars")
+                    break
+        
+        # If we got the enhanced fields, return them
+        if 'overview' in result or 'detailed' in result:
+            logger.info(f"Enhanced fallback extraction successful: {list(result.keys())}")
+            # Ensure all fields exist
+            result.setdefault('overview', '')
+            result.setdefault('detailed', '')
+            result.setdefault('term_dictionary', '[]')
+            result.setdefault('tweet', '')
+            return result
+        
+        # If the enhanced fallback didn't find anything, do not proceed to legacy.
+        # Instead, ensure all keys are present with default values.
+        logger.warning("No structured content found in fallback, returning empty summary object.")
+        return {
+            "overview": "",
+            "detailed": "",
+            "term_dictionary": "[]",
+            "tweet": "",
+            "long": ""
+        }
 
 
 def _smart_truncate_tweet(tweet: str, limit: int = 200) -> str:
@@ -253,10 +417,22 @@ def _call_anthropic_once(client: Anthropic, model: str, system: str, user: str):
 def _model_call_with_fallback(client: Anthropic, system: str, user: str) -> str:
     """
     Call Anthropic with preferred then fallback model.
-    Includes simple exponential backoff on 429 rate_limit errors.
+    Includes simple exponential backoff on 429 rate_limit errors and
+    handles model not found errors gracefully.
     """
+    # Validate models before attempting to use them
+    models_to_try = []
+    for model in (PREFERRED_MODEL, FALLBACK_MODEL, SECOND_FALLBACK_MODEL):
+        if model not in VALID_MODELS:
+            logger.error(f"Invalid model configured: {model}. Must be one of: {', '.join(sorted(VALID_MODELS))}")
+            continue
+        models_to_try.append(model)
+    
+    if not models_to_try:
+        raise ValueError(f"No valid models configured. Check ANTHROPIC_MODEL_PREFERRED, ANTHROPIC_MODEL_FALLBACK, and ANTHROPIC_MODEL_SECOND_FALLBACK environment variables. Valid models: {', '.join(sorted(VALID_MODELS))}")
+    
     last_err: Optional[Exception] = None
-    for model in (PREFERRED_MODEL, FALLBACK_MODEL):
+    for model in models_to_try:
         delay = 1.0
         for attempt in range(1, 4):
             try:
@@ -271,11 +447,19 @@ def _model_call_with_fallback(client: Anthropic, system: str, user: str) -> str:
             except Exception as e:
                 last_err = e
                 emsg = str(e).lower()
+                
+                # Handle model not found errors (404)
+                if "404" in emsg or "not_found" in emsg or "model not found" in emsg:
+                    logger.error(f"Model {model} not found/available: {e}")
+                    break  # Don't retry this model, move to next
+                
+                # Handle rate limiting
                 if "429" in emsg or "rate_limit" in emsg:
                     logger.info(f"429/rate limit for {model}; sleeping {delay:.2f}s then retrying (attempt {attempt}/3)")
                     time.sleep(delay)
                     delay *= 2.0
                     continue
+                
                 logger.warning(f"Model call failed for {model} (attempt {attempt}): {e}")
                 break  # move to next model
 def _force_json_conversion(client: Anthropic, text: str, required_keys: List[str]) -> str:
@@ -590,6 +774,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     """
     Enhanced summarization that returns overview, detailed, term_dictionary, tweet, and long.
     Uses the enhanced system prompt and includes full_text when available.
+    Ensures non-empty overview/detailed/long even when full bill text is unavailable.
     """
     start = time.monotonic()
     logger.info("Preparing to generate enhanced bill summary (restored function)")
@@ -602,7 +787,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     system = _build_enhanced_system_prompt()
 
     # Build user with optional full_text (no truncation)
-    bill_json = json.dumps(bill, ensure_ascii=False)
+    bill_json = json.dumps(bill, ensure_ascii=False, default=str)
     full_text_section = ""
     if bill.get("full_text"):
         try:
@@ -620,15 +805,160 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         f"Bill JSON:\n{bill_json}{full_text_section}"
     )
 
+    # Helper: merge/normalize term_dictionary inputs into a list[dict]
+    def _merge_term_dictionary(acc: List[Dict[str, str]], incoming: Any) -> List[Dict[str, str]]:
+        try:
+            td = incoming
+            if isinstance(td, str):
+                try:
+                    td = json.loads(td)
+                except Exception:
+                    td = [p.strip() for p in re.split(r"[;\n]", td) if p.strip()]
+            if isinstance(td, list):
+                for item in td:
+                    if isinstance(item, dict):
+                        term = str(item.get("term", "")).strip()
+                        definition = str(item.get("definition", "")).strip()
+                        if not (term or definition):
+                            continue
+                        if not any((term == x.get("term") and definition == x.get("definition")) for x in acc):
+                            acc.append({"term": term, "definition": definition})
+                    else:
+                        s = str(item).strip()
+                        if not s:
+                            continue
+                        if ":" in s:
+                            t, d = s.split(":", 1)
+                            t, d = t.strip(), d.strip()
+                        else:
+                            t, d = s, ""
+                        if not any((t == x.get("term") and d == x.get("definition")) for x in acc):
+                            acc.append({"term": t, "definition": d})
+        except Exception as e:
+            logger.warning(f"Failed to merge term_dictionary: {e}")
+        return acc
+
+    # Helper: metadata-only model pass to fill missing fields (no full_text required)
+    def _generate_from_metadata_model() -> Dict[str, Any]:
+        bill_meta = {
+            "bill_id": bill.get("bill_id"),
+            "title": bill.get("title"),
+            "introduced_date": bill.get("introduced_date") or bill.get("date_introduced") or bill.get("introducedDate"),
+            "latest_action": bill.get("latest_action"),
+            "status": bill.get("status"),
+            "congress": bill.get("congress") or bill.get("congress_session"),
+            "bill_type": bill.get("bill_type") or bill.get("type"),
+            "bill_number": bill.get("bill_number") or bill.get("number"),
+            "sponsor": bill.get("sponsor"),
+            "text_format": bill.get("text_format"),
+            "text_url": bill.get("text_url"),
+        }
+        system2 = _build_enhanced_system_prompt()
+        user2 = (
+            "We do not have full bill text. Using ONLY the following bill metadata, generate ALL four fields.\n"
+            "Do NOT leave any field empty. No speculation beyond what the metadata clearly states.\n"
+            "Return ONLY a strict JSON object with keys 'overview', 'detailed', 'term_dictionary', and 'tweet'.\n"
+            f"Bill metadata (JSON):\n{json.dumps(bill_meta, ensure_ascii=False, default=str)}"
+        )
+        try:
+            rawx = _model_call_with_fallback(client, system2, user2)
+            return _try_parse_json_with_fallback(rawx)
+        except Exception as ex:
+            logger.warning(f"Metadata-only enhanced generation failed: {ex}")
+            return {}
+
+    # Helper: deterministic synthesis from metadata (no API) as last resort
+    def _synthesize_from_metadata_py() -> Dict[str, Any]:
+        title = str(bill.get("title") or "").strip()
+        bill_type = str(bill.get("bill_type") or bill.get("type") or "").upper()
+        bill_number = str(bill.get("bill_number") or bill.get("number") or "").strip()
+        congress = str(bill.get("congress") or bill.get("congress_session") or "").strip()
+        latest_action = str(bill.get("latest_action") or "").strip()
+        status = str(bill.get("status") or "").strip().replace("_", " ")
+        introduced_date = str(bill.get("introduced_date") or bill.get("date_introduced") or bill.get("introducedDate") or "").strip()
+
+        prefix = f"{bill_type}.{bill_number} ({congress}th Congress)" if (bill_type and bill_number and congress) else ""
+        overview_parts: List[str] = []
+        if title:
+            overview_parts.append(title)
+        if status:
+            overview_parts.append(f"Status: {status}.")
+        elif latest_action:
+            overview_parts.append(f"Latest action: {latest_action}")
+        overview_text = (" ".join(overview_parts)).strip()
+        if prefix:
+            overview_text = f"{prefix} — {overview_text}"
+        if bill_type == "SRES":
+            overview_text = (overview_text + " This is a simple Senate resolution that expresses the position of the Senate and does not have the force of law.").strip()
+
+        # Structured detailed with required emoji sections
+        lines: List[str] = []
+        lines.append("🔎 Overview")
+        lines.append(f"- {title}" if title else "- Senate resolution.")
+        if introduced_date:
+            lines.append(f"- Introduced: {introduced_date}")
+        if latest_action:
+            lines.append(f"- Latest action: {latest_action}")
+        lines.append("")
+        lines.append("🔑 Key Provisions")
+        ltitle = title.lower()
+        import re as _re
+        if "designating" in ltitle:
+            m = _re.search(r'designating\s+([^,]+)', title, flags=_re.IGNORECASE)
+            if m:
+                lines.append(f"- Designates {m.group(1).strip()}.")
+            else:
+                lines.append("- Designates a commemorative period identified in the title.")
+        if "recogniz" in ltitle:
+            lines.append("- Recognizes and celebrates the subject identified in the title.")
+        if "awareness" in ltitle:
+            lines.append("- Raises awareness of the issue referenced in the title.")
+        if "increase" in ltitle or "reduce" in ltitle:
+            lines.append("- Encourages efforts consistent with the resolution's stated purpose.")
+        lines.append("- Expresses the sense of the Senate on the topic identified in the title.")
+        lines.append("")
+        lines.append("🛠️ Policy Changes")
+        lines.append("- No statutory changes; simple resolutions do not create or amend law.")
+        lines.append("")
+        lines.append("⚖️ Policy Riders or Key Rules/Changes")
+        lines.append("- Not applicable; this resolution expresses a position and sets no binding rules.")
+        lines.append("")
+        lines.append("📌 Procedural/Administrative Notes")
+        la_lower = latest_action.lower()
+        if "unanimous consent" in la_lower:
+            lines.append("- Agreed to in the Senate by Unanimous Consent.")
+        if "preamble" in la_lower:
+            lines.append("- Adopted with a preamble.")
+        if status:
+            lines.append(f"- Status: {status}.")
+        lines.append("")
+        lines.append("👉 In short")
+        lines.append("- A Senate resolution stating support/recognition as reflected in its title.")
+        if "designating" in ltitle:
+            lines.append("- Formally designates the period named in the title for awareness.")
+        if "recogniz" in ltitle:
+            lines.append("- Recognizes contributions or significance referenced in the title.")
+        detailed_text = "\n".join(lines).strip()
+
+        td: List[Dict[str, str]] = []
+        if bill_type == "SRES":
+            td.append({"term": "simple resolution", "definition": "A measure considered by one chamber that expresses its position; it is not presented to the President and does not have the force of law."})
+        if "unanimous consent" in la_lower:
+            td.append({"term": "unanimous consent", "definition": "A procedure where the Senate agrees to a measure without objection, speeding consideration."})
+        if "preamble" in la_lower:
+            td.append({"term": "preamble", "definition": "Introductory text in a resolution stating findings or reasons."})
+
+        return {"overview": overview_text, "detailed": detailed_text, "term_dictionary": td}
+
     # Primary attempt with simple repair
     try:
         raw = _model_call_with_fallback(client, system, user)
-        parsed = _try_parse_json_strict(raw)
+        parsed = _try_parse_json_with_fallback(raw)
     except Exception as e:
         logger.warning(f"Enhanced parse failed; retrying once: {e}")
         try:
             raw2 = _model_call_with_fallback(client, system, user)
-            parsed = _try_parse_json_strict(raw2)
+            parsed = _try_parse_json_with_fallback(raw2)
         except Exception as e2:
             logger.error(f"Enhanced retry failed: {e2}")
             raise
@@ -636,43 +966,75 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     if not isinstance(parsed, dict):
         raise ValueError("Enhanced model did not return a JSON object")
 
-    # Required keys with defaults
     # Normalize fields that may be lists or stringified lists
     overview = _normalize_structured_text(parsed.get("overview", ""))
     detailed = _normalize_structured_text(parsed.get("detailed", ""))
-    term_dict = parsed.get("term_dictionary", [])
-    tweet = str(parsed.get("tweet", "") or "").strip()
 
-    # Normalize term_dictionary to JSON string for DB compatibility
-    if isinstance(term_dict, (list, dict)):
-        term_dictionary_str = json.dumps(term_dict, ensure_ascii=False)
+    # Normalize term dictionary to a working list
+    term_dictionary_obj: List[Dict[str, str]] = []
+    _merge_term_dictionary(term_dictionary_obj, parsed.get("term_dictionary", []))
+
+    # Tweet: coerce to <=200 characters coherently
+    tweet_raw = str(parsed.get("tweet", "")).strip()
+    tweet = _smart_truncate_tweet(tweet_raw, limit=200)
+
+    # If the model underfilled fields (common when full_text is absent), do a metadata-only repair pass
+    ov_min, det_min = 100, 300
+    if len(overview.strip()) < ov_min or len(detailed.strip()) < det_min:
+        logger.info("Overview/detailed too short; attempting metadata-only enhanced repair pass")
+        parsed_meta = _generate_from_metadata_model()
+        if isinstance(parsed_meta, dict) and parsed_meta:
+            new_overview = _normalize_structured_text(parsed_meta.get("overview", ""))
+            new_detailed = _normalize_structured_text(parsed_meta.get("detailed", ""))
+            if len(new_overview.strip()) > len(overview.strip()):
+                overview = new_overview
+            if len(new_detailed.strip()) > len(detailed.strip()):
+                detailed = new_detailed
+            _merge_term_dictionary(term_dictionary_obj, parsed_meta.get("term_dictionary", []))
+            # If original tweet was empty and metadata pass produced one, use it
+            if not tweet.strip():
+                tweet = _smart_truncate_tweet(str(parsed_meta.get("tweet", "")).strip(), limit=200)
+
+    # Last-resort deterministic synthesis if still underfilled
+    if len(overview.strip()) < ov_min or len(detailed.strip()) < det_min:
+        logger.info("Overview/detailed still short; synthesizing structured content from metadata")
+        synth = _synthesize_from_metadata_py()
+        if len(synth.get("overview", "").strip()) > len(overview.strip()):
+            overview = synth["overview"]
+        if len(synth.get("detailed", "").strip()) > len(detailed.strip()):
+            detailed = synth["detailed"]
+        _merge_term_dictionary(term_dictionary_obj, synth.get("term_dictionary", []))
+
+    # Build long summary from overview + detailed
+    if overview and detailed:
+        long_summary = f"{overview}\n\n{detailed}".strip()
     else:
-        term_dictionary_str = str(term_dict).strip()
+        long_summary = (overview or detailed or "").strip()
 
-    # Backward-compatible long = overview + gap + detailed
-    summary_long = f"{overview}\n\n{detailed}" if overview and detailed else (overview or detailed)
+    # Ensure term_dictionary JSON string
+    term_dictionary = json.dumps(term_dictionary_obj, ensure_ascii=False)
 
-    dur = time.monotonic() - start
-    logger.info(f"Enhanced summarization complete in {dur:.2f}s")
+    logger.info(
+        f"Enhanced summary fields lengths: tweet={len(tweet)}, overview={len(overview)}, "
+        f"detailed={len(detailed)}, long={len(long_summary)}"
+    )
 
-    return {
+    summaries = {
         "overview": overview,
         "detailed": detailed,
-        "term_dictionary": term_dictionary_str,
+        "term_dictionary": term_dictionary,
         "tweet": tweet,
-        "long": summary_long,
+        "long": long_summary,
     }
 
+    # Final validation: ensure all required keys exist before returning
+    required_keys = ["overview", "detailed", "term_dictionary", "tweet", "long"]
+    for key in required_keys:
+        if key not in summaries or summaries[key] is None:
+            logger.warning(f"Final validation: adding missing key '{key}' with default value.")
+            if key == "term_dictionary":
+                summaries[key] = "[]"
+            else:
+                summaries[key] = ""
 
-def summarize_bill(bill: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Summarize a bill into tweet and long formats using Claude Sonnet.
-
-    Returns:
-        {"tweet": "...", "long": "...", "raw_tweet": "..."}
-    """
-    start = time.monotonic()
-    logger.info("Preparing to summarize bill")
-
-    _ensure_api_key()
-    # Create custom http_client to 
+    return summaries

@@ -11,20 +11,22 @@
 
     <!-- Filter Section -->
     <div class="filter-section">
-        <form method="GET" class="filter-form">
+        <div class="filter-form">
             <label for="status-filter">Filter by status:</label>
-            <select name="status" id="status-filter" onchange="this.form.submit()">
-                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
-                <option value="Introduced" {% if status_filter == 'Introduced' %}selected{% endif %}>Introduced</option>
-                <option value="Referred to Committee" {% if status_filter == 'Referred to Committee' %}selected{% endif %}>Referred to Committee</option>
-                <option value="Committee Consideration" {% if status_filter == 'Committee Consideration' %}selected{% endif %}>Committee Consideration</option>
-                <option value="Reported by Committee" {% if status_filter == 'Reported by Committee' %}selected{% endif %}>Reported by Committee</option>
-                <option value="Passed House" {% if status_filter == 'Passed House' %}selected{% endif %}>Passed House</option>
-                <option value="Passed Senate" {% if status_filter == 'Passed Senate' %}selected{% endif %}>Passed Senate</option>
-                <option value="Became Law" {% if status_filter == 'Became Law' %}selected{% endif %}>Became Law</option>
-                <option value="Vetoed" {% if status_filter == 'Vetoed' %}selected{% endif %}>Vetoed</option>
+            <select name="status" id="status-filter">
+                <option value="all">All Statuses</option>
+                <option value="introduced">Introduced</option>
+                <option value="referred_to_committee">Referred to Committee</option>
+                <option value="committee_consideration">Committee Consideration</option>
+                <option value="reported_by_committee">Reported by Committee</option>
+                <option value="passed_house">Passed House</option>
+                <option value="failed_house">Failed House</option>
+                <option value="passed_senate">Passed Senate</option>
+                <option value="failed_senate">Failed Senate</option>
+                <option value="became_law">Became Law</option>
+                <option value="vetoed">Vetoed</option>
             </select>
-        </form>
+        </div>
     </div>
 
     {% if error %}
@@ -36,10 +38,10 @@
     {% if bills %}
     <div class="bills-grid">
         {% for bill in bills %}
-        <article class="bill-card">
+        <article class="bill-card" data-status="{{ bill.status }}">
             <div class="bill-header">
                 <h2 class="bill-title">
-                    <a href="/bills/{{ bill.website_slug }}">{{ bill.title|shorten_title }}</a>
+                    <a href="/bill/{{ bill.website_slug }}">{{ bill.title|shorten_title }}</a>
                 </h2>
                 {% if bill.title|length > 80 %}
                 <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
@@ -52,7 +54,7 @@
                 <div class="bill-meta">
                     <span class="bill-id">{{ bill.bill_id }}</span>
                     <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
-                    <span class="bill-status {{ bill.status|lower|replace(' ', '-') }}">{{ bill.status }}</span>
+                    <span class="bill-status {{ bill.status|lower|replace('_', '-') }}">{{ bill.status|format_status }}</span>
                 </div>
             </div>
 
@@ -64,7 +66,7 @@
                 <br>
                 
                 <div class="bill-actions">
-                    <a href="/bills/{{ bill.website_slug }}" class="btn btn-primary btn-small">
+                    <a href="/bill/{{ bill.website_slug }}" class="btn btn-primary btn-small">
                         Read Summary
                     </a>
                     {% if bill.tweet_url %}

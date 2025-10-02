@@ -1,3 +1,3 @@
-from .summarizer import summarize_bill
+from .summarizer import summarize_bill_enhanced
 
-__all__ = ["summarize_bill"]
+__all__ = ["summarize_bill_enhanced"]

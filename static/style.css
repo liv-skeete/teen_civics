@@ -331,7 +331,13 @@ a:hover {
     background-color: var(--color-success);
 }
 
-.bill-status.became-law {
+.bill-status.failed-house,
+.bill-status.failed-senate {
+    background-color: var(--color-error);
+}
+
+.bill-status.became-law,
+.bill-status.enacted {
     background-color: var(--color-success);
 }
 
