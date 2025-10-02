@@ -58,7 +58,7 @@ jobs:
 
     - name: Run weekly digest
       env:
-        CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
+        CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
         TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}

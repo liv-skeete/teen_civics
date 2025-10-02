@@ -195,41 +195,4 @@ def rollback_migration():
     
     try:
         with pg_connect() as conn:
-            with conn.cursor() as cursor:
-                logger.info("🗑️ Dropping new columns...")
-                
-                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS text_source")
-                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS text_version")
-                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS text_received_date")
-                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS processing_attempts")
-                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS problematic")
-                cursor.execute("ALTER TABLE bills DROP COLUMN IF EXISTS problem_reason")
-                
-                logger.info("🗑️ Dropping indexes...")
-                cursor.execute("DROP INDEX IF EXISTS idx_bills_text_received")
-                cursor.execute("DROP INDEX IF EXISTS idx_bills_processing_attempts")
-                cursor.execute("DROP INDEX IF EXISTS idx_bills_problematic")
-                
-                conn.commit()
-                logger.info("✅ Rollback completed successfully")
-                return True
-                
-    except Exception as e:
-        logger.error(f"❌ Rollback failed: {e}")
-        return False
-
-
-if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Database schema migration for new workflow")
-    parser.add_argument("--rollback", action="store_true", help="Rollback the migration (DANGEROUS)")
-    
-    args = parser.parse_args()
-    
-    if args.rollback:
-        success = rollback_migration()
-    else:
-        success = migrate_schema()
-    
-    sys.exit(0 if success else 1)
+            with c

@@ -62,7 +62,7 @@ jobs:
       # The ${{ secrets.SECRET_NAME }} syntax is the standard, secure way to access secrets in GitHub Actions.
       # Linter warnings about invalid context access can be safely ignored.
       env:
-        CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
+        CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         ANTHROPIC_MODEL_PREFERRED: claude-3-5-sonnet-20241022
         ANTHROPIC_MODEL_FALLBACK: claude-3-5-sonnet-20240620
