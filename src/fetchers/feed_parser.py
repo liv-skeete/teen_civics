@@ -13,6 +13,14 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Playwright not available. Browser-based fetching will be disabled.")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -20,10 +28,17 @@ logger = logging.getLogger(__name__)
 # Feed URL
 BILL_TEXTS_FEED_URL = "https://www.congress.gov/bill-texts-received-today"
 
-# Enhanced headers to avoid 403 errors
+# Enhanced headers to avoid 403 errors - more realistic browser headers
+# Rotating user agents to avoid detection
+USER_AGENTS = [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/126.0'
+]
+
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br',
     'Connection': 'keep-alive',
@@ -31,12 +46,81 @@ HEADERS = {
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
     'Sec-Fetch-Site': 'none',
-    'Cache-Control': 'max-age=0'
+    'Sec-Fetch-User': '?1',
+    'Cache-Control': 'max-age=0',
+    'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"macOS"',
+    'DNT': '1',
+    'Referer': 'https://www.congress.gov/'
 }
+
+# Create a session for persistent connections
+session = requests.Session()
+session.headers.update(HEADERS)
+
+def get_random_user_agent():
+    """Return a random user agent from the list"""
+    import random
+    return random.choice(USER_AGENTS)
+
+def update_session_headers():
+    """Update session headers with a random user agent"""
+    session.headers.update({
+        'User-Agent': get_random_user_agent()
+    })
+
+def fetch_feed_with_browser(url: str, timeout: int = 30000) -> Optional[str]:
+    """
+    Fetch feed using Playwright browser to bypass 403 errors.
+    
+    Args:
+        url: The feed URL to fetch
+        timeout: Timeout in milliseconds (default: 30000)
+        
+    Returns:
+        HTML content or None if failed
+    """
+    if not PLAYWRIGHT_AVAILABLE:
+        logger.warning("Playwright not available, cannot use browser fetch")
+        return None
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            
+            # Set realistic user agent
+            page.set_extra_http_headers({
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+            })
+            
+            logger.info(f"🌐 Fetching feed with browser: {url}")
+            response = page.goto(url, timeout=timeout, wait_until='networkidle')
+            
+            if response and response.status == 200:
+                content = page.content()
+                browser.close()
+                logger.info(f"✅ Successfully fetched feed with browser ({len(content)} chars)")
+                return content
+            else:
+                status = response.status if response else 'unknown'
+                logger.warning(f"⚠️ Browser fetch returned status {status}")
+                browser.close()
+                return None
+                
+    except Exception as e:
+        logger.error(f"❌ Browser fetch failed: {e}")
+        return None
+
 
 def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
     """
     Parse the "Bill Texts Received Today" HTML feed from Congress.gov.
+    Uses a three-tier approach:
+    1. Browser-based fetch (bypasses 403 errors)
+    2. Traditional requests library (fallback)
+    3. API fallback (if feed is empty or fails)
     
     Args:
         limit: Maximum number of bills to return (default: 50)
@@ -50,56 +134,69 @@ def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
             'text_version': str,      # e.g., 'Introduced', 'Engrossed'
             'text_received_date': str # ISO format date
         }
-    
-    Raises:
-        requests.RequestException: If feed cannot be fetched
-        ValueError: If feed format is invalid
     """
     logger.info(f"Fetching bill texts feed from: {BILL_TEXTS_FEED_URL}")
     
-    # Try to fetch the feed with retry logic
-    bills = []
-    feed_success = False
+    html_content = None
+    fetch_method = None
     
-    for attempt in range(3):
-        try:
-            logger.info(f"Attempt {attempt + 1}/3 to fetch feed")
-            
-            # Add delay between retries
-            if attempt > 0:
-                delay = 2 ** attempt  # Exponential backoff: 2, 4 seconds
-                logger.info(f"Waiting {delay} seconds before retry...")
-                time.sleep(delay)
-            
-            # Fetch the feed with timeout and enhanced headers
-            response = requests.get(BILL_TEXTS_FEED_URL, headers=HEADERS, timeout=30)
-            response.raise_for_status()
-            logger.info(f"Feed fetched successfully (status: {response.status_code})")
-            feed_success = True
-            break
-            
-        except requests.HTTPError as e:
-            if e.response.status_code == 403:
-                logger.warning(f"403 Forbidden error on attempt {attempt + 1}/3")
-                if attempt == 2:  # Last attempt
-                    logger.error("All feed fetch attempts failed with 403. Will fall back to API.")
-            else:
-                logger.error(f"HTTP error on attempt {attempt + 1}/3: {e}")
-        except requests.RequestException as e:
-            logger.error(f"Request error on attempt {attempt + 1}/3: {e}")
+    # Tier 1: Try browser-based fetch first (bypasses 403)
+    if PLAYWRIGHT_AVAILABLE:
+        logger.info("🎯 Tier 1: Attempting browser-based fetch...")
+        html_content = fetch_feed_with_browser(BILL_TEXTS_FEED_URL)
+        if html_content:
+            fetch_method = 'browser'
+            logger.info("✅ Browser fetch succeeded")
     
-    # If feed fetch failed, fall back to API
-    if not feed_success:
-        logger.warning("Feed fetch failed after all retries. Falling back to Congress.gov API...")
+    # Tier 2: Fall back to requests library if browser failed
+    if not html_content:
+        logger.info("🎯 Tier 2: Attempting requests library fetch...")
+        feed_success = False
+        
+        for attempt in range(3):
+            try:
+                logger.info(f"Attempt {attempt + 1}/3 to fetch feed with requests")
+                
+                # Add delay between retries
+                if attempt > 0:
+                    delay = 2 ** attempt  # Exponential backoff: 2, 4 seconds
+                    logger.info(f"Waiting {delay} seconds before retry...")
+                    time.sleep(delay)
+                
+                # Update headers with random user agent for each attempt
+                update_session_headers()
+                
+                # Fetch the feed with timeout and enhanced headers
+                response = session.get(BILL_TEXTS_FEED_URL, timeout=30)
+                response.raise_for_status()
+                html_content = response.text
+                fetch_method = 'requests'
+                logger.info(f"✅ Feed fetched successfully with requests (status: {response.status_code})")
+                feed_success = True
+                break
+                
+            except requests.HTTPError as e:
+                if e.response.status_code == 403:
+                    logger.warning(f"⚠️ 403 Forbidden error on attempt {attempt + 1}/3")
+                    if attempt == 2:  # Last attempt
+                        logger.error("❌ All requests fetch attempts failed with 403")
+                else:
+                    logger.error(f"❌ HTTP error on attempt {attempt + 1}/3: {e}")
+            except requests.RequestException as e:
+                logger.error(f"❌ Request error on attempt {attempt + 1}/3: {e}")
+    
+    # Tier 3: If both browser and requests failed, fall back to API
+    if not html_content:
+        logger.warning("🎯 Tier 3: Both browser and requests failed. Falling back to Congress.gov API...")
         return _fetch_bills_from_api(limit)
     
     # Parse HTML with lxml parser
     try:
-        soup = BeautifulSoup(response.content, 'lxml')
-        logger.info("HTML parsed successfully with lxml parser")
+        soup = BeautifulSoup(html_content, 'lxml')
+        logger.info(f"✅ HTML parsed successfully with lxml parser (fetched via {fetch_method})")
     except Exception as e:
-        logger.warning(f"lxml parser failed, falling back to html.parser: {e}")
-        soup = BeautifulSoup(response.content, 'html.parser')
+        logger.warning(f"⚠️ lxml parser failed, falling back to html.parser: {e}")
+        soup = BeautifulSoup(html_content, 'html.parser')
     
     # Extract bills from the feed
     bills = []
@@ -124,15 +221,17 @@ def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
         bill_items = soup.find_all('div', class_='item-wrapper')
     
     if not bill_items:
-        logger.warning("No bill items found in feed using standard selectors")
+        logger.warning("⚠️ No bill items found in feed using standard selectors")
         # Try to find any links that look like bill links
         all_links = soup.find_all('a', href=re.compile(r'/bill/\d+/(hr|s|hjres|sjres|hconres|sconres|hres|sres)-\d+'))
         if all_links:
             logger.info(f"Found {len(all_links)} bill links using fallback method")
             bill_items = [link.parent for link in all_links[:limit]]
         else:
-            logger.error("No bills found in feed")
-            return []
+            # Feed is empty (ephemeral nature) - this is not an error
+            logger.info("ℹ️ Feed is empty (no bills received today). This is normal for the ephemeral feed.")
+            logger.info("🎯 Tier 3: Falling back to API to find bills with recently available text...")
+            return _fetch_bills_from_api(limit)
     
     logger.info(f"Found {len(bill_items)} bill items in feed")
     
@@ -146,7 +245,12 @@ def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
             logger.warning(f"Failed to extract bill data from item: {e}")
             continue
     
-    logger.info(f"Successfully parsed {len(bills)} bills from feed")
+    if not bills:
+        logger.info("ℹ️ No bills extracted from feed items. Feed may be empty today.")
+        logger.info("🎯 Tier 3: Falling back to API to find bills with recently available text...")
+        return _fetch_bills_from_api(limit)
+    
+    logger.info(f"✅ Successfully parsed {len(bills)} bills from feed (via {fetch_method})")
     return bills
 
 
@@ -215,42 +319,36 @@ def _extract_bill_data(item) -> Optional[Dict[str, Any]]:
         # Find text URL (PDF or TXT) - look for actual text links in the item
         text_url = None
         
-        # Look for direct text links first (most reliable)
-        text_links = item.find_all('a', href=re.compile(r'\.(pdf|txt)$'))
-        if text_links:
-            # Prefer PDF, fallback to TXT
-            pdf_link = next((link for link in text_links if link.get('href', '').endswith('.pdf')), None)
-            txt_link = next((link for link in text_links if link.get('href', '').endswith('.txt')), None)
-            
-            if pdf_link:
-                text_url = pdf_link.get('href')
-            elif txt_link:
-                text_url = txt_link.get('href')
-        
-        # If no direct text links found, try to find text URLs in other elements
-        if not text_url:
-            # Look for text URLs in span elements or other containers
-            text_spans = item.find_all('span', string=re.compile(r'\.(pdf|txt)$'))
-            for span in text_spans:
-                if span.text.endswith(('.pdf', '.txt')):
-                    text_url = span.text
-                    break
-        
-        # If still no text URL found, check if this is a table row structure
-        if not text_url and hasattr(item, 'find_all') and item.name == 'tr':
-            # For table rows, text links are typically in specific columns
+        # For table row structure (the actual feed format)
+        if hasattr(item, 'find_all') and item.name == 'tr':
             cols = item.find_all('td')
-            if len(cols) >= 4:  # Text link is usually in column 2 or 3
-                for col in cols[1:3]:  # Check columns 2 and 3
-                    col_links = col.find_all('a', href=re.compile(r'\.(pdf|txt)$'))
-                    if col_links:
-                        text_url = col_links[0].get('href')
-                        break
+            if len(cols) >= 2:  # We need at least 2 columns (bill info and text version)
+                # The second column contains the text version links
+                text_col = cols[1] if len(cols) >= 2 else None
+                if text_col:
+                    # Look for PDF link first (most reliable)
+                    pdf_link = text_col.find('a', href=re.compile(r'\.pdf$'))
+                    if pdf_link:
+                        text_url = pdf_link.get('href')
+                    else:
+                        # Fallback to TXT link
+                        txt_link = text_col.find('a', href=re.compile(r'format=txt'))
+                        if txt_link:
+                            text_url = txt_link.get('href')
         
-        # As a last resort, construct from bill ID (but this should rarely be needed)
+        # If not a table row, try other structures
         if not text_url:
-            logger.warning(f"No text URL found for {bill_id}, constructing from pattern")
-            text_url = f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}ih.pdf"
+            # Look for direct text links
+            text_links = item.find_all('a', href=re.compile(r'\.(pdf|txt)$|format=(txt|xml)'))
+            if text_links:
+                # Prefer PDF, fallback to TXT
+                pdf_link = next((link for link in text_links if link.get('href', '').endswith('.pdf')), None)
+                txt_link = next((link for link in text_links if 'format=txt' in link.get('href', '') or link.get('href', '').endswith('.txt')), None)
+                
+                if pdf_link:
+                    text_url = pdf_link.get('href')
+                elif txt_link:
+                    text_url = txt_link.get('href')
         
         # Ensure URL is absolute
         if text_url and not text_url.startswith('http'):
@@ -259,10 +357,20 @@ def _extract_bill_data(item) -> Optional[Dict[str, Any]]:
         # Use current date as received date
         text_received_date = datetime.now().isoformat()
         
+        # Construct source_url (bill page, not direct text)
+        source_url = f"https://www.congress.gov/bill/{congress}th-congress/{bill_type_full}/{bill_number}"
+        
+        # Log whether we found a direct text_url or will need to construct/scrape
+        if text_url:
+            logger.info(f"✅ Extracted direct text_url from feed for {bill_id}: {text_url}")
+        else:
+            logger.warning(f"⚠️ No direct text_url found in feed for {bill_id}, will use constructed source_url: {source_url}")
+        
         return {
             'bill_id': bill_id,
             'title': title,
-            'text_url': text_url,
+            'source_url': source_url,  # Constructed bill page URL (for scraping fallback)
+            'text_url': text_url,  # Extracted direct text URL from feed (may be None)
             'text_version': text_version,
             'text_received_date': text_received_date,
             'congress': congress,
@@ -275,16 +383,48 @@ def _extract_bill_data(item) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _check_bill_has_text(congress: str, bill_type: str, bill_number: str, api_key: str) -> bool:
+    """
+    Check if a bill has text available via the API.
+    
+    Args:
+        congress: Congress number
+        bill_type: Bill type (e.g., 'hr', 's')
+        bill_number: Bill number
+        api_key: API key
+        
+    Returns:
+        True if bill has text available, False otherwise
+    """
+    try:
+        text_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/text"
+        params = {'api_key': api_key, 'format': 'json'}
+        
+        response = requests.get(text_url, params=params, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            text_versions = data.get('textVersions', [])
+            return len(text_versions) > 0
+        return False
+    except Exception as e:
+        logger.debug(f"Error checking text availability for {bill_type}{bill_number}-{congress}: {e}")
+        return False
+
+
 def _fetch_bills_from_api(limit: int = 50) -> List[Dict[str, Any]]:
     """
     Fallback method to fetch bills using the Congress.gov API.
-    This is used when the feed parser encounters 403 errors.
+    This is used when the feed is empty or encounters errors.
+    
+    IMPORTANT: This filters bills to only return those with text available,
+    addressing the issue where sort=updateDate+desc returns recently updated
+    bills that may not have text yet.
     
     Args:
         limit: Maximum number of bills to return
     
     Returns:
-        List of bill dictionaries
+        List of bill dictionaries (only bills with text available)
     """
     import os
     from dotenv import load_dotenv
@@ -293,19 +433,19 @@ def _fetch_bills_from_api(limit: int = 50) -> List[Dict[str, Any]]:
     api_key = os.getenv('CONGRESS_API_KEY')
     
     if not api_key:
-        logger.error("CONGRESS_API_KEY not found in environment. Cannot use API fallback.")
+        logger.error("❌ CONGRESS_API_KEY not found in environment. Cannot use API fallback.")
         return []
     
-    logger.info(f"Fetching bills from Congress.gov API (limit={limit})")
+    logger.info(f"📡 Fetching bills from Congress.gov API (requesting {limit * 3} to filter for text availability)")
     
     try:
-        # Fetch recent bills from the API
-        # Use the /bill endpoint with recent bills
+        # Fetch MORE bills than needed since we'll filter for text availability
+        # Request 3x the limit to account for bills without text
         api_url = f"https://api.congress.gov/v3/bill"
         params = {
             'api_key': api_key,
             'format': 'json',
-            'limit': limit,
+            'limit': min(limit * 3, 250),  # Cap at API max
             'sort': 'updateDate+desc'
         }
         
@@ -313,9 +453,14 @@ def _fetch_bills_from_api(limit: int = 50) -> List[Dict[str, Any]]:
         response.raise_for_status()
         
         data = response.json()
-        bills = []
+        bills_with_text = []
+        bills_checked = 0
+        bills_with_text_count = 0
+        bills_without_text_count = 0
         
         if 'bills' in data:
+            logger.info(f"📋 API returned {len(data['bills'])} bills, checking for text availability...")
+            
             for bill_data in data['bills']:
                 try:
                     # Extract bill information
@@ -326,63 +471,99 @@ def _fetch_bills_from_api(limit: int = 50) -> List[Dict[str, Any]]:
                     if not all([bill_type, bill_number, congress]):
                         continue
                     
+                    bills_checked += 1
                     bill_id = f"{bill_type}{bill_number}-{congress}"
+                    
+                    # Check if this bill has text available
+                    has_text = _check_bill_has_text(congress, bill_type, bill_number, api_key)
+                    
+                    if not has_text:
+                        bills_without_text_count += 1
+                        logger.debug(f"⏭️  Skipping {bill_id} - no text available")
+                        continue
+                    
+                    bills_with_text_count += 1
+                    logger.info(f"✅ {bill_id} has text available")
+                    
                     title = bill_data.get('title', f"Bill {bill_id}")
                     
                     # Get the latest action date as text_received_date
                     latest_action = bill_data.get('latestAction', {})
                     action_date = latest_action.get('actionDate', datetime.now().isoformat())
                     
-                    # Try to get actual text URLs from the bill data if available
+                    # Fetch text version details
                     text_url = None
+                    text_version_name = 'Introduced'
                     
-                    # Check if text versions are available in the API response
-                    if 'textVersions' in bill_data and bill_data['textVersions']:
-                        # Get the first text version (usually Introduced)
-                        text_version = bill_data['textVersions'][0]
-                        if 'formats' in text_version and text_version['formats']:
-                            # Look for PDF format first
-                            pdf_format = next((fmt for fmt in text_version['formats'] if fmt.get('type') == 'PDF'), None)
-                            if pdf_format and 'url' in pdf_format:
-                                text_url = pdf_format['url']
-                    
-                    # If no text URL found in API, construct from bill ID but try multiple patterns
-                    if not text_url:
-                        # Try multiple common URL patterns for bill texts
-                        url_patterns = [
-                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}ih.pdf",
-                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}is.pdf",
-                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}enr.pdf",
-                            f"https://www.congress.gov/{congress}/bills/{bill_type}{bill_number}/BILLS-{congress}{bill_type}{bill_number}eh.pdf"
-                        ]
+                    try:
+                        text_versions_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/text"
+                        text_params = {'api_key': api_key, 'format': 'json'}
+                        text_response = requests.get(text_versions_url, params=text_params, timeout=10)
                         
-                        # We'll let the download function try these patterns
-                        text_url = url_patterns[0]  # Use first pattern as default
+                        if text_response.status_code == 200:
+                            text_data = text_response.json()
+                            text_versions = text_data.get('textVersions', [])
+                            
+                            if text_versions:
+                                # Get the most recent text version
+                                latest_version = text_versions[0]
+                                text_version_name = latest_version.get('type', 'Introduced')
+                                
+                                # Get formats for this version
+                                formats = latest_version.get('formats', [])
+                                
+                                # Prefer PDF, then TXT
+                                pdf_format = next((fmt for fmt in formats if fmt.get('type') == 'PDF'), None)
+                                txt_format = next((fmt for fmt in formats if fmt.get('type') == 'TXT'), None)
+                                
+                                if pdf_format and 'url' in pdf_format:
+                                    text_url = pdf_format['url']
+                                elif txt_format and 'url' in txt_format:
+                                    text_url = txt_format['url']
+                    except Exception as e:
+                        logger.debug(f"Could not fetch text version details for {bill_id}: {e}")
                     
-                    bills.append({
+                    # Construct the source URL to the main bill page
+                    source_url = f"https://www.congress.gov/bill/{congress}th-congress/{bill_type}-bill/{bill_number}"
+                    
+                    bills_with_text.append({
                         'bill_id': bill_id,
                         'title': title,
+                        'source_url': source_url,
                         'text_url': text_url,
-                        'text_version': 'Introduced',
+                        'text_version': text_version_name,
                         'text_received_date': action_date,
                         'congress': str(congress),
                         'bill_type': bill_type,
                         'bill_number': str(bill_number),
-                        'api_data': bill_data  # Include full API data for debugging
+                        'api_data': bill_data
                     })
                     
+                    # Stop once we have enough bills with text
+                    if len(bills_with_text) >= limit:
+                        logger.info(f"✅ Reached target of {limit} bills with text")
+                        break
+                    
                 except Exception as e:
-                    logger.warning(f"Error processing API bill data: {e}")
+                    logger.warning(f"⚠️ Error processing API bill data: {e}")
                     continue
         
-        logger.info(f"Successfully fetched {len(bills)} bills from API")
-        return bills
+        logger.info(f"📊 API Filtering Results:")
+        logger.info(f"   - Bills checked: {bills_checked}")
+        logger.info(f"   - Bills WITH text: {bills_with_text_count}")
+        logger.info(f"   - Bills WITHOUT text (filtered): {bills_without_text_count}")
+        logger.info(f"   - Bills returned: {len(bills_with_text)}")
+        
+        if not bills_with_text:
+            logger.warning("⚠️ No bills with text found in API results")
+        
+        return bills_with_text
         
     except requests.RequestException as e:
-        logger.error(f"Failed to fetch bills from API: {e}")
+        logger.error(f"❌ Failed to fetch bills from API: {e}")
         return []
     except Exception as e:
-        logger.error(f"Error processing API response: {e}")
+        logger.error(f"❌ Error processing API response: {e}")
         return []
 
 

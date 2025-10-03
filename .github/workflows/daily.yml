@@ -57,6 +57,33 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        playwright install chromium
+        playwright install-deps chromium
+
+    # Note: Congress.gov may return 403 Forbidden for automated requests.
+    # Our system handles this with:
+    # 1. Playwright browser automation (bypasses anti-bot protection)
+    # 2. Multiple user-agent rotation
+    # 3. API fallback with text filtering
+    # See src/fetchers/feed_parser.py for implementation details
+
+    - name: Validate environment
+      run: |
+        python -c "
+        import os
+        import sys
+        required = ['CONGRESS_API_KEY', 'ANTHROPIC_API_KEY', 'TWITTER_API_KEY', 'DATABASE_URL']
+        missing = [k for k in required if not os.getenv(k)]
+        if missing:
+            print(f'❌ Missing required secrets: {missing}')
+            sys.exit(1)
+        print('✅ All required secrets are set')
+        "
+      env:
+        CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     - name: Run daily orchestrator
       # The ${{ secrets.SECRET_NAME }} syntax is the standard, secure way to access secrets in GitHub Actions.
@@ -71,6 +98,7 @@ jobs:
         TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
         TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
         TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+        TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         python src/orchestrator.py

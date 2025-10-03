@@ -22,6 +22,18 @@ import psycopg2.extras
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+def get_current_congress() -> str:
+    """
+    Calculate current Congress session based on date.
+    118th Congress: 2023-2024 (Jan 3, 2023 - Jan 3, 2025)
+    119th Congress: 2025-2026 (Jan 3, 2025 - Jan 3, 2027)
+    Each Congress lasts 2 years starting in odd years.
+    """
+    year = datetime.now().year
+    # 118th Congress started in 2023
+    congress = 118 + ((year - 2023) // 2)
+    return str(congress)
+
 @contextmanager
 def db_connect() -> Iterator[psycopg2.extensions.connection]:
     """
@@ -216,8 +228,8 @@ def normalize_bill_id(bill_id: str) -> str:
         match = re.match(r'([a-z]+)(\d+)', normalized)
         if match:
             bill_type, bill_number = match.groups()
-            # Assume current congress (118th) if not specified
-            congress = "118"
+            # Use current congress if not specified
+            congress = get_current_congress()
             normalized = f"{bill_type}{bill_number}-{congress}"
         else:
             # If pattern doesn't match, just return lowercase
