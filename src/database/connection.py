@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 Supabase PostgreSQL database connection manager.
-Provides a unified interface for database connections with automatic fallback.
+Provides a unified interface for database connections with connection pooling.
 """
 
 import os
 import logging
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 from typing import Optional, Iterator, Dict, Any
 from contextlib import contextmanager
 from urllib.parse import urlparse
@@ -15,6 +16,9 @@ from urllib.parse import urlparse
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# Global connection pool
+_connection_pool: Optional[psycopg2.pool.ThreadedConnectionPool] = None
 
 def get_connection_string() -> Optional[str]:
     """
@@ -40,6 +44,44 @@ def get_connection_string() -> Optional[str]:
         return f"postgresql://{supabase_db_user}:{supabase_db_password}@{supabase_db_host}:{supabase_db_port}/{supabase_db_name}"
     
     return None
+
+def init_connection_pool(minconn: int = 2, maxconn: int = 10) -> None:
+    """
+    Initialize the PostgreSQL connection pool.
+    
+    Args:
+        minconn: Minimum number of connections to maintain
+        maxconn: Maximum number of connections allowed
+    """
+    global _connection_pool
+    
+    if _connection_pool is not None:
+        logger.debug("Connection pool already initialized")
+        return
+    
+    conn_string = get_connection_string()
+    if not conn_string:
+        raise ValueError("No PostgreSQL connection string configured")
+    
+    try:
+        _connection_pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=minconn,
+            maxconn=maxconn,
+            dsn=conn_string
+        )
+        logger.info(f"PostgreSQL connection pool initialized (min={minconn}, max={maxconn})")
+    except Exception as e:
+        logger.error(f"Failed to initialize connection pool: {e}")
+        raise
+
+def close_connection_pool() -> None:
+    """Close all connections in the pool."""
+    global _connection_pool
+    
+    if _connection_pool is not None:
+        _connection_pool.closeall()
+        _connection_pool = None
+        logger.info("Connection pool closed")
 
 def is_postgres_available() -> bool:
     """
@@ -77,34 +119,49 @@ def is_postgres_available() -> bool:
 @contextmanager
 def postgres_connect() -> Iterator[psycopg2.extensions.connection]:
     """
-    Context manager that yields a PostgreSQL connection and guarantees it is closed.
+    Context manager that yields a PostgreSQL connection from the pool.
     Commits on success and rolls back on failure.
+    Automatically returns connection to pool when done.
     
     Yields:
         psycopg2 connection object
         
     Raises:
-        Exception: If connection cannot be established
+        Exception: If connection cannot be obtained
     """
-    conn_string = get_connection_string()
-    if not conn_string:
-        raise ValueError("No PostgreSQL connection string configured")
+    global _connection_pool
+    import time
+    start_time = time.time()
     
-    conn = psycopg2.connect(conn_string)
+    # Initialize pool if not already done
+    if _connection_pool is None:
+        init_connection_pool()
+    
+    # Get connection from pool
+    logger.debug("Getting connection from pool...")
+    conn = _connection_pool.getconn()
+    connect_time = time.time() - start_time
+    logger.info(f"PostgreSQL connection obtained from pool in {connect_time:.3f}s")
+    
     try:
         yield conn
         conn.commit()
-    except Exception:
+        total_time = time.time() - start_time
+        logger.debug(f"Transaction completed in {total_time:.3f}s")
+    except Exception as e:
+        logger.error(f"Transaction failed: {e}")
         try:
             conn.rollback()
         except Exception:
             pass
         raise
     finally:
+        # Return connection to pool instead of closing
         try:
-            conn.close()
-        except Exception:
-            pass
+            _connection_pool.putconn(conn)
+            logger.debug("Connection returned to pool")
+        except Exception as e:
+            logger.error(f"Failed to return connection to pool: {e}")
 
 def init_postgres_tables() -> None:
     """

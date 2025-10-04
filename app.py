@@ -196,11 +196,28 @@ def shorten_title_filter(title: str, max_length: int = 60) -> str:
 @app.route('/')
 def index():
     """Homepage: Displays the most recent tweeted bill."""
+    import time
+    start_time = time.time()
+    logger.info("=== Homepage request started ===")
+    
     try:
+        db_start = time.time()
         latest_bill = get_latest_tweeted_bill()
+        db_time = time.time() - db_start
+        logger.info(f"Database query completed in {db_time:.3f}s")
+        
         if not latest_bill:
+            logger.warning("No latest bill found")
             return render_template('index.html', bill=None)
-        return render_template('index.html', bill=latest_bill)
+        
+        render_start = time.time()
+        response = render_template('index.html', bill=latest_bill)
+        render_time = time.time() - render_start
+        total_time = time.time() - start_time
+        
+        logger.info(f"Template rendered in {render_time:.3f}s")
+        logger.info(f"=== Homepage request completed in {total_time:.3f}s ===")
+        return response
     except Exception as e:
         logger.error(f"Error loading homepage: {e}", exc_info=True)
         return render_template('index.html', bill=None, error="Unable to load the latest bill. Please try again later.")
@@ -208,31 +225,46 @@ def index():
 @app.route('/archive')
 def archive():
     """Archive page: Displays all tweeted bills with optional filtering."""
+    import time
+    start_time = time.time()
+    logger.info("=== Archive request started ===")
+    
     try:
         # Get filter parameter
         status_filter = request.args.get('status', 'all')
         
         # Get all bills
+        db_start = time.time()
         bills = get_all_tweeted_bills()
+        db_time = time.time() - db_start
+        logger.info(f"Database query returned {len(bills)} bills in {db_time:.3f}s")
         
         # Apply status filter if not 'all'
         if status_filter != 'all' and bills:
             # Normalize the filter value to match database format (lowercase with underscores)
             normalized_filter = status_filter.lower().replace(' ', '_')
             bills = [bill for bill in bills if bill.get('status') == normalized_filter]
+            logger.info(f"Filtered to {len(bills)} bills with status '{status_filter}'")
         
         # For now, we'll show all bills on one page (no pagination)
         # If pagination is needed in the future, we can add it
         current_page = 1
         total_pages = 1
         
-        return render_template(
+        render_start = time.time()
+        response = render_template(
             'archive.html',
             bills=bills,
             status_filter=status_filter,
             current_page=current_page,
             total_pages=total_pages
         )
+        render_time = time.time() - render_start
+        total_time = time.time() - start_time
+        
+        logger.info(f"Template rendered in {render_time:.3f}s")
+        logger.info(f"=== Archive request completed in {total_time:.3f}s ===")
+        return response
     except Exception as e:
         logger.error(f"Error loading archive: {e}", exc_info=True)
         return render_template(
@@ -247,11 +279,28 @@ def archive():
 @app.route('/bill/<string:slug>')
 def bill_detail(slug: str):
     """Bill detail page: Displays a single bill by slug."""
+    import time
+    start_time = time.time()
+    logger.info(f"=== Bill detail request started for slug: {slug} ===")
+    
     try:
+        db_start = time.time()
         bill = get_bill_by_slug(slug)
+        db_time = time.time() - db_start
+        logger.info(f"Database query completed in {db_time:.3f}s")
+        
         if not bill:
+            logger.warning(f"Bill not found for slug: {slug}")
             abort(404)
-        return render_template('bill.html', bill=bill)
+        
+        render_start = time.time()
+        response = render_template('bill.html', bill=bill)
+        render_time = time.time() - render_start
+        total_time = time.time() - start_time
+        
+        logger.info(f"Template rendered in {render_time:.3f}s")
+        logger.info(f"=== Bill detail request completed in {total_time:.3f}s ===")
+        return response
     except Exception as e:
         logger.error(f"Error loading bill detail for slug '{slug}': {e}", exc_info=True)
         abort(404)

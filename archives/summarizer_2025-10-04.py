@@ -48,8 +48,7 @@ def _build_system_prompt() -> str:
         "**General rules:**\n"
         "- Do not invent facts or numbers. Only use information present in the provided bill data.\n"
         "- Keep summaries clear, neutral, and accessible for a teen civic audience.\n"
-        "- Avoid partisan framing, speculation, or \"supporters say/critics say\" constructions.\n"
-        "- **BEFORE FINALIZING: Review your entire response for grammar, spelling, punctuation, and clarity. Ensure all sentences are complete and properly structured.**\n\n"
+        "- Avoid partisan framing, speculation, or \"supporters say/critics say\" constructions.\n\n"
         "**tweet (short summary):**\n"
         "- One professional, factual sentence <=200 characters.\n"
         "- Highlight the major priorities or themes of the bill (e.g., expands surveillance, cuts environmental rules, boosts science funding, regulates AI).\n"
@@ -76,73 +75,41 @@ def _build_system_prompt() -> str:
 
 def _build_enhanced_system_prompt() -> str:
     return (
-        "You are a careful, non-partisan summarizer for civic education targeting teens aged 13-19.\n"
+        "You are a careful, non-partisan summarizer for civic education.\n"
         "**Your output must be STRICT JSON with four keys: `overview`, `detailed`, `term_dictionary`, and `tweet`. No code fences. No extra text.**\n\n"
         "**CRITICAL: Even if full bill text is not provided, you MUST generate ALL four fields (overview, detailed, term_dictionary, tweet) using the bill title, status, latest action, and any available metadata. Do NOT return empty strings for any field.**\n\n"
-        "**ABSOLUTE PROHIBITIONS - THESE WILL CAUSE REJECTION:**\n"
-        "- ❌ NEVER write 'Expresses the sense of the Senate/House on the topic identified in the title'\n"
-        "- ❌ NEVER write 'No statutory changes; simple resolutions do not create or amend law'\n"
-        "- ❌ NEVER write 'Not applicable; this resolution expresses a position'\n"
-        "- ❌ NEVER use ANY generic placeholder text that doesn't describe the ACTUAL bill content\n"
-        "- ❌ NEVER say 'Status: introduced' without explaining what the bill actually does\n"
-        "- ❌ If you cannot extract substantive content, you MUST research the bill title and explain what it's actually about\n\n"
         "**General rules:**\n"
-        "- Write for teens aged 13-19. Use clear, conversational language they can understand.\n"
         "- Do not invent facts or numbers. Only use information present in the provided bill data.\n"
-        "- Keep summaries clear, neutral, and accessible. Avoid jargon unless explained.\n"
+        "- Keep summaries clear, neutral, and accessible for a teen civic audience.\n"
         "- Avoid partisan framing, speculation, direct address to reader (no 'you', 'Liv', etc.).\n"
         "- No exclamations or opinion language. Maintain neutral, factual tone.\n"
         "- Do NOT use hedging/uncertainty words (e.g., 'may', 'could', 'might', 'likely', 'appears'). State only what the bill or metadata explicitly says.\n"
         "- If a detail is not present in the bill text or provided metadata, omit it rather than speculate.\n"
-        "- Use present-tense factual verbs (e.g., 'specifies', 'includes', 'authorizes', 'requires').\n"
-        "- **BEFORE FINALIZING: Review your entire response for grammar, spelling, punctuation, and clarity. Ensure all sentences are complete, properly structured, and free of errors.**\n\n"
+        "- Use present-tense factual verbs (e.g., 'specifies', 'includes', 'authorizes', 'requires').\n\n"
         "**WHEN FULL BILL TEXT IS PROVIDED:**\n"
         "- You MUST extract and summarize SPECIFIC provisions, requirements, and legal standards from the full text.\n"
         "- Include concrete details: deadlines (e.g., '60-day deadline'), timeframes (e.g., 'within 30 days'), dollar amounts, legal standards (e.g., 'clear and convincing evidence'), enforcement mechanisms, and statutory amendments.\n"
         "- The full bill text is the PRIMARY source - prioritize it over metadata.\n"
-        "- Do NOT default to generic procedural descriptions when substantive legislative details are available in the full text.\n"
-        "- Extract the ACTUAL policy content - what the bill specifically does, who it affects, what changes it makes.\n\n"
+        "- Do NOT default to generic procedural descriptions when substantive legislative details are available in the full text.\n\n"
         "**overview (short summary):**\n"
         "- One short paragraph in plain language that identifies the bill type, scope, and purpose.\n"
-        "- Should be concise but informative, setting context for the detailed summary.\n"
-        "- Must describe the ACTUAL content of the bill, not generic descriptions.\n\n"
+        "- Should be concise but informative, setting context for the detailed summary.\n\n"
         "**detailed (structured summary):**\n"
         "- Be adaptive: If the bill text is substantial, aim for 400–500 words. If the bill text is short/simple (e.g., many House/Senate resolutions), write a concise summary sufficient to fully explain it, even as short as 120–250 words. Do not speculate to reach a target length.\n"
         "- ALWAYS include the emoji signposts in your output - they are REQUIRED.\n"
         "- Use bullet points for scannability. Explain acronyms inline where helpful.\n"
-        "- REQUIRED section headers in this EXACT order (use these exact emojis and titles):\n"
-        "  🔎 Overview\n"
-        "    - Brief description of what the bill does\n"
-        "    - Bill type and current status\n"
-        "  👥 Who does this affect?\n"
-        "    - Main groups: [Name the specific groups touched by the bill, e.g., gun owners, law enforcement, states with concealed carry laws]\n"
-        "    - Who benefits/loses: [Note who is likely to benefit or lose out based on the bill's provisions]\n"
-        "    - Teen impact score: [Score from 1-10, where 1 = minimal teen impact, 10 = major teen impact]\n"
-        "    - [If score > 5]: Teen-specific impact: [Explain how this specifically affects teenagers]\n"
+        "- REQUIRED section headers (use these exact emojis and titles; omit sections only if truly not applicable):\n"
+        "  🔎 Overview (brief if overview already provided above; can be omitted if redundant)\n"
         "  🔑 Key Provisions (REQUIRED - extract from full text when available):\n"
         "    - Specific requirements, deadlines, and timeframes (e.g., '60-day deadline for corrections')\n"
         "    - Legal standards and burdens of proof (e.g., 'clear and convincing evidence')\n"
         "    - Enforcement mechanisms and remedies (e.g., 'attorney fees provisions')\n"
         "    - Reporting requirements (e.g., 'annual reports to Congress')\n"
         "    - Amendments to existing law (cite specific U.S.C. sections, e.g., '18 U.S.C. § 925A')\n"
-        "    - Rights, permissions, or restrictions created by the bill\n"
-        "  🛠️ Policy Changes\n"
-        "    - Substantive policy changes created or modified by the bill\n"
-        "    - Changes to existing programs, regulations, or legal frameworks\n"
-        "  ⚖️ Policy Riders or Key Rules/Changes\n"
-        "    - For House rules: germaneness requirements, waiver language, points of order\n"
-        "    - For substantive bills: conditions, restrictions, or riders attached to the bill\n"
-        "  📌 Procedural/Administrative Notes\n"
-        "    - House Calendar placement, committee procedures, voting procedures\n"
-        "    - Legislative process details and current stage\n"
-        "  👉 In short\n"
-        "    - 3-5 bullets summarizing key implications and next steps\n"
-        "    - Bottom-line takeaways in plain language\n"
-        "  💡 Why should I care?\n"
-        "    - Tie the bill to everyday stakes in neutral language\n"
-        "    - Explain real-world relevance and potential impacts\n"
-        "    - Make it relatable and clear why this matters to regular people\n"
-        "    - Focus on practical implications, not political spin\n"
+        "  🛠️ Policy Changes (substantive policy changes created or modified by the bill)\n"
+        "  ⚖️ Policy Riders or Key Rules/Changes (for House rules: germaneness requirements, waiver language, points of order)\n"
+        "  📌 Procedural/Administrative Notes (House Calendar placement, committee procedures, voting procedures)\n"
+        "  👉 In short (3-5 bullets summarizing key implications and next steps)\n"
         "- For House resolutions/rules: Include concrete details about debate time, amendment handling, floor procedures, voting requirements.\n\n"
         "**Example of good Key Provisions extraction from full text:**\n"
         "- Establishes 60-day deadline for NICS to correct erroneous records\n"
@@ -151,46 +118,15 @@ def _build_enhanced_system_prompt() -> str:
         "- Provides for attorney fees if petitioner prevails\n"
         "- Mandates annual reporting to Congress on correction requests\n"
         "- Amends 18 U.S.C. § 925A to add new due process protections\n\n"
-        "**Example of good '👥 Who does this affect?' section:**\n"
-        "For a concealed carry reciprocity bill:\n"
-        "- Main groups: Gun owners with concealed carry permits, law enforcement agencies, states with varying concealed carry laws\n"
-        "- Who benefits/loses: Benefits gun owners who travel across state lines (expanded carry rights); may concern states with stricter gun laws (reduced state autonomy)\n"
-        "- Teen impact score: 3/10\n"
-        "- (Score ≤5, so no teen-specific explanation needed)\n\n"
-        "**Example of good '💡 Why should I care?' section:**\n"
-        "For a concealed carry reciprocity bill:\n"
-        "This bill affects how gun laws work when you travel between states. Currently, a concealed carry permit from one state might not be valid in another state with different rules. This bill would require all states to recognize permits from other states, similar to how driver's licenses work. This matters if you or your family members have concealed carry permits and travel, or if you live in a state with strict gun laws that would now have to accept permits from states with looser requirements. The debate centers on balancing gun rights with state authority to set their own public safety standards.\n\n"
         "**term_dictionary (glossary):**\n"
         "- Array of objects with 'term' and 'definition' keys for unfamiliar terms.\n"
         "- Include appropriations, riders, acronyms, specialized policy terms.\n"
         "- Keep definitions concise and teen-friendly, neutral tone.\n"
         "- Example: [{'term': 'appropriations', 'definition': 'Money that Congress allocates for specific government spending'}]\n\n"
-        "**tweet (engaging summary for X/Twitter):**\n"
-        "- Target audience: Teens aged 13-19. Use language they understand and find engaging.\n"
-        "- Length: <=200 characters that grabs attention while remaining factual and non-partisan.\n"
-        "- **MUST start with an ethical attention hook** (choose one):\n"
-        "  1. Strong action verb: 'New bill aims to...', 'Congress proposes...', 'Bill would change...'\n"
-        "  2. Surprising/relevant number: 'Could this bill affect 2.3 million students?', '$500M for...'\n"
-        "  3. Engaging question: 'Should teens have more privacy online? New bill decides.'\n"
-        "  4. Direct impact: 'Your school lunch could change under new bill'\n"
-        "- **X Algorithm Optimization:**\n"
-        "  - Use concrete nouns and active verbs (better engagement)\n"
-        "  - Include specific numbers when available (drives clicks)\n"
-        "  - Frame around human impact, not process (more shares)\n"
-        "  - Ask questions that make people want to learn more\n"
-        "  - Avoid generic phrases like 'new legislation' - be specific\n"
-        "- Examples of GOOD tweets:\n"
-        "  - 'New bill would require background checks for all gun sales. Here's what changes.'\n"
-        "  - 'Should AI companies pay for using your data? Congress debates new rules.'\n"
-        "  - 'Bill could cut student loan payments for 8M borrowers. How it works:'\n"
-        "  - 'Your TikTok data might get new protections under proposed privacy law'\n"
-        "- Examples of BAD tweets (too generic):\n"
-        "  - 'New legislation introduced in Congress' ❌\n"
-        "  - 'Bill proposes changes to existing law' ❌\n"
-        "  - 'Senate considers new measure' ❌\n"
-        "- Focus on the bill's core purpose or impact on real people.\n"
-        "- Maintain a neutral, non-sensational tone. No clickbait, emojis, or hashtags.\n"
-        "- Use stage-appropriate verbs (proposes, passed, became law).\n\n"
+        "**tweet (short summary):**\n"
+        "- One professional, factual sentence <=200 characters.\n"
+        "- Highlight major themes/impacts. Use stage-appropriate verbs.\n"
+        "- No emojis, hashtags, or fluff.\n\n"
         "**Output format (strict JSON):**\n"
         '{"overview": "...", "detailed": "...", "term_dictionary": [...], "tweet": "..."}'
     )
@@ -213,7 +149,7 @@ def _build_user_prompt(bill: Dict[str, Any]) -> str:
 
     user_prompt = (
         "Summarize the following bill object under the constraints above.\n"
-        "Return ONLY a strict JSON object with keys 'overview', 'detailed', 'term_dictionary', and 'tweet'.\n"
+        "Return ONLY a strict JSON object with keys 'tweet' and 'long'.\n"
         f"Bill JSON:\n{bill_json}{full_text_section}"
     )
     logger.info(f"User prompt char count: {len(user_prompt)}")
@@ -975,7 +911,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         if bill_type == "SRES":
             overview_text = (overview_text + " This is a simple Senate resolution that expresses the position of the Senate and does not have the force of law.").strip()
 
-        # Structured detailed with required emoji sections in correct order
+        # Structured detailed with required emoji sections
         lines: List[str] = []
         lines.append("🔎 Overview")
         lines.append(f"- {title}" if title else "- Senate resolution.")
@@ -984,39 +920,9 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         if latest_action:
             lines.append(f"- Latest action: {latest_action}")
         lines.append("")
-        
-        # NEW SECTION: Who does this affect?
-        lines.append("👥 Who does this affect?")
+        lines.append("🔑 Key Provisions")
         ltitle = title.lower()
         import re as _re
-        
-        # Try to extract affected groups from title
-        affected_groups = []
-        if "concealed carry" in ltitle or "firearm" in ltitle or "gun" in ltitle:
-            affected_groups.append("gun owners, law enforcement, states with varying gun laws")
-        elif "veteran" in ltitle:
-            affected_groups.append("veterans, military families")
-        elif "student" in ltitle or "education" in ltitle or "school" in ltitle:
-            affected_groups.append("students, educators, schools")
-        elif "health" in ltitle or "medicare" in ltitle or "medicaid" in ltitle:
-            affected_groups.append("healthcare recipients, medical providers")
-        elif "tax" in ltitle:
-            affected_groups.append("taxpayers, businesses")
-        elif "environment" in ltitle or "climate" in ltitle:
-            affected_groups.append("environmental organizations, affected industries, general public")
-        else:
-            # Generic fallback based on bill type
-            if bill_type == "SRES" or bill_type == "HRES":
-                affected_groups.append("primarily symbolic; expresses Congressional position")
-            else:
-                affected_groups.append("groups identified in the bill title")
-        
-        lines.append(f"- Main groups: {', '.join(affected_groups) if affected_groups else 'See bill title for affected parties'}")
-        lines.append("- Who benefits/loses: Depends on specific provisions (full text needed for detailed analysis)")
-        lines.append("- Teen impact score: 2/10 (limited metadata available)")
-        lines.append("")
-        
-        lines.append("🔑 Key Provisions")
         if "designating" in ltitle:
             m = _re.search(r'designating\s+([^,]+)', title, flags=_re.IGNORECASE)
             if m:
@@ -1029,25 +935,14 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
             lines.append("- Raises awareness of the issue referenced in the title.")
         if "increase" in ltitle or "reduce" in ltitle:
             lines.append("- Encourages efforts consistent with the resolution's stated purpose.")
-        # Only add generic line if no specific provisions were found
-        if not any(keyword in ltitle for keyword in ["designating", "recogniz", "awareness", "increase", "reduce"]):
-            lines.append("- Full text needed for detailed provisions.")
+        lines.append("- Expresses the sense of the Senate on the topic identified in the title.")
         lines.append("")
-        
         lines.append("🛠️ Policy Changes")
-        if bill_type == "SRES" or bill_type == "HRES":
-            lines.append("- No statutory changes; simple resolutions do not create or amend law.")
-        else:
-            lines.append("- Full text needed for detailed policy changes.")
+        lines.append("- No statutory changes; simple resolutions do not create or amend law.")
         lines.append("")
-        
         lines.append("⚖️ Policy Riders or Key Rules/Changes")
-        if bill_type == "SRES" or bill_type == "HRES":
-            lines.append("- Not applicable; this resolution expresses a position and sets no binding rules.")
-        else:
-            lines.append("- Full text needed for riders and rule changes.")
+        lines.append("- Not applicable; this resolution expresses a position and sets no binding rules.")
         lines.append("")
-        
         lines.append("📌 Procedural/Administrative Notes")
         la_lower = latest_action.lower()
         if "unanimous consent" in la_lower:
@@ -1056,29 +951,13 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
             lines.append("- Adopted with a preamble.")
         if status:
             lines.append(f"- Status: {status}.")
-        if not any(keyword in la_lower for keyword in ["unanimous consent", "preamble"]) and not status:
-            lines.append("- See latest action for procedural details.")
         lines.append("")
-        
         lines.append("👉 In short")
-        if bill_type == "SRES" or bill_type == "HRES":
-            lines.append("- A resolution stating Congressional position as reflected in its title.")
-            if "designating" in ltitle:
-                lines.append("- Formally designates the period named in the title for awareness.")
-            if "recogniz" in ltitle:
-                lines.append("- Recognizes contributions or significance referenced in the title.")
-        else:
-            lines.append("- Full bill text needed for comprehensive summary.")
-            lines.append(f"- Title indicates focus on: {title[:100]}...")
-        lines.append("")
-        
-        # NEW SECTION: Why should I care?
-        lines.append("💡 Why should I care?")
-        if bill_type == "SRES" or bill_type == "HRES":
-            lines.append("This resolution expresses Congress's position on an issue but doesn't create new laws or change existing ones. It's primarily symbolic, showing where Congress stands on the topic mentioned in the title. While it doesn't directly affect your daily life, it can signal Congressional priorities and set the stage for future legislation.")
-        else:
-            lines.append(f"This bill addresses {title.lower() if title else 'the topic in its title'}. Without the full text, it's difficult to assess specific impacts, but the title suggests it could affect policies or programs related to this area. Check back once the full text is available for a detailed analysis of how it might impact you.")
-        
+        lines.append("- A Senate resolution stating support/recognition as reflected in its title.")
+        if "designating" in ltitle:
+            lines.append("- Formally designates the period named in the title for awareness.")
+        if "recogniz" in ltitle:
+            lines.append("- Recognizes contributions or significance referenced in the title.")
         detailed_text = "\n".join(lines).strip()
 
         td: List[Dict[str, str]] = []
@@ -1151,4 +1030,32 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     if overview and detailed:
         long_summary = f"{overview}\n\n{detailed}".strip()
     else:
-        long_summary
+        long_summary = (overview or detailed or "").strip()
+
+    # Ensure term_dictionary JSON string
+    term_dictionary = json.dumps(term_dictionary_obj, ensure_ascii=False)
+
+    logger.info(
+        f"Enhanced summary fields lengths: tweet={len(tweet)}, overview={len(overview)}, "
+        f"detailed={len(detailed)}, long={len(long_summary)}"
+    )
+
+    summaries = {
+        "overview": overview,
+        "detailed": detailed,
+        "term_dictionary": term_dictionary,
+        "tweet": tweet,
+        "long": long_summary,
+    }
+
+    # Final validation: ensure all required keys exist before returning
+    required_keys = ["overview", "detailed", "term_dictionary", "tweet", "long"]
+    for key in required_keys:
+        if key not in summaries or summaries[key] is None:
+            logger.warning(f"Final validation: adding missing key '{key}' with default value.")
+            if key == "term_dictionary":
+                summaries[key] = "[]"
+            else:
+                summaries[key] = ""
+    
+    return summaries

@@ -6,9 +6,15 @@ This column will store the complete text of bills for better summarization.
 
 import os
 import psycopg2
+import sys
 
-# Set the DATABASE_URL environment variable
-os.environ['DATABASE_URL'] = 'postgresql://postgres.ogsonggpqnmwivimnpqu:mybsoc-raxsyd-4goRky@aws-1-us-west-1.pooler.supabase.com:6543/postgres'
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.load_env import load_env
+
+# Load environment variables
+load_env()
 
 def add_full_text_column():
     """Add full_text column to bills table if it doesn't exist."""
