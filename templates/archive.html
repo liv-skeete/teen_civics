@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{# Updated poll results design - 2025-10-03 #}
 
 {% block title %}Bill Archive - TeenCivics{% endblock %}
 
@@ -80,22 +81,29 @@
                 <div class="poll-preview">
                     <h4>Community Poll</h4>
                     {% set total_votes = (bill.poll_results_yes or 0) + (bill.poll_results_no or 0) %}
-                    <div class="mini-results"
-                         data-yes="{{ ((bill.poll_results_yes or 0) / (total_votes if total_votes > 0 else 1) * 100)|round(1) }}"
-                         data-no="{{ ((bill.poll_results_no or 0) / (total_votes if total_votes > 0 else 1) * 100)|round(1) }}"
-                         data-total="{{ total_votes }}">
-                        {% if total_votes > 0 %}
-                            <div class="mini-result yes">
-                                <span>{{ ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) }}% Yes</span>
+                    {% if total_votes > 0 %}
+                        {% set yes_percentage = ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) %}
+                        {% set no_percentage = ((bill.poll_results_no or 0) / total_votes * 100)|round(1) %}
+                        <div class="poll-results">
+                            <div class="poll-option">
+                                <span class="poll-label">Yes</span>
+                                <div class="poll-bar">
+                                    <div class="poll-fill yes-fill" style="width: {{ yes_percentage }}%"></div>
+                                </div>
+                                <span class="poll-percentage">{{ yes_percentage }}%</span>
                             </div>
-                            <div class="mini-result no">
-                                <span>{{ ((bill.poll_results_no or 0) / total_votes * 100)|round(1) }}% No</span>
+                            <div class="poll-option">
+                                <span class="poll-label">No</span>
+                                <div class="poll-bar">
+                                    <div class="poll-fill no-fill" style="width: {{ no_percentage }}%"></div>
+                                </div>
+                                <span class="poll-percentage">{{ no_percentage }}%</span>
                             </div>
-                        {% else %}
-                            <p>No votes yet</p>
-                        {% endif %}
-                    </div>
-                    <p class="total-votes-mini">{{ total_votes }} total votes</p>
+                            <p class="poll-total">{{ total_votes }} total vote{{ 's' if total_votes != 1 else '' }}</p>
+                        </div>
+                    {% else %}
+                        <p class="no-votes">No votes yet</p>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>

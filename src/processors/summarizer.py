@@ -86,6 +86,11 @@ def _build_enhanced_system_prompt() -> str:
         "- Do NOT use hedging/uncertainty words (e.g., 'may', 'could', 'might', 'likely', 'appears'). State only what the bill or metadata explicitly says.\n"
         "- If a detail is not present in the bill text or provided metadata, omit it rather than speculate.\n"
         "- Use present-tense factual verbs (e.g., 'specifies', 'includes', 'authorizes', 'requires').\n\n"
+        "**WHEN FULL BILL TEXT IS PROVIDED:**\n"
+        "- You MUST extract and summarize SPECIFIC provisions, requirements, and legal standards from the full text.\n"
+        "- Include concrete details: deadlines (e.g., '60-day deadline'), timeframes (e.g., 'within 30 days'), dollar amounts, legal standards (e.g., 'clear and convincing evidence'), enforcement mechanisms, and statutory amendments.\n"
+        "- The full bill text is the PRIMARY source - prioritize it over metadata.\n"
+        "- Do NOT default to generic procedural descriptions when substantive legislative details are available in the full text.\n\n"
         "**overview (short summary):**\n"
         "- One short paragraph in plain language that identifies the bill type, scope, and purpose.\n"
         "- Should be concise but informative, setting context for the detailed summary.\n\n"
@@ -95,12 +100,24 @@ def _build_enhanced_system_prompt() -> str:
         "- Use bullet points for scannability. Explain acronyms inline where helpful.\n"
         "- REQUIRED section headers (use these exact emojis and titles; omit sections only if truly not applicable):\n"
         "  🔎 Overview (brief if overview already provided above; can be omitted if redundant)\n"
-        "  🔑 Key Provisions (detailed breakdown with sub-bullets; for House rules include debate structure, time limits, amendment procedures)\n"
+        "  🔑 Key Provisions (REQUIRED - extract from full text when available):\n"
+        "    - Specific requirements, deadlines, and timeframes (e.g., '60-day deadline for corrections')\n"
+        "    - Legal standards and burdens of proof (e.g., 'clear and convincing evidence')\n"
+        "    - Enforcement mechanisms and remedies (e.g., 'attorney fees provisions')\n"
+        "    - Reporting requirements (e.g., 'annual reports to Congress')\n"
+        "    - Amendments to existing law (cite specific U.S.C. sections, e.g., '18 U.S.C. § 925A')\n"
         "  🛠️ Policy Changes (substantive policy changes created or modified by the bill)\n"
         "  ⚖️ Policy Riders or Key Rules/Changes (for House rules: germaneness requirements, waiver language, points of order)\n"
         "  📌 Procedural/Administrative Notes (House Calendar placement, committee procedures, voting procedures)\n"
         "  👉 In short (3-5 bullets summarizing key implications and next steps)\n"
         "- For House resolutions/rules: Include concrete details about debate time, amendment handling, floor procedures, voting requirements.\n\n"
+        "**Example of good Key Provisions extraction from full text:**\n"
+        "- Establishes 60-day deadline for NICS to correct erroneous records\n"
+        "- Requires expedited hearings within 30 days of petition filing\n"
+        "- Sets burden of proof at 'clear and convincing evidence' standard\n"
+        "- Provides for attorney fees if petitioner prevails\n"
+        "- Mandates annual reporting to Congress on correction requests\n"
+        "- Amends 18 U.S.C. § 925A to add new due process protections\n\n"
         "**term_dictionary (glossary):**\n"
         "- Array of objects with 'term' and 'definition' keys for unfamiliar terms.\n"
         "- Include appropriations, riders, acronyms, specialized policy terms.\n"
@@ -787,13 +804,15 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     system = _build_enhanced_system_prompt()
 
     # Build user with optional full_text (no truncation)
-    bill_json = json.dumps(bill, ensure_ascii=False, default=str)
+    bill_for_json = bill.copy()
+    full_text_content = bill_for_json.pop("full_text", None)
+    bill_json = json.dumps(bill_for_json, ensure_ascii=False, default=str)
     full_text_section = ""
-    if bill.get("full_text"):
+    if full_text_content:
         try:
             tf = bill.get("text_format")
             tu = bill.get("text_url")
-            ft = bill["full_text"]
+            ft = full_text_content
             logger.info(f"include_text=True; using attached full_text (no truncation). chars={len(ft)}; text_format={tf}; text_url={tu}")
             full_text_section = f"\n\nFull bill text (no truncation):\n{ft}"
         except Exception as e:
@@ -801,6 +820,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
 
     user = (
         "Summarize the following bill object under the constraints above.\n"
+        f"{'**IMPORTANT: Full bill text is provided below. You MUST extract specific provisions, deadlines, legal standards, and requirements from it.**' if full_text_content else ''}\n"
         "Return ONLY a strict JSON object with keys 'overview', 'detailed', 'term_dictionary', and 'tweet'.\n"
         f"Bill JSON:\n{bill_json}{full_text_section}"
     )
@@ -980,8 +1000,9 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
 
     # If the model underfilled fields (common when full_text is absent), do a metadata-only repair pass
     ov_min, det_min = 100, 300
-    if len(overview.strip()) < ov_min or len(detailed.strip()) < det_min:
-        logger.info("Overview/detailed too short; attempting metadata-only enhanced repair pass")
+    # Only use metadata fallback if full_text was NOT provided
+    if (len(overview.strip()) < ov_min or len(detailed.strip()) < det_min) and not full_text_content:
+        logger.info("Overview/detailed too short AND no full text; attempting metadata-only enhanced repair pass")
         parsed_meta = _generate_from_metadata_model()
         if isinstance(parsed_meta, dict) and parsed_meta:
             new_overview = _normalize_structured_text(parsed_meta.get("overview", ""))
@@ -1036,5 +1057,5 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
                 summaries[key] = "[]"
             else:
                 summaries[key] = ""
-
+    
     return summaries

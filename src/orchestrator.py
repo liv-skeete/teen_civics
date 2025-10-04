@@ -189,7 +189,8 @@ def main(dry_run: bool = False) -> int:
                 "text_source": selected_bill.get("text_source", "feed"),
                 "text_version": selected_bill.get("text_version", "Introduced"),
                 "text_received_date": selected_bill.get("text_received_date"),
-                "processing_attempts": 0
+                "processing_attempts": 0,
+                "full_text": selected_bill.get("full_text", "")
             }
             
             logger.info(f"📊 New tweet summary length: {len(bill_data['summary_tweet'])} characters")

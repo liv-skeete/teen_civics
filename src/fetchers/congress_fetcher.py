@@ -75,46 +75,64 @@ def fetch_bill_text_from_api(congress: str, bill_type: str, bill_number: str, ap
             logger.warning(f"No text versions available for {bill_type}{bill_number}-{congress}")
             return None, None
         
-        # Get the first (most recent) text version
-        latest_version = text_versions[0]
-        version_type = latest_version.get('type', 'Unknown')
-        logger.info(f"Found text version: {version_type}")
-        
-        # Get formats available for this version
-        formats = latest_version.get('formats', [])
-        
-        # Try to get text in order of preference: Formatted Text (HTML), XML, TXT, PDF
-        for format_type in ['Formatted Text', 'XML', 'Formatted XML', 'TXT']:
+        # Try each text version until we find one with substantial legislative content
+        # Some versions (like "Reported in House") may just be cover pages
+        for version_idx, version in enumerate(text_versions):
+            version_type = version.get('type', 'Unknown')
+            logger.info(f"Trying text version {version_idx + 1}/{len(text_versions)}: {version_type}")
+            
+            # Get formats available for this version
+            formats = version.get('formats', [])
+            
+            # Try to get text in order of preference: Formatted Text (HTML), XML, TXT, PDF
+            for format_type in ['Formatted Text', 'XML', 'Formatted XML', 'TXT']:
+                for fmt in formats:
+                    if fmt.get('type') == format_type:
+                        url = fmt.get('url')
+                        if url:
+                            logger.info(f"  Downloading {format_type} from: {url}")
+                            try:
+                                text_response = requests.get(url, timeout=30)
+                                if text_response.status_code == 200:
+                                    content = text_response.text
+                                    logger.info(f"  Downloaded {format_type} ({len(content)} characters)")
+                                    
+                                    # Check if this version has substantial LEGISLATIVE content
+                                    # Look for key indicators of actual bill text vs cover pages
+                                    has_sections = 'SECTION 1.' in content.upper() or 'SEC. 1.' in content.upper()
+                                    has_be_it_enacted = 'Be it enacted' in content
+                                    
+                                    if has_sections or has_be_it_enacted:
+                                        logger.info(f"✅ Found legislative content in {version_type} ({format_type})")
+                                        return content, format_type
+                                    else:
+                                        logger.info(f"  ⚠️ No legislative sections found, trying next version...")
+                            except Exception as e:
+                                logger.warning(f"  Failed to download {format_type}: {e}")
+            
+            # If no text format worked for this version, try PDF as last resort
             for fmt in formats:
-                if fmt.get('type') == format_type:
+                if fmt.get('type') == 'PDF':
                     url = fmt.get('url')
                     if url:
-                        logger.info(f"Downloading {format_type} from: {url}")
+                        logger.info(f"  Downloading PDF from: {url}")
                         try:
-                            text_response = requests.get(url, timeout=30)
-                            if text_response.status_code == 200:
-                                content = text_response.text
-                                logger.info(f"Successfully downloaded {format_type} ({len(content)} characters)")
-                                return content, format_type
+                            pdf_response = requests.get(url, timeout=30)
+                            if pdf_response.status_code == 200:
+                                # Extract text from PDF
+                                text = _extract_text_from_pdf(pdf_response.content)
+                                if text:
+                                    # Check for legislative content in PDF
+                                    has_sections = 'SECTION 1.' in text.upper() or 'SEC. 1.' in text.upper()
+                                    has_be_it_enacted = 'Be it enacted' in text
+                                    
+                                    if has_sections or has_be_it_enacted:
+                                        logger.info(f"✅ Found legislative content in {version_type} (PDF)")
+                                        return text, 'PDF'
+                                    else:
+                                        logger.info(f"  ⚠️ PDF has no legislative sections, trying next version...")
                         except Exception as e:
-                            logger.warning(f"Failed to download {format_type}: {e}")
-        
-        # If no text format worked, try PDF as last resort
-        for fmt in formats:
-            if fmt.get('type') == 'PDF':
-                url = fmt.get('url')
-                if url:
-                    logger.info(f"Downloading PDF from: {url}")
-                    try:
-                        pdf_response = requests.get(url, timeout=30)
-                        if pdf_response.status_code == 200:
-                            # Extract text from PDF
-                            text = _extract_text_from_pdf(pdf_response.content)
-                            if text and len(text.strip()) > 100:
-                                logger.info(f"Successfully extracted text from PDF ({len(text)} characters)")
-                                return text, 'PDF'
-                    except Exception as e:
-                        logger.warning(f"Failed to download/extract PDF: {e}")
+                            logger.warning(f"  Failed to download/extract PDF: {e}")
         
         logger.warning(f"No downloadable text format found for {bill_type}{bill_number}-{congress}")
         return None, None
