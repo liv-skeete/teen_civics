@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pye
+
+# Log files
+*.log
+*.pid
+dev-start.log
+dev-start.pid
+migration.log
+orchestrator_run.log
+run_orchestrator.log
+
+# Environments
+.env
+.env.local
+.env.*.local
+venv/
+ENV/
+.venv*
+venv*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Databases / Data
+# Note: bills.db is tracked to sync between GitHub Actions and local environment
+# *.db
+# data/*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

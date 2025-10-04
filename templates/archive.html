@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{# Updated poll results design - 2025-10-03 #}
+
+{% block title %}Bill Archive - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="archive-header">
+        <h1>Bill Archive</h1>
+        <p>Browse all congressional bills summarized by TeenCivics</p>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+        <div class="filter-form">
+            <label for="status-filter">Filter by status:</label>
+            <select name="status" id="status-filter">
+                <option value="all">All Statuses</option>
+                <option value="introduced">Introduced</option>
+                <option value="referred_to_committee">Referred to Committee</option>
+                <option value="committee_consideration">Committee Consideration</option>
+                <option value="reported_by_committee">Reported by Committee</option>
+                <option value="passed_house">Passed House</option>
+                <option value="failed_house">Failed House</option>
+                <option value="passed_senate">Passed Senate</option>
+                <option value="failed_senate">Failed Senate</option>
+                <option value="became_law">Became Law</option>
+                <option value="vetoed">Vetoed</option>
+            </select>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="error-message">
+        <p>{{ error }}</p>
+    </div>
+    {% endif %}
+
+    {% if bills %}
+    <div class="bills-grid">
+        {% for bill in bills %}
+        <article class="bill-card" data-status="{{ bill.status }}">
+            <div class="bill-header">
+                <h2 class="bill-title">
+                    <a href="/bill/{{ bill.website_slug }}">{{ bill.title|shorten_title }}</a>
+                </h2>
+                {% if bill.title|length > 80 %}
+                <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
+                {% endif %}
+                {% if bill.short_title %}
+                <h3 class="bill-short-title">{{ bill.short_title }}</h3>
+                {% endif %}
+                
+                <!-- Bill metadata moved here -->
+                <div class="bill-meta">
+                    <span class="bill-id">{{ bill.bill_id }}</span>
+                    <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
+                    <span class="bill-status {{ bill.status|lower|replace('_', '-') }}">{{ bill.status|format_status }}</span>
+                </div>
+            </div>
+
+            <div class="bill-content">
+                <div class="summary-preview">
+                    {{ bill.summary_tweet|truncate(200) }}
+                </div>
+                
+                <br>
+                
+                <div class="bill-actions">
+                    <a href="/bill/{{ bill.website_slug }}" class="btn btn-primary btn-small">
+                        Read Summary
+                    </a>
+                    {% if bill.tweet_url %}
+                    <a href="{{ bill.tweet_url }}" target="_blank" rel="noopener" class="btn btn-twitter btn-small">
+                        View Tweet
+                    </a>
+                    {% endif %}
+                </div>
+
+                {% if bill.poll_results_yes is defined or bill.poll_results_no is defined %}
+                <div class="poll-preview">
+                    <h4>Community Poll</h4>
+                    {% set total_votes = (bill.poll_results_yes or 0) + (bill.poll_results_no or 0) %}
+                    {% if total_votes > 0 %}
+                        {% set yes_percentage = ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) %}
+                        {% set no_percentage = ((bill.poll_results_no or 0) / total_votes * 100)|round(1) %}
+                        <div class="poll-results">
+                            <div class="poll-option">
+                                <span class="poll-label">Yes</span>
+                                <div class="poll-bar">
+                                    <div class="poll-fill yes-fill" style="width: {{ yes_percentage }}%"></div>
+                                </div>
+                                <span class="poll-percentage">{{ yes_percentage }}%</span>
+                            </div>
+                            <div class="poll-option">
+                                <span class="poll-label">No</span>
+                                <div class="poll-bar">
+                                    <div class="poll-fill no-fill" style="width: {{ no_percentage }}%"></div>
+                                </div>
+                                <span class="poll-percentage">{{ no_percentage }}%</span>
+                            </div>
+                            <p class="poll-total">{{ total_votes }} total vote{{ 's' if total_votes != 1 else '' }}</p>
+                        </div>
+                    {% else %}
+                        <p class="no-votes">No votes yet</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if current_page > 1 %}
+        <a href="?page={{ current_page - 1 }}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}" class="page-link prev">
+            ← Previous
+        </a>
+        {% endif %}
+
+        {% for page_num in range(1, total_pages + 1) %}
+            {% if page_num == current_page %}
+            <span class="page-link current">{{ page_num }}</span>
+            {% else %}
+            <a href="?page={{ page_num }}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}" class="page-link">
+                {{ page_num }}
+            </a>
+            {% endif %}
+        {% endfor %}
+
+        {% if current_page < total_pages %}
+        <a href="?page={{ current_page + 1 }}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}" class="page-link next">
+            Next →
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="no-bills-message">
+        <h2>No bills found</h2>
+        <p>{% if status_filter != 'all' %}No bills with status "{{ status_filter }}" found.{% else %}No bills available in the archive yet.{% endif %}</p>
+        <a href="/archive?status=all" class="btn btn-primary">View All Bills</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
