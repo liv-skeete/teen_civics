@@ -47,7 +47,7 @@ def get_connection_string() -> Optional[str]:
 
 def init_connection_pool(minconn: int = 2, maxconn: int = 10) -> None:
     """
-    Initialize the PostgreSQL connection pool.
+    Initialize the PostgreSQL connection pool with connection validation.
     
     Args:
         minconn: Minimum number of connections to maintain
@@ -64,15 +64,55 @@ def init_connection_pool(minconn: int = 2, maxconn: int = 10) -> None:
         raise ValueError("No PostgreSQL connection string configured")
     
     try:
+        # Parse connection string to add keepalive settings
+        parsed = urlparse(conn_string)
+        
+        # Build connection parameters with keepalive settings
+        conn_params = {
+            'dsn': conn_string,
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5
+        }
+        
         _connection_pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=minconn,
             maxconn=maxconn,
-            dsn=conn_string
+            **conn_params
         )
-        logger.info(f"PostgreSQL connection pool initialized (min={minconn}, max={maxconn})")
+        logger.info(f"PostgreSQL connection pool initialized (min={minconn}, max={maxconn}) with keepalive settings")
     except Exception as e:
         logger.error(f"Failed to initialize connection pool: {e}")
         raise
+
+def _validate_connection(conn: psycopg2.extensions.connection) -> bool:
+    """
+    Validate that a connection is still alive and usable.
+    
+    Args:
+        conn: PostgreSQL connection to validate
+        
+    Returns:
+        bool: True if connection is valid, False otherwise
+    """
+    try:
+        # Check if connection is closed
+        if conn.closed:
+            logger.warning("Connection is closed")
+            return False
+        
+        # Test with a simple query
+        with conn.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+        return True
+    except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+        logger.warning(f"Connection validation failed: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Unexpected error during connection validation: {e}")
+        return False
 
 def close_connection_pool() -> None:
     """Close all connections in the pool."""
@@ -120,6 +160,7 @@ def is_postgres_available() -> bool:
 def postgres_connect() -> Iterator[psycopg2.extensions.connection]:
     """
     Context manager that yields a PostgreSQL connection from the pool.
+    Validates connection health and automatically reconnects if stale.
     Commits on success and rolls back on failure.
     Automatically returns connection to pool when done.
     
@@ -142,6 +183,31 @@ def postgres_connect() -> Iterator[psycopg2.extensions.connection]:
     conn = _connection_pool.getconn()
     connect_time = time.time() - start_time
     logger.info(f"PostgreSQL connection obtained from pool in {connect_time:.3f}s")
+    
+    # Validate connection health
+    max_retries = 2
+    for attempt in range(max_retries):
+        if _validate_connection(conn):
+            logger.debug(f"Connection validated successfully (attempt {attempt + 1})")
+            break
+        else:
+            logger.warning(f"Connection validation failed (attempt {attempt + 1}/{max_retries})")
+            
+            if attempt < max_retries - 1:
+                # Close the stale connection
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                
+                # Get a fresh connection from the pool
+                logger.info("Requesting fresh connection from pool...")
+                conn = _connection_pool.getconn()
+            else:
+                # Last attempt failed - raise error
+                logger.error("Failed to obtain valid connection after retries")
+                _connection_pool.putconn(conn)
+                raise psycopg2.OperationalError("Unable to obtain valid database connection")
     
     try:
         yield conn
@@ -219,58 +285,4 @@ def init_postgres_tables() -> None:
                 RETURNS TRIGGER AS $$
                 BEGIN
                     NEW.updated_at = CURRENT_TIMESTAMP;
-                    RETURN NEW;
-                END;
-                $$ LANGUAGE plpgsql;
-                ''')
-                
-                # Create trigger to automatically update updated_at
-                cursor.execute('''
-                DROP TRIGGER IF EXISTS update_bills_updated_at ON bills;
-                CREATE TRIGGER update_bills_updated_at
-                    BEFORE UPDATE ON bills
-                    FOR EACH ROW
-                    EXECUTE FUNCTION update_updated_at_column();
-                ''')
-
-        logger.info("PostgreSQL tables initialized successfully")
-
-    except Exception as e:
-        logger.error(f"Failed to initialize PostgreSQL tables: {e}")
-        raise
-
-def get_database_type() -> str:
-    """
-    Determine which database type to use based on configuration.
-    PostgreSQL is now required - no SQLite fallback.
-    
-    Returns:
-        str: 'postgres' if PostgreSQL is available
-        
-    Raises:
-        ValueError: If PostgreSQL is not configured or connection fails
-    """
-    conn_string = get_connection_string()
-    if not conn_string:
-        raise ValueError("PostgreSQL database is required but not configured. Please set DATABASE_URL or Supabase environment variables in .env file.")
-    
-    if is_postgres_available():
-        logger.info("Using postgres database")
-        return 'postgres'
-    else:
-        raise ValueError("PostgreSQL database connection failed. DATABASE_URL is set but connection cannot be established. Check your database credentials and ensure the database server is accessible.")
-
-def get_connection_manager():
-    """
-    Get the PostgreSQL connection manager.
-    
-    Returns:
-        Context manager function for PostgreSQL database
-        
-    Raises:
-        ValueError: If PostgreSQL is not configured
-    """
-    if get_database_type() == 'postgres':
-        return postgres_connect
-    else:
-        raise ValueError("PostgreSQL database is required but not configured.")
+  
