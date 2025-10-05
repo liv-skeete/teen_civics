@@ -285,4 +285,22 @@ def init_postgres_tables() -> None:
                 RETURNS TRIGGER AS $$
                 BEGIN
                     NEW.updated_at = CURRENT_TIMESTAMP;
-  
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                ''')
+                
+                # Create trigger to automatically update updated_at
+                cursor.execute('''
+                DROP TRIGGER IF EXISTS update_bills_updated_at ON bills;
+                CREATE TRIGGER update_bills_updated_at
+                    BEFORE UPDATE ON bills
+                    FOR EACH ROW
+                    EXECUTE FUNCTION update_updated_at_column();
+                ''')
+
+        logger.info("PostgreSQL tables initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize PostgreSQL tables: {e}")
+        raise

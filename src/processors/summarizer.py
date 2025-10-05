@@ -1151,4 +1151,19 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     if overview and detailed:
         long_summary = f"{overview}\n\n{detailed}".strip()
     else:
-        long_summary
+        long_summary = overview or detailed or "Summary not available."
+    
+    # Serialize term_dictionary back to JSON string
+    term_dictionary_str = json.dumps(term_dictionary_obj, ensure_ascii=False)
+    
+    elapsed = time.monotonic() - start
+    logger.info(f"✅ Summaries generated successfully")
+    logger.debug(f"Enhanced summary generation took {elapsed:.2f}s")
+    
+    return {
+        "tweet": tweet,
+        "long": long_summary,
+        "overview": overview,
+        "detailed": detailed,
+        "term_dictionary": term_dictionary_str
+    }
