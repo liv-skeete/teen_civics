@@ -16,7 +16,7 @@ load_dotenv()
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.database.connection import get_connection_manager
+from src.database.connection import postgres_connect
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -37,10 +37,8 @@ def migrate_schema():
     """
     logger.info("🚀 Starting database schema migration...")
     
-    pg_connect = get_connection_manager()
-    
     try:
-        with pg_connect() as conn:
+        with postgres_connect() as conn:
             with conn.cursor() as cursor:
                 # Check if migration is needed
                 logger.info("📋 Checking current schema...")
@@ -191,10 +189,8 @@ def rollback_migration():
         logger.info("Rollback cancelled")
         return False
     
-    pg_connect = get_connection_manager()
-    
     try:
-        with pg_connect() as conn:
+        with postgres_connect() as conn:
             with conn.cursor() as cursor:
                 logger.info("🗑️ Dropping new columns...")
                 

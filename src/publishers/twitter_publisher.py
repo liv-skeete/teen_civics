@@ -130,6 +130,12 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
         logger.error(f"Tweet text exceeds 280 characters ({len(text)} chars)")
         return False, None
 
+    # DIAGNOSTIC: Log full tweet content hash for duplicate detection
+    import hashlib
+    tweet_hash = hashlib.md5(text.encode()).hexdigest()
+    logger.info(f"🔍 DIAGNOSTIC: Attempting to post tweet with hash: {tweet_hash}")
+    logger.info(f"🔍 DIAGNOSTIC: Full tweet content: {text}")
+
     # Prefer v2 API first (generally better supported)
     if client_v2:
         try:
@@ -145,7 +151,15 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
                 logger.error("v2 API response missing tweet data")
                 # Consider this a failure to allow fallback to v1
         except tweepy.TweepyException as e:
+            error_msg = str(e)
             logger.error(f"v2 API failed: {e}")
+            # DIAGNOSTIC: Check if this is a duplicate content error
+            if "duplicate" in error_msg.lower():
+                logger.error(f"🔍 DIAGNOSTIC: DUPLICATE CONTENT ERROR detected in v2 API")
+                logger.error(f"🔍 DIAGNOSTIC: Tweet hash that was rejected: {tweet_hash}")
+                logger.error(f"🔍 DIAGNOSTIC: This tweet content was already posted to Twitter")
+                # Return a special indicator that this is a duplicate
+                return False, "DUPLICATE_CONTENT"
         except Exception as e:
             logger.error(f"Unexpected error with v2 API: {e}")
 
@@ -158,7 +172,15 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
             logger.info(f"Tweet posted successfully via v1.1 API: {tweet_url}")
             return True, tweet_url
         except tweepy.TweepyException as e:
+            error_msg = str(e)
             logger.warning(f"v1.1 API failed: {e}")
+            # DIAGNOSTIC: Check if this is a duplicate content error
+            if "duplicate" in error_msg.lower():
+                logger.error(f"🔍 DIAGNOSTIC: DUPLICATE CONTENT ERROR detected in v1.1 API")
+                logger.error(f"🔍 DIAGNOSTIC: Tweet hash that was rejected: {tweet_hash}")
+                logger.error(f"🔍 DIAGNOSTIC: This tweet content was already posted to Twitter")
+                # Return a special indicator that this is a duplicate
+                return False, "DUPLICATE_CONTENT"
         except Exception as e:
             logger.error(f"Unexpected error with v1.1 API: {e}")
 

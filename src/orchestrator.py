@@ -208,6 +208,15 @@ def main(dry_run: bool = False) -> int:
         formatted_tweet = format_bill_tweet(bill_data)
         logger.info(f"📝 Formatted tweet length: {len(formatted_tweet)} characters")
         
+        # DIAGNOSTIC: Log current database state before posting
+        logger.info(f"🔍 DIAGNOSTIC: Pre-post database state for bill {bill_id}:")
+        current_state = get_bill_by_id(bill_id)
+        if current_state:
+            logger.info(f"🔍 DIAGNOSTIC:   tweet_posted = {current_state.get('tweet_posted')}")
+            logger.info(f"🔍 DIAGNOSTIC:   tweet_url = {current_state.get('tweet_url')}")
+        else:
+            logger.warning(f"🔍 DIAGNOSTIC:   Bill {bill_id} not found in database!")
+        
         if dry_run:
             logger.info("🔶 DRY-RUN MODE: Simulating tweet post")
             logger.info(f"🔶 DRY-RUN: Would post tweet (length: {len(formatted_tweet)}):")
@@ -220,6 +229,25 @@ def main(dry_run: bool = False) -> int:
             logger.info(f"📝 Tweet content: {formatted_tweet[:100]}...")
             
             success, tweet_url = post_tweet(formatted_tweet)
+            
+            # DIAGNOSTIC: Check if this was a duplicate content error
+            if not success and tweet_url == "DUPLICATE_CONTENT":
+                logger.error("🔍 DIAGNOSTIC: Twitter rejected tweet as DUPLICATE CONTENT")
+                logger.error(f"🔍 DIAGNOSTIC: Bill {bill_id} was likely already tweeted but database wasn't updated")
+                logger.error(f"🔍 DIAGNOSTIC: Marking bill as tweeted to prevent future duplicate attempts")
+                
+                # Mark the bill as tweeted even though we don't have the original tweet URL
+                # This prevents infinite retry loops
+                placeholder_url = f"https://twitter.com/search?q=from:TeenCivics+{bill_id}"
+                update_success = update_tweet_info(bill_id, placeholder_url)
+                
+                if update_success:
+                    logger.info(f"✅ Bill {bill_id} marked as tweeted (duplicate detected)")
+                    logger.info("🎉 Orchestrator completed - duplicate handled gracefully")
+                    return 0
+                else:
+                    logger.error(f"❌ Failed to mark bill {bill_id} as tweeted after duplicate detection")
+                    return 1
 
             if success:
                 logger.info(f"✅ Tweet posted successfully: {tweet_url}")

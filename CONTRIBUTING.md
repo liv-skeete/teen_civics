@@ -364,6 +364,4 @@ If you have questions about contributing:
 
 - Open a [GitHub Discussion](https://github.com/liv-skeete/teen_civics/discussions)
 - Check existing documentation in the repository
-- Review closed issues and PRs for similar questions
-
-Thank you for contributing to TeenCivics! 🎉
+- Review closed issues and PRs for si

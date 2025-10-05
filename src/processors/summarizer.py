@@ -95,6 +95,7 @@ def _build_enhanced_system_prompt() -> str:
         "- Do NOT use hedging/uncertainty words (e.g., 'may', 'could', 'might', 'likely', 'appears'). State only what the bill or metadata explicitly says.\n"
         "- If a detail is not present in the bill text or provided metadata, omit it rather than speculate.\n"
         "- Use present-tense factual verbs (e.g., 'specifies', 'includes', 'authorizes', 'requires').\n"
+        "- Use ethical attention hooks: strong verbs, relevant numbers, or quick questions that make content engaging without sensationalism.\n"
         "- **BEFORE FINALIZING: Review your entire response for grammar, spelling, punctuation, and clarity. Ensure all sentences are complete, properly structured, and free of errors.**\n\n"
         "**WHEN FULL BILL TEXT IS PROVIDED:**\n"
         "- You MUST extract and summarize SPECIFIC provisions, requirements, and legal standards from the full text.\n"
@@ -104,21 +105,23 @@ def _build_enhanced_system_prompt() -> str:
         "- Extract the ACTUAL policy content - what the bill specifically does, who it affects, what changes it makes.\n\n"
         "**overview (short summary):**\n"
         "- One short paragraph in plain language that identifies the bill type, scope, and purpose.\n"
+        "- Start with an ethical attention hook: use strong verbs, relevant numbers, or a compelling question.\n"
         "- Should be concise but informative, setting context for the detailed summary.\n"
-        "- Must describe the ACTUAL content of the bill, not generic descriptions.\n\n"
+        "- Must describe the ACTUAL content of the bill, not generic descriptions.\n"
+        "- Examples of good hooks: 'New bill targets...', 'Could this affect 2M students?', 'Bill proposes major changes to...'\n\n"
         "**detailed (structured summary):**\n"
         "- Be adaptive: If the bill text is substantial, aim for 400–500 words. If the bill text is short/simple (e.g., many House/Senate resolutions), write a concise summary sufficient to fully explain it, even as short as 120–250 words. Do not speculate to reach a target length.\n"
         "- ALWAYS include the emoji signposts in your output - they are REQUIRED.\n"
         "- Use bullet points for scannability. Explain acronyms inline where helpful.\n"
         "- REQUIRED section headers in this EXACT order (use these exact emojis and titles):\n"
         "  🔎 Overview\n"
-        "    - Brief description of what the bill does\n"
+        "    - Brief description of what the bill does (use strong verbs and specific details)\n"
         "    - Bill type and current status\n"
         "  👥 Who does this affect?\n"
         "    - Main groups: [Name the specific groups touched by the bill, e.g., gun owners, law enforcement, states with concealed carry laws]\n"
         "    - Who benefits/loses: [Note who is likely to benefit or lose out based on the bill's provisions]\n"
-        "    - Teen impact score: [Score from 1-10, where 1 = minimal teen impact, 10 = major teen impact]\n"
-        "    - [If score > 5]: Teen-specific impact: [Explain how this specifically affects teenagers]\n"
+        "    - Teen impact score: [Score from 1-10 based on: direct impact on education/employment/healthcare/tech access (weight: 40%), indirect impact through family/community (weight: 30%), long-term implications for their generation (weight: 30%)]\n"
+        "    - [ONLY if score > 5]: Teen-specific impact: [Explain concretely how this affects teenagers' daily lives, future opportunities, or rights]\n"
         "  🔑 Key Provisions (REQUIRED - extract from full text when available):\n"
         "    - Specific requirements, deadlines, and timeframes (e.g., '60-day deadline for corrections')\n"
         "    - Legal standards and burdens of proof (e.g., 'clear and convincing evidence')\n"
@@ -157,9 +160,16 @@ def _build_enhanced_system_prompt() -> str:
         "- Who benefits/loses: Benefits gun owners who travel across state lines (expanded carry rights); may concern states with stricter gun laws (reduced state autonomy)\n"
         "- Teen impact score: 3/10\n"
         "- (Score ≤5, so no teen-specific explanation needed)\n\n"
+        "For a student loan forgiveness bill:\n"
+        "- Main groups: Current student loan borrowers, future college students, taxpayers, higher education institutions\n"
+        "- Who benefits/loses: Benefits borrowers with debt relief; concerns about fairness to those who already paid or didn't attend college\n"
+        "- Teen impact score: 8/10\n"
+        "- Teen-specific impact: Directly affects teens planning for college by changing the financial landscape of higher education. Could reduce the burden of student debt for current high school students entering college, but may also influence college costs and financial aid policies.\n\n"
         "**Example of good '💡 Why should I care?' section:**\n"
         "For a concealed carry reciprocity bill:\n"
-        "This bill affects how gun laws work when you travel between states. Currently, a concealed carry permit from one state might not be valid in another state with different rules. This bill would require all states to recognize permits from other states, similar to how driver's licenses work. This matters if you or your family members have concealed carry permits and travel, or if you live in a state with strict gun laws that would now have to accept permits from states with looser requirements. The debate centers on balancing gun rights with state authority to set their own public safety standards.\n\n"
+        "This bill affects how gun laws work when traveling between states. Currently, a concealed carry permit from one state might not be valid in another state with different rules. This bill would require all states to recognize permits from other states, similar to how driver's licenses work. This matters if family members have concealed carry permits and travel, or if living in a state with strict gun laws that would now have to accept permits from states with looser requirements. The debate centers on balancing gun rights with state authority to set their own public safety standards.\n\n"
+        "For a student loan forgiveness bill:\n"
+        "This bill could reshape how Americans pay for college. If passed, it would cancel a portion of federal student loan debt for millions of borrowers. For teens, this signals a potential shift in how society handles college costs. It could make college feel more accessible, but it also raises questions about fairness and who pays for education. The decision affects not just current borrowers, but future students trying to figure out how to afford college and whether taking on debt is worth the risk.\n\n"
         "**term_dictionary (glossary):**\n"
         "- Array of objects with 'term' and 'definition' keys for unfamiliar terms.\n"
         "- Include appropriations, riders, acronyms, specialized policy terms.\n"
@@ -168,26 +178,28 @@ def _build_enhanced_system_prompt() -> str:
         "**tweet (engaging summary for X/Twitter):**\n"
         "- Target audience: Teens aged 13-19. Use language they understand and find engaging.\n"
         "- Length: <=200 characters that grabs attention while remaining factual and non-partisan.\n"
-        "- **MUST start with an ethical attention hook** (choose one):\n"
-        "  1. Strong action verb: 'New bill aims to...', 'Congress proposes...', 'Bill would change...'\n"
-        "  2. Surprising/relevant number: 'Could this bill affect 2.3 million students?', '$500M for...'\n"
-        "  3. Engaging question: 'Should teens have more privacy online? New bill decides.'\n"
-        "  4. Direct impact: 'Your school lunch could change under new bill'\n"
+        "- **MUST start with an ethical attention hook** (choose the most appropriate):\n"
+        "  1. Strong action verb: 'New bill targets...', 'Congress moves to...', 'Bill would expand/restrict/change...'\n"
+        "  2. Surprising/relevant number: '2.3M students could be affected by new bill', '$500M proposed for...'\n"
+        "  3. Engaging question: 'Should states control gun laws? New bill weighs in.', 'What if college debt disappeared?'\n"
+        "  4. Direct impact statement: 'School lunch programs face changes under new bill', 'Teen privacy online gets new protections'\n"
         "- **X Algorithm Optimization:**\n"
         "  - Use concrete nouns and active verbs (better engagement)\n"
         "  - Include specific numbers when available (drives clicks)\n"
         "  - Frame around human impact, not process (more shares)\n"
         "  - Ask questions that make people want to learn more\n"
         "  - Avoid generic phrases like 'new legislation' - be specific\n"
-        "- Examples of GOOD tweets:\n"
-        "  - 'New bill would require background checks for all gun sales. Here's what changes.'\n"
-        "  - 'Should AI companies pay for using your data? Congress debates new rules.'\n"
-        "  - 'Bill could cut student loan payments for 8M borrowers. How it works:'\n"
-        "  - 'Your TikTok data might get new protections under proposed privacy law'\n"
-        "- Examples of BAD tweets (too generic):\n"
-        "  - 'New legislation introduced in Congress' ❌\n"
-        "  - 'Bill proposes changes to existing law' ❌\n"
-        "  - 'Senate considers new measure' ❌\n"
+        "- Examples of GOOD tweets (engaging, specific, teen-relevant):\n"
+        "  - 'New bill targets universal background checks for gun sales. Major policy shift proposed.'\n"
+        "  - 'Should AI companies pay for your data? Congress debates new tech rules.'\n"
+        "  - '8M borrowers could see lower student loan payments under new bill.'\n"
+        "  - 'TikTok data gets new protections under proposed privacy law.'\n"
+        "  - 'Congress moves to expand healthcare access for 2M young adults.'\n"
+        "- Examples of BAD tweets (too generic, no hook):\n"
+        "  - 'New legislation introduced in Congress' ❌ (no specifics, no hook)\n"
+        "  - 'Bill proposes changes to existing law' ❌ (vague, boring)\n"
+        "  - 'Senate considers new measure' ❌ (no substance, no engagement)\n"
+        "  - 'Important bill being debated' ❌ (meaningless without context)\n"
         "- Focus on the bill's core purpose or impact on real people.\n"
         "- Maintain a neutral, non-sensational tone. No clickbait, emojis, or hashtags.\n"
         "- Use stage-appropriate verbs (proposes, passed, became law).\n\n"
@@ -990,30 +1002,59 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         ltitle = title.lower()
         import re as _re
         
-        # Try to extract affected groups from title
+        # Try to extract affected groups from title and calculate teen impact
         affected_groups = []
-        if "concealed carry" in ltitle or "firearm" in ltitle or "gun" in ltitle:
+        teen_impact_score = 2  # Default low score for limited metadata
+        teen_impact_explanation = ""
+        
+        # Calculate teen impact based on topic relevance
+        if "student" in ltitle or "education" in ltitle or "school" in ltitle or "college" in ltitle:
+            affected_groups.append("students, educators, schools, families")
+            teen_impact_score = 7
+            teen_impact_explanation = "Directly affects educational opportunities, school policies, or student resources that teens interact with daily."
+        elif "employment" in ltitle or "job" in ltitle or "worker" in ltitle or "wage" in ltitle or "minimum wage" in ltitle:
+            affected_groups.append("workers, employers, job seekers")
+            teen_impact_score = 6
+            teen_impact_explanation = "Affects job opportunities and working conditions for teens entering the workforce or working part-time."
+        elif "health" in ltitle or "medicare" in ltitle or "medicaid" in ltitle or "insurance" in ltitle:
+            affected_groups.append("healthcare recipients, medical providers, insured individuals")
+            teen_impact_score = 5
+            teen_impact_explanation = "Could affect healthcare access for teens and their families, including mental health services and preventive care."
+        elif "internet" in ltitle or "online" in ltitle or "privacy" in ltitle or "data" in ltitle or "social media" in ltitle or "technology" in ltitle:
+            affected_groups.append("internet users, tech companies, privacy advocates")
+            teen_impact_score = 7
+            teen_impact_explanation = "Directly impacts how teens use technology, social media, and online platforms, affecting digital privacy and safety."
+        elif "concealed carry" in ltitle or "firearm" in ltitle or "gun" in ltitle:
             affected_groups.append("gun owners, law enforcement, states with varying gun laws")
-        elif "veteran" in ltitle:
-            affected_groups.append("veterans, military families")
-        elif "student" in ltitle or "education" in ltitle or "school" in ltitle:
-            affected_groups.append("students, educators, schools")
-        elif "health" in ltitle or "medicare" in ltitle or "medicaid" in ltitle:
-            affected_groups.append("healthcare recipients, medical providers")
+            teen_impact_score = 4
+        elif "veteran" in ltitle or "military" in ltitle:
+            affected_groups.append("veterans, military families, active service members")
+            teen_impact_score = 3
         elif "tax" in ltitle:
-            affected_groups.append("taxpayers, businesses")
+            affected_groups.append("taxpayers, businesses, families")
+            teen_impact_score = 3
         elif "environment" in ltitle or "climate" in ltitle:
             affected_groups.append("environmental organizations, affected industries, general public")
+            teen_impact_score = 6
+            teen_impact_explanation = "Long-term environmental policies will shape the world teens inherit, affecting air quality, climate stability, and natural resources."
+        elif "voting" in ltitle or "election" in ltitle:
+            affected_groups.append("voters, election officials, political parties")
+            teen_impact_score = 5
+            teen_impact_explanation = "Affects voting rights and election processes that teens will participate in as they reach voting age."
         else:
             # Generic fallback based on bill type
             if bill_type == "SRES" or bill_type == "HRES":
                 affected_groups.append("primarily symbolic; expresses Congressional position")
+                teen_impact_score = 1
             else:
                 affected_groups.append("groups identified in the bill title")
+                teen_impact_score = 2
         
         lines.append(f"- Main groups: {', '.join(affected_groups) if affected_groups else 'See bill title for affected parties'}")
         lines.append("- Who benefits/loses: Depends on specific provisions (full text needed for detailed analysis)")
-        lines.append("- Teen impact score: 2/10 (limited metadata available)")
+        lines.append(f"- Teen impact score: {teen_impact_score}/10")
+        if teen_impact_score > 5 and teen_impact_explanation:
+            lines.append(f"- Teen-specific impact: {teen_impact_explanation}")
         lines.append("")
         
         lines.append("🔑 Key Provisions")
@@ -1075,9 +1116,23 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         # NEW SECTION: Why should I care?
         lines.append("💡 Why should I care?")
         if bill_type == "SRES" or bill_type == "HRES":
-            lines.append("This resolution expresses Congress's position on an issue but doesn't create new laws or change existing ones. It's primarily symbolic, showing where Congress stands on the topic mentioned in the title. While it doesn't directly affect your daily life, it can signal Congressional priorities and set the stage for future legislation.")
+            lines.append("This resolution expresses Congress's position on an issue but doesn't create new laws or change existing ones. It's primarily symbolic, showing where Congress stands on the topic mentioned in the title. While it doesn't directly affect daily life, it can signal Congressional priorities and set the stage for future legislation.")
         else:
-            lines.append(f"This bill addresses {title.lower() if title else 'the topic in its title'}. Without the full text, it's difficult to assess specific impacts, but the title suggests it could affect policies or programs related to this area. Check back once the full text is available for a detailed analysis of how it might impact you.")
+            # Provide more specific relevance based on topic
+            if "student" in ltitle or "education" in ltitle or "school" in ltitle or "college" in ltitle:
+                lines.append(f"This bill addresses {title.lower() if title else 'education policy'}. Education legislation can affect school funding, curriculum standards, student loan programs, and educational opportunities. These policies shape the quality of education available and the cost of pursuing higher education, directly impacting students and families planning for the future.")
+            elif "employment" in ltitle or "job" in ltitle or "worker" in ltitle or "wage" in ltitle:
+                lines.append(f"This bill addresses {title.lower() if title else 'employment and labor policy'}. Workplace laws affect job opportunities, wages, working conditions, and employee rights. For teens entering the workforce or working part-time, these policies determine minimum wage, overtime rules, and workplace protections.")
+            elif "health" in ltitle or "medicare" in ltitle or "medicaid" in ltitle:
+                lines.append(f"This bill addresses {title.lower() if title else 'healthcare policy'}. Healthcare legislation affects insurance coverage, medical costs, and access to care. These policies impact families' ability to afford healthcare, including mental health services, preventive care, and treatment for chronic conditions.")
+            elif "internet" in ltitle or "online" in ltitle or "privacy" in ltitle or "data" in ltitle or "social media" in ltitle:
+                lines.append(f"This bill addresses {title.lower() if title else 'digital privacy and technology'}. Technology laws shape how companies collect and use personal data, what content can be shared online, and how platforms moderate content. These policies directly affect how teens use social media, protect their privacy, and interact online.")
+            elif "environment" in ltitle or "climate" in ltitle:
+                lines.append(f"This bill addresses {title.lower() if title else 'environmental policy'}. Environmental legislation affects air and water quality, climate change mitigation, and natural resource protection. These policies shape the world future generations will inherit, impacting everything from local pollution to global climate patterns.")
+            elif "voting" in ltitle or "election" in ltitle:
+                lines.append(f"This bill addresses {title.lower() if title else 'voting and election policy'}. Election laws determine who can vote, how votes are cast and counted, and how campaigns are conducted. These policies affect democratic participation and will impact teens as they reach voting age.")
+            else:
+                lines.append(f"This bill addresses {title.lower() if title else 'the topic in its title'}. Without the full text, it's difficult to assess specific impacts, but the title suggests it could affect policies or programs in this area. Legislative decisions shape government programs, regulations, and funding priorities that affect communities and families.")
         
         detailed_text = "\n".join(lines).strip()
 

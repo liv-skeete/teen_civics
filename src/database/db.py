@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List, Iterator
 from contextlib import contextmanager
 
 # Import the database connection manager
-from .connection import get_connection_manager, init_postgres_tables
+from .connection import postgres_connect, init_postgres_tables
 
 # Import psycopg2 for PostgreSQL support
 import psycopg2
@@ -40,8 +40,7 @@ def db_connect() -> Iterator[psycopg2.extensions.connection]:
     Context manager that yields a PostgreSQL connection and guarantees it is closed.
     Commits on success and rolls back on failure.
     """
-    pg_connect = get_connection_manager()
-    with pg_connect() as conn:
+    with postgres_connect() as conn:
         yield conn
 
 def init_db() -> None:

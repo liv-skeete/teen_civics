@@ -9,7 +9,8 @@ import logging
 import psycopg2
 import psycopg2.extras
 import psycopg2.pool
-from typing import Optional, Iterator, Dict, Any
+import time
+from typing import Optional, Iterator, Dict, Any, Tuple
 from contextlib import contextmanager
 from urllib.parse import urlparse
 
@@ -17,8 +18,9 @@ from urllib.parse import urlparse
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Global connection pool
+# Global connection pool and connection tracking
 _connection_pool: Optional[psycopg2.pool.ThreadedConnectionPool] = None
+_connection_metadata: Dict[int, Tuple[float, int]] = {}  # conn_id -> (creation_time, use_count)
 
 def get_connection_string() -> Optional[str]:
     """
@@ -64,27 +66,55 @@ def init_connection_pool(minconn: int = 2, maxconn: int = 10) -> None:
         raise ValueError("No PostgreSQL connection string configured")
     
     try:
-        # Parse connection string to add keepalive settings
+        # Parse connection string to add keepalive and SSL settings
         parsed = urlparse(conn_string)
         
-        # Build connection parameters with keepalive settings
+        # Build connection parameters with keepalive and SSL settings
         conn_params = {
             'dsn': conn_string,
             'keepalives': 1,
             'keepalives_idle': 30,
             'keepalives_interval': 10,
-            'keepalives_count': 5
+            'keepalives_count': 5,
+            'connect_timeout': 10,
+            'options': '-c statement_timeout=30000'  # 30 second statement timeout
         }
+        
+        # Add SSL mode if not already in connection string
+        if 'sslmode' not in conn_string.lower():
+            conn_params['sslmode'] = 'require'
+            logger.info("Setting SSL mode to 'require' for secure connection")
         
         _connection_pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=minconn,
             maxconn=maxconn,
             **conn_params
         )
-        logger.info(f"PostgreSQL connection pool initialized (min={minconn}, max={maxconn}) with keepalive settings")
+        logger.info(f"PostgreSQL connection pool initialized (min={minconn}, max={maxconn}) with keepalive and SSL settings")
     except Exception as e:
         logger.error(f"Failed to initialize connection pool: {e}")
         raise
+def _is_ssl_error(error: Exception) -> bool:
+    """
+    Check if an error is SSL-related.
+    
+    Args:
+        error: Exception to check
+        
+    Returns:
+        bool: True if error is SSL-related, False otherwise
+    """
+    error_str = str(error).lower()
+    ssl_indicators = [
+        'ssl',
+        'certificate',
+        'handshake',
+        'tls',
+        'connection reset',
+        'broken pipe'
+    ]
+    return any(indicator in error_str for indicator in ssl_indicators)
+
 
 def _validate_connection(conn: psycopg2.extensions.connection) -> bool:
     """
@@ -161,6 +191,7 @@ def postgres_connect() -> Iterator[psycopg2.extensions.connection]:
     """
     Context manager that yields a PostgreSQL connection from the pool.
     Validates connection health and automatically reconnects if stale.
+    Implements exponential backoff for SSL errors and connection age limits.
     Commits on success and rolls back on failure.
     Automatically returns connection to pool when done.
     
@@ -168,66 +199,168 @@ def postgres_connect() -> Iterator[psycopg2.extensions.connection]:
         psycopg2 connection object
         
     Raises:
-        Exception: If connection cannot be obtained
+        Exception: If connection cannot be obtained after retries
     """
-    global _connection_pool
-    import time
+    global _connection_pool, _connection_metadata
     start_time = time.time()
     
     # Initialize pool if not already done
     if _connection_pool is None:
         init_connection_pool()
     
-    # Get connection from pool
-    logger.debug("Getting connection from pool...")
-    conn = _connection_pool.getconn()
-    connect_time = time.time() - start_time
-    logger.info(f"PostgreSQL connection obtained from pool in {connect_time:.3f}s")
+    # Connection age limit (5 minutes) - recycle connections older than this
+    MAX_CONNECTION_AGE = 300  # seconds
     
-    # Validate connection health
-    max_retries = 2
+    # Retry configuration with exponential backoff
+    max_retries = 5  # Increased from 2 for SSL errors
+    base_delay = 0.1  # Start with 100ms
+    max_delay = 5.0   # Cap at 5 seconds
+    
+    conn = None
+    conn_id = None
+    
     for attempt in range(max_retries):
-        if _validate_connection(conn):
-            logger.debug(f"Connection validated successfully (attempt {attempt + 1})")
-            break
-        else:
-            logger.warning(f"Connection validation failed (attempt {attempt + 1}/{max_retries})")
+        try:
+            # Get connection from pool
+            if attempt == 0:
+                logger.debug("[DIAG] Getting connection from pool...")
+            else:
+                # Calculate exponential backoff delay
+                delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                logger.info(f"[DIAG] Retry attempt {attempt + 1}/{max_retries} after {delay:.2f}s delay")
+                time.sleep(delay)
+                logger.debug("[DIAG] Getting fresh connection from pool after backoff...")
             
-            if attempt < max_retries - 1:
-                # Close the stale connection
+            conn = _connection_pool.getconn()
+            conn_id = id(conn)
+            connect_time = time.time() - start_time
+            
+            # Track connection metadata
+            if conn_id not in _connection_metadata:
+                _connection_metadata[conn_id] = (time.time(), 0)
+                logger.info(f"[DIAG] NEW connection {conn_id} created (obtained in {connect_time:.3f}s)")
+            else:
+                creation_time, use_count = _connection_metadata[conn_id]
+                age = time.time() - creation_time
+                logger.info(f"[DIAG] REUSED connection {conn_id}: age={age:.1f}s, previous_uses={use_count} (obtained in {connect_time:.3f}s)")
+                
+                # Check if connection is too old and should be recycled
+                if age > MAX_CONNECTION_AGE:
+                    logger.warning(f"[DIAG] Connection {conn_id} exceeded max age ({age:.1f}s > {MAX_CONNECTION_AGE}s), recycling...")
+                    try:
+                        conn.close()
+                        del _connection_metadata[conn_id]
+                    except Exception as e:
+                        logger.warning(f"[DIAG] Error closing old connection: {e}")
+                    
+                    # Get a fresh connection
+                    conn = _connection_pool.getconn()
+                    conn_id = id(conn)
+                    _connection_metadata[conn_id] = (time.time(), 0)
+                    logger.info(f"[DIAG] NEW recycled connection {conn_id} created")
+            
+            # Increment use count
+            creation_time, use_count = _connection_metadata[conn_id]
+            _connection_metadata[conn_id] = (creation_time, use_count + 1)
+            
+            # Validate connection health
+            if _validate_connection(conn):
+                logger.debug(f"[DIAG] Connection {conn_id} validated successfully (attempt {attempt + 1})")
+                break  # Connection is good, exit retry loop
+            else:
+                logger.warning(f"[DIAG] Connection {conn_id} validation failed (attempt {attempt + 1}/{max_retries})")
+                
+                # Close the stale connection and remove from tracking
                 try:
                     conn.close()
+                    if conn_id in _connection_metadata:
+                        del _connection_metadata[conn_id]
+                        logger.info(f"[DIAG] Removed stale connection {conn_id} from tracking")
+                except Exception as e:
+                    logger.warning(f"[DIAG] Error closing stale connection: {e}")
+                
+                # Return failed connection to pool
+                try:
+                    _connection_pool.putconn(conn)
                 except Exception:
                     pass
                 
-                # Get a fresh connection from the pool
-                logger.info("Requesting fresh connection from pool...")
-                conn = _connection_pool.getconn()
+                conn = None
+                
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    logger.error(f"[DIAG] Failed to obtain valid connection after {max_retries} retries")
+                    raise psycopg2.OperationalError("Unable to obtain valid database connection after retries with exponential backoff")
+                    
+        except psycopg2.OperationalError as e:
+            if _is_ssl_error(e):
+                logger.error(f"[DIAG] SSL error on attempt {attempt + 1}/{max_retries}: {e}")
+                if conn:
+                    try:
+                        conn.close()
+                        if conn_id and conn_id in _connection_metadata:
+                            del _connection_metadata[conn_id]
+                    except Exception:
+                        pass
+                    try:
+                        _connection_pool.putconn(conn)
+                    except Exception:
+                        pass
+                    conn = None
+                
+                if attempt == max_retries - 1:
+                    logger.error(f"[DIAG] SSL connection failed after {max_retries} retries with exponential backoff")
+                    raise
             else:
-                # Last attempt failed - raise error
-                logger.error("Failed to obtain valid connection after retries")
-                _connection_pool.putconn(conn)
-                raise psycopg2.OperationalError("Unable to obtain valid database connection")
+                # Non-SSL operational error, re-raise immediately
+                logger.error(f"[DIAG] Non-SSL operational error: {e}")
+                if conn:
+                    try:
+                        _connection_pool.putconn(conn)
+                    except Exception:
+                        pass
+                raise
+    
+    # At this point, conn should be valid
+    if conn is None:
+        raise psycopg2.OperationalError("Failed to obtain database connection")
     
     try:
         yield conn
         conn.commit()
         total_time = time.time() - start_time
-        logger.debug(f"Transaction completed in {total_time:.3f}s")
+        logger.debug(f"[DIAG] Transaction completed in {total_time:.3f}s on connection {conn_id}")
     except Exception as e:
-        logger.error(f"Transaction failed: {e}")
+        is_ssl = _is_ssl_error(e)
+        error_type = "SSL ERROR" if is_ssl else "ERROR"
+        logger.error(f"[DIAG] Transaction {error_type}: {e}")
+        
+        if is_ssl and conn_id in _connection_metadata:
+            creation_time, use_count = _connection_metadata[conn_id]
+            age = time.time() - creation_time
+            logger.error(f"[DIAG] SSL error on connection {conn_id}: age={age:.1f}s, uses={use_count}")
+            
+            # For SSL errors during transaction, close and remove the connection
+            try:
+                conn.close()
+                del _connection_metadata[conn_id]
+                logger.info(f"[DIAG] Closed and removed connection {conn_id} after SSL error")
+            except Exception as close_error:
+                logger.warning(f"[DIAG] Error closing connection after SSL error: {close_error}")
+        
         try:
             conn.rollback()
-        except Exception:
-            pass
+        except Exception as rollback_error:
+            logger.error(f"[DIAG] Rollback failed: {rollback_error}")
         raise
     finally:
-        # Return connection to pool instead of closing
-        try:
-            _connection_pool.putconn(conn)
-            logger.debug("Connection returned to pool")
-        except Exception as e:
-            logger.error(f"Failed to return connection to pool: {e}")
+        # Return connection to pool instead of closing (unless it was closed due to SSL error)
+        if conn and not conn.closed:
+            try:
+                _connection_pool.putconn(conn)
+                logger.debug(f"[DIAG] Connection {conn_id} returned to pool")
+            except Exception as e:
+                logger.error(f"[DIAG] Failed to return connection {conn_id} to pool: {e}")
 
 def init_postgres_tables() -> None:
     """
