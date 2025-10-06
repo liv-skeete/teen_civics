@@ -154,7 +154,7 @@ def format_detailed_html_filter(text: str) -> Markup:
             continue
             
         # Headers (start with emoji)
-        if any(line.startswith(emoji) for emoji in ['🏠', '📋', '💰', '🛠️', '⚖️', '🚀', '📌', '👉', '🔍', '🔎', '📝', '🔑', '📜']):
+        if any(line.startswith(emoji) for emoji in ['🏠', '📋', '💰', '🛠️', '⚖️', '🚀', '📌', '👉', '🔍', '🔎', '📝', '🔑', '📜', '👥', '💡']):
             if in_list:
                 html_parts.append("</ul>")
                 in_list = False
@@ -220,4 +220,275 @@ def index():
         return response
     except Exception as e:
         logger.error(f"Error loading homepage: {e}", exc_info=True)
-        return render_template('index.
+        return render_template('index.html', bill=None, error="Unable to load the latest bill. Please try again later.")
+
+@app.route('/archive')
+def archive():
+    """Archive page: Displays all tweeted bills with optional filtering."""
+    import time
+    import os
+    from src.database.connection import get_connection_string
+    
+    start_time = time.time()
+    logger.info("=== Archive request started ===")
+    
+    try:
+        # Verify database configuration before proceeding
+        conn_string = get_connection_string()
+        if not conn_string:
+            error_msg = "Database connection not configured. Missing DATABASE_URL or Supabase environment variables."
+            logger.error(error_msg)
+            logger.error("Environment check: DATABASE_URL=%s, SUPABASE_DB_HOST=%s",
+                        'SET' if os.environ.get('DATABASE_URL') else 'NOT SET',
+                        'SET' if os.environ.get('SUPABASE_DB_HOST') else 'NOT SET')
+            return render_template(
+                'archive.html',
+                bills=[],
+                status_filter='all',
+                current_page=1,
+                total_pages=1,
+                error_message=error_msg
+            ), 500
+        
+        logger.info("Database connection string configured: %s",
+                   conn_string[:20] + '...' if len(conn_string) > 20 else conn_string)
+        
+        # Get filter parameter
+        status_filter = request.args.get('status', 'all')
+        
+        # Get all bills with enhanced logging
+        db_start = time.time()
+        logger.info("Calling get_all_tweeted_bills()...")
+        bills = get_all_tweeted_bills()
+        db_time = time.time() - db_start
+        
+        # Log detailed results
+        logger.info(f"Database query completed in {db_time:.3f}s")
+        logger.info(f"Retrieved {len(bills)} bills from database")
+        
+        if not bills:
+            logger.warning("No bills returned from database. This may indicate:")
+            logger.warning("  1. Database is empty (no bills have been tweeted)")
+            logger.warning("  2. Database connection failed silently")
+            logger.warning("  3. Query returned no results due to filtering")
+        else:
+            logger.info(f"Sample bills: {[bill.get('bill_id', 'unknown') for bill in bills[:3]]}")
+        
+        # Apply status filter if not 'all'
+        if status_filter != 'all' and bills:
+            # Normalize the filter value to match database format (lowercase with underscores)
+            normalized_filter = status_filter.lower().replace(' ', '_')
+            bills = [bill for bill in bills if bill.get('status') == normalized_filter]
+            logger.info(f"Filtered to {len(bills)} bills with status '{status_filter}'")
+        
+        # For now, we'll show all bills on one page (no pagination)
+        # If pagination is needed in the future, we can add it
+        current_page = 1
+        total_pages = 1
+        
+        render_start = time.time()
+        response = render_template(
+            'archive.html',
+            bills=bills,
+            status_filter=status_filter,
+            current_page=current_page,
+            total_pages=total_pages
+        )
+        render_time = time.time() - render_start
+        total_time = time.time() - start_time
+        
+        logger.info(f"Template rendered in {render_time:.3f}s")
+        logger.info(f"=== Archive request completed in {total_time:.3f}s ===")
+        return response
+    except Exception as e:
+        error_msg = f"Failed to load archive: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        logger.error("Exception type: %s", type(e).__name__)
+        
+        # Provide detailed error context
+        import os
+        logger.error("Environment diagnostics:")
+        logger.error("  DATABASE_URL: %s", 'SET' if os.environ.get('DATABASE_URL') else 'NOT SET')
+        logger.error("  SUPABASE_DB_HOST: %s", 'SET' if os.environ.get('SUPABASE_DB_HOST') else 'NOT SET')
+        logger.error("  Working directory: %s", os.getcwd())
+        
+        return render_template(
+            'archive.html',
+            bills=[],
+            status_filter='all',
+            current_page=1,
+            total_pages=1,
+            error_message=error_msg
+        ), 500
+
+@app.route('/debug/env')
+def debug_env():
+    """Debug endpoint to verify environment configuration (only in debug mode)."""
+    import os
+    from src.database.connection import get_connection_string
+    
+    # Only allow in debug mode
+    if not app.config.get('DEBUG'):
+        abort(404)
+    
+    try:
+        conn_string = get_connection_string()
+        
+        # Mask sensitive parts of connection string
+        masked_conn = None
+        if conn_string:
+            # Show first 30 chars and last 20 chars, mask the middle
+            if len(conn_string) > 50:
+                masked_conn = conn_string[:30] + '...[MASKED]...' + conn_string[-20:]
+            else:
+                masked_conn = conn_string[:10] + '...[MASKED]'
+        
+        env_status = {
+            'database_configured': conn_string is not None,
+            'connection_string_preview': masked_conn,
+            'environment_variables': {
+                'DATABASE_URL': 'SET' if os.environ.get('DATABASE_URL') else 'NOT SET',
+                'SUPABASE_DB_HOST': 'SET' if os.environ.get('SUPABASE_DB_HOST') else 'NOT SET',
+                'SUPABASE_DB_USER': 'SET' if os.environ.get('SUPABASE_DB_USER') else 'NOT SET',
+                'SUPABASE_DB_PASSWORD': 'SET' if os.environ.get('SUPABASE_DB_PASSWORD') else 'NOT SET',
+                'SUPABASE_DB_NAME': 'SET' if os.environ.get('SUPABASE_DB_NAME') else 'NOT SET',
+                'SUPABASE_DB_PORT': os.environ.get('SUPABASE_DB_PORT', 'NOT SET'),
+            },
+            'working_directory': os.getcwd(),
+            'python_path': os.environ.get('PYTHONPATH', 'NOT SET'),
+        }
+        
+        # Try to test database connection
+        try:
+            from src.database.connection import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM bills WHERE tweeted = TRUE")
+                    count = cur.fetchone()[0]
+                    env_status['database_test'] = {
+                        'status': 'SUCCESS',
+                        'tweeted_bills_count': count
+                    }
+        except Exception as db_error:
+            env_status['database_test'] = {
+                'status': 'FAILED',
+                'error': str(db_error),
+                'error_type': type(db_error).__name__
+            }
+        
+        return jsonify(env_status)
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {e}", exc_info=True)
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+@app.route('/bill/<string:slug>')
+def bill_detail(slug: str):
+    """Bill detail page: Displays a single bill by slug."""
+    import time
+    start_time = time.time()
+    logger.info(f"=== Bill detail request started for slug: {slug} ===")
+    
+    try:
+        db_start = time.time()
+        bill = get_bill_by_slug(slug)
+        db_time = time.time() - db_start
+        logger.info(f"Database query completed in {db_time:.3f}s")
+        
+        if not bill:
+            logger.warning(f"Bill not found for slug: {slug}")
+            abort(404)
+        
+        render_start = time.time()
+        response = render_template('bill.html', bill=bill)
+        render_time = time.time() - render_start
+        total_time = time.time() - start_time
+        
+        logger.info(f"Template rendered in {render_time:.3f}s")
+        logger.info(f"=== Bill detail request completed in {total_time:.3f}s ===")
+        return response
+    except Exception as e:
+        logger.error(f"Error loading bill detail for slug '{slug}': {e}", exc_info=True)
+        abort(404)
+
+@app.route('/about')
+def about():
+    """About page."""
+    return render_template('about.html')
+
+@app.route('/contact')
+def contact():
+    """Contact page."""
+    return render_template('contact.html')
+
+@app.route('/resources')
+def resources():
+    """Resources page."""
+    return render_template('resources.html')
+
+@app.errorhandler(404)
+def page_not_found(e):
+    """404 error handler."""
+    return render_template('404.html'), 404
+
+# --- API Routes ---
+
+@app.route('/api/vote', methods=['POST'])
+def record_vote():
+    """API endpoint to record a user's poll vote."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "Invalid JSON data"}), 400
+        
+        bill_id = data.get('bill_id')
+        vote_type = data.get('vote_type')
+        previous_vote = data.get('previous_vote')
+
+        if not bill_id or not vote_type:
+            return jsonify({"success": False, "error": "Missing bill_id or vote_type"}), 400
+
+        success = update_poll_results(bill_id, vote_type, previous_vote)
+        
+        if success:
+            return jsonify({"success": True})
+        else:
+            logger.warning(f"Failed to update poll results for bill_id={bill_id}, vote_type={vote_type}")
+            return jsonify({"success": False, "error": "Failed to update poll results"}), 500
+    
+    except Exception as e:
+        logger.error(f"Error recording vote: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "An error occurred while recording your vote"}), 500
+
+@app.route('/api/poll-results/<string:bill_id>')
+def get_poll_results(bill_id: str):
+    """API endpoint to get poll results for a specific bill."""
+    try:
+        bill = get_bill_by_id(bill_id)
+        if not bill:
+            return jsonify({"success": False, "error": "Bill not found"}), 404
+        
+        return jsonify({
+            "success": True,
+            "bill_id": bill_id,
+            "yes_votes": bill.get('poll_results_yes', 0),
+            "no_votes": bill.get('poll_results_no', 0)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching poll results for bill_id '{bill_id}': {e}", exc_info=True)
+        return jsonify({"success": False, "error": "An error occurred while fetching poll results"}), 500
+
+if __name__ == '__main__':
+    try:
+        logger.info(f"Starting Flask app on {config.flask.host}:{config.flask.port}")
+        logger.info(f"Debug mode: {config.flask.debug}")
+        app.run(
+            debug=config.flask.debug,
+            host=config.flask.host,
+            port=config.flask.port
+        )
+    except Exception as e:
+        logger.error(f"Failed to start Flask app: {e}", exc_info=True)
+        raise

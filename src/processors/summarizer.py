@@ -295,15 +295,30 @@ def _try_parse_json_strict(text: str) -> Dict[str, Any]:
     t = _strip_code_fences(text)
     t = _sanitize_json_text(t)
     
+    # CRITICAL: Remove ALL control characters BEFORE any parsing attempts
+    # This fixes "Invalid control character" errors from API responses
+    # Keep only printable characters, tabs, newlines, and carriage returns
+    t = ''.join(char for char in t if ord(char) >= 32 or char in '\t\n\r')
+    
+    # Additional safety: use json.loads with strict=False to be more lenient
     attempts = []
     
-    # Attempt 1: Direct JSON parse
+    # Attempt 1: Direct JSON parse with strict=False
     try:
-        result = json.loads(t)
-        logger.debug("JSON parse successful on first attempt")
+        result = json.loads(t, strict=False)
+        logger.info("DEBUG - JSON parse successful on first attempt")
         return result
     except Exception as e:
         attempts.append(f"Direct parse: {e}")
+        logger.info(f"DEBUG - Attempt 1 failed: {str(e)[:100]}")
+        # DEBUG: Show the problematic area
+        try:
+            char_pos = int(str(e).split("char ")[-1].rstrip(")"))
+            context_start = max(0, char_pos - 50)
+            context_end = min(len(t), char_pos + 50)
+            logger.info(f"DEBUG - Context around char {char_pos}: {repr(t[context_start:context_end])}")
+        except:
+            pass
 
     # Attempt 2: Repair common JSON errors (like unescaped newlines)
     t_repaired = _repair_json_text(t)
@@ -396,7 +411,7 @@ def _try_parse_json_strict(text: str) -> Dict[str, Any]:
                 "tweet": tweet_match.group(1) if tweet_match else "",
                 "long": long_match.group(1) if long_match else ""
             }
-            logger.debug("JSON constructed manually from pattern matching")
+            logger.warning("DEBUG - JSON constructed manually from pattern matching (LEGACY FALLBACK - MISSING FIELDS!)")
             return result
     except Exception as e:
         attempts.append(f"Manual construction: {e}")
@@ -500,7 +515,7 @@ def _smart_truncate_tweet(tweet: str, limit: int = 200) -> str:
 def _call_anthropic_once(client: Anthropic, model: str, system: str, user: str):
     return client.messages.create(
         model=model,
-        max_tokens=1200,
+        max_tokens=4096,
         temperature=0.2,
         system=system,
         messages=[{"role": "user", "content": [{"type": "text", "text": user}]}],
@@ -555,6 +570,12 @@ def _model_call_with_fallback(client: Anthropic, system: str, user: str) -> str:
                 
                 logger.warning(f"Model call failed for {model} (attempt {attempt}): {e}")
                 break  # move to next model
+    
+    if last_err:
+        raise last_err
+    raise RuntimeError("No response from Anthropic")
+
+
 def _force_json_conversion(client: Anthropic, text: str, required_keys: List[str]) -> str:
     """
     Last-resort coercion: ask the model to convert arbitrary content into STRICT JSON
@@ -576,9 +597,6 @@ def _force_json_conversion(client: Anthropic, text: str, required_keys: List[str
         f"{text}"
     )
     return _model_call_with_fallback(client, system, user)
-    if last_err:
-        raise last_err
-    raise RuntimeError("No response from Anthropic")
 
 
 def _ensure_period(s: str) -> str:
@@ -1162,9 +1180,18 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     if not isinstance(parsed, dict):
         raise ValueError("Enhanced model did not return a JSON object")
 
+    # DEBUG: Log what we parsed
+    logger.info(f"DEBUG - Parsed keys: {list(parsed.keys())}")
+    logger.info(f"DEBUG - overview raw length: {len(str(parsed.get('overview', '')))}")
+    logger.info(f"DEBUG - detailed raw length: {len(str(parsed.get('detailed', '')))}")
+
     # Normalize fields that may be lists or stringified lists
     overview = _normalize_structured_text(parsed.get("overview", ""))
     detailed = _normalize_structured_text(parsed.get("detailed", ""))
+    
+    # DEBUG: Log after normalization
+    logger.info(f"DEBUG - overview normalized length: {len(overview)}")
+    logger.info(f"DEBUG - detailed normalized length: {len(detailed)}")
 
     # Normalize term dictionary to a working list
     term_dictionary_obj: List[Dict[str, str]] = []
@@ -1193,7 +1220,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
                 tweet = _smart_truncate_tweet(str(parsed_meta.get("tweet", "")).strip(), limit=200)
 
     # Last-resort deterministic synthesis if still underfilled
-    if len(overview.strip()) < ov_min or len(detailed.strip()) < det_min:
+    if (len(overview.strip()) < ov_min or len(detailed.strip()) < det_min) and not full_text_content:
         logger.info("Overview/detailed still short; synthesizing structured content from metadata")
         synth = _synthesize_from_metadata_py()
         if len(synth.get("overview", "").strip()) > len(overview.strip()):

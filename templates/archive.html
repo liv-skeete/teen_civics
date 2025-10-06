@@ -4,6 +4,14 @@
 {% block title %}Bill Archive - TeenCivics{% endblock %}
 
 {% block content %}
+<style>
+    .poll-results .yes-fill {
+        width: var(--yes-width, 0%);
+    }
+    .poll-results .no-fill {
+        width: var(--no-width, 0%);
+    }
+</style>
 <div class="container">
     <div class="archive-header">
         <h1>Bill Archive</h1>
@@ -30,9 +38,9 @@
         </div>
     </div>
 
-    {% if error %}
+    {% if error or error_message %}
     <div class="error-message">
-        <p>{{ error }}</p>
+        <p>{{ error or error_message }}</p>
     </div>
     {% endif %}
 
@@ -84,18 +92,18 @@
                     {% if total_votes > 0 %}
                         {% set yes_percentage = ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) %}
                         {% set no_percentage = ((bill.poll_results_no or 0) / total_votes * 100)|round(1) %}
-                        <div class="poll-results">
+                        <div class="poll-results" style="--yes-width: {{ yes_percentage }}%; --no-width: {{ no_percentage }}%;">
                             <div class="poll-option">
                                 <span class="poll-label">Yes</span>
                                 <div class="poll-bar">
-                                    <div class="poll-fill yes-fill" style="width: {{ yes_percentage }}%"></div>
+                                    <div class="poll-fill yes-fill"></div>
                                 </div>
                                 <span class="poll-percentage">{{ yes_percentage }}%</span>
                             </div>
                             <div class="poll-option">
                                 <span class="poll-label">No</span>
                                 <div class="poll-bar">
-                                    <div class="poll-fill no-fill" style="width: {{ no_percentage }}%"></div>
+                                    <div class="poll-fill no-fill"></div>
                                 </div>
                                 <span class="poll-percentage">{{ no_percentage }}%</span>
                             </div>

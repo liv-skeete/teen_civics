@@ -19,12 +19,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 def main(dry_run: bool = False) -> int:
     """
     Main orchestrator function:
-    1. Fetches recent bills from Congress.gov
-    2. Checks each bill to find the first one not already tweeted
-    3. Summarizes it using Claude if needed
-    4. Stores summary in database if needed
-    5. Posts the tweet to X/Twitter (unless dry-run mode)
-    6. Updates database with tweet information (unless dry-run mode)
+    1. Checks if a bill was already posted today (duplicate prevention)
+    2. Fetches recent bills from Congress.gov
+    3. Checks each bill to find the first one not already tweeted
+    4. Summarizes it using Claude if needed
+    5. Stores summary in database if needed
+    6. Posts the tweet to X/Twitter (unless dry-run mode)
+    7. Updates database with tweet information (unless dry-run mode)
     If all bills are already processed, checks DB for unposted bills.
     
     Args:
@@ -33,6 +34,23 @@ def main(dry_run: bool = False) -> int:
     try:
         logger.info("🚀 Starting orchestrator: fetch → check → summarize → store → tweet")
         logger.info(f"📊 Dry-run mode: {dry_run}")
+        
+        # Determine which scan this is based on current time
+        from datetime import datetime
+        import pytz
+        et_tz = pytz.timezone('America/New_York')
+        current_time_et = datetime.now(et_tz)
+        current_hour = current_time_et.hour
+        
+        # Morning scan: 8-11 AM ET, Evening scan: 9 PM - 1 AM ET
+        if 8 <= current_hour < 12:
+            scan_type = "MORNING"
+        elif current_hour >= 21 or current_hour < 2:
+            scan_type = "EVENING"
+        else:
+            scan_type = "MANUAL"
+        
+        logger.info(f"⏰ Scan type: {scan_type} (Current time: {current_time_et.strftime('%I:%M %p ET')})")
         
         # Debug: Print all environment variables to see what's available
         logger.info("🔍 ---Dumping Environment Variables---")
@@ -56,13 +74,20 @@ def main(dry_run: bool = False) -> int:
         from src.database.db import (
             bill_exists, bill_already_posted, get_bill_by_id, get_most_recent_unposted_bill,
             insert_bill, update_tweet_info, generate_website_slug, init_db,
-            normalize_bill_id, select_and_lock_unposted_bill
+            normalize_bill_id, select_and_lock_unposted_bill, has_posted_today
         )
         
         # Ensure database exists and schema is up to date
         logger.info("🗄️ Initializing database (ensure tables exist)...")
         init_db()
         logger.info("✅ Database initialization complete")
+        
+        # DUPLICATE PREVENTION: Check if we already posted today
+        if not dry_run and has_posted_today():
+            logger.info("🛑 DUPLICATE PREVENTION: A bill was already posted in the last 24 hours")
+            logger.info(f"🛑 Skipping {scan_type} scan to prevent duplicate posts")
+            logger.info("✅ Orchestrator completed - no action needed")
+            return 0
 
         # Step 1: Fetch recent bills from feed
         logger.info("📥 Fetching recent bills from 'Bill Texts Received Today' feed...")

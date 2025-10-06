@@ -57,4 +57,11 @@ def ping_database():
         
     except ImportError:
         logger.error("psycopg2-binary not installed. Install with: pip install psycopg2-binary")
-        return
+        return False
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        return False
+
+if __name__ == "__main__":
+    success = ping_database()
+    sys.exit(0 if success else 1)

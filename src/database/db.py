@@ -92,6 +92,36 @@ def bill_already_posted(bill_id: str) -> bool:
         logger.error(f"Error checking if bill already posted: {e}")
         return False
 
+def has_posted_today() -> bool:
+    """
+    Check if any bill has been posted to Twitter/X in the last 24 hours.
+    This is used to prevent duplicate posts when running multiple daily scans.
+    
+    Returns:
+        bool: True if a tweet was posted in the last 24 hours, False otherwise
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                # Check for any bills posted in the last 24 hours
+                # Using updated_at which is set when tweet_posted is updated to TRUE
+                cursor.execute('''
+                SELECT 1 FROM bills
+                WHERE tweet_posted = TRUE
+                AND updated_at >= NOW() - INTERVAL '24 hours'
+                LIMIT 1
+                ''')
+                result = cursor.fetchone() is not None
+                if result:
+                    logger.info("✅ Found tweet posted in last 24 hours - skipping duplicate post")
+                else:
+                    logger.info("📭 No tweets posted in last 24 hours - proceeding with scan")
+                return result
+    except Exception as e:
+        logger.error(f"Error checking if posted today: {e}")
+        # On error, return False to allow posting (fail open)
+        return False
+
 def insert_bill(bill_data: Dict[str, Any]) -> bool:
     """
     Insert a new bill record into the database.
