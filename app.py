@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 from flask import Flask, render_template, request, jsonify, abort
 from markupsafe import Markup, escape
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
+import secrets
 
 # Import database functions
 from src.database.db import (
@@ -40,6 +44,57 @@ from src.database.db import (
 # Configure Flask app
 app = Flask(__name__)
 app.config['DEBUG'] = config.flask.debug
+
+# Security: Generate a secret key if not set
+if not app.config.get('SECRET_KEY'):
+    app.config['SECRET_KEY'] = secrets.token_hex(32)
+    logger.warning("SECRET_KEY not set in environment, using generated key (not suitable for production)")
+
+# Security: Secure session configuration
+app.config['SESSION_COOKIE_SECURE'] = not config.flask.debug  # True in production
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Security: Initialize CSRF protection
+csrf = CSRFProtect(app)
+
+# Security: Initialize rate limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# Security: Add security headers middleware
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    # Prevent clickjacking
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    
+    # Content Security Policy
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self';"
+    )
+    
+    # Prevent MIME type sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    
+    # XSS Protection (legacy but still useful)
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # HSTS (HTTP Strict Transport Security) - only in production
+    if not config.flask.debug:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    
+    return response
 
 # Helper to format dates
 @app.template_filter('format_date')
@@ -471,6 +526,8 @@ def page_not_found(e):
 # --- API Routes ---
 
 @app.route('/api/vote', methods=['POST'])
+@limiter.limit("10 per minute")
+@csrf.exempt
 def record_vote():
     """API endpoint to record a user's poll vote."""
     try:
@@ -498,6 +555,7 @@ def record_vote():
         return jsonify({"success": False, "error": "An error occurred while recording your vote"}), 500
 
 @app.route('/api/poll-results/<string:bill_id>')
+@csrf.exempt
 def get_poll_results(bill_id: str):
     """API endpoint to get poll results for a specific bill."""
     try:

@@ -2,6 +2,11 @@
 """
 Database module for storing congressional bill summaries.
 Provides functions for database operations using PostgreSQL.
+
+TODO: Future improvements (SAVE FOR LATER):
+- Add deep retry logic with exponential backoff for database inserts
+- Implement connection pooling optimization
+- Add database query performance monitoring
 """
 
 import os

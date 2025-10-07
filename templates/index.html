@@ -64,7 +64,7 @@
                 <a href="{{ bill.bill_id|generate_congress_url(bill.congress_session) }}" target="_blank" rel="noopener" class="btn btn-primary">
                     Read Full Bill on Congress.gov
                 </a>
-                <a href="/bill/{{ bill.website_slug }}" class="btn btn-secondary">
+                <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}" class="btn btn-secondary">
                     View Bill Details
                 </a>
                 {% if bill.tweet_url %}
@@ -86,7 +86,7 @@
                     👎 No, oppose it
                 </button>
             </div>
-            <div class="poll-results" style="display: none;">
+            <div class="poll-results" style="display: none;" aria-live="polite">
                 <h4>Community Results</h4>
                 <div class="result-bar">
                     <div class="result-fill yes-fill" style="width: 0%">
@@ -140,7 +140,7 @@
     <div class="cta-section">
         <h2>Explore More Bills</h2>
         <p>Browse our archive of previously summarized bills and see how others voted.</p>
-        <a href="/archive" class="btn btn-primary">View Bill Archive</a>
+        <a href="{{ url_for('archive') }}" class="btn btn-primary">View Bill Archive</a>
     </div>
 
     <div class="features-section">

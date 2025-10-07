@@ -90,9 +90,13 @@ Contributions are what make the open-source community such an amazing place to l
 
 Please see [`CONTRIBUTING.md`](CONTRIBUTING.md:1) for detailed guidelines on how to get started.
 
+## Deployment
+
+TeenCivics is deployed on AWS Lightsail using Gunicorn as the WSGI server and Nginx as a reverse proxy. For detailed deployment instructions, see [`DEPLOYMENT.md`](DEPLOYMENT.md:1).
+
 ## License
 
-Distributed under the MIT License. See `LICENSE` for more information (though a LICENSE file does not exist yet, this is standard practice).
+Distributed under the MIT License. See [`LICENSE`](LICENSE:1) for more information.
 
 ## Contact
 
@@ -142,3 +146,13 @@ This repo follows a strict "No secrets in source" policy. See [SECURITY.md](SECU
 - Orchestrator (fetch → summarize → store → tweet): python [orchestrator.py](src/orchestrator.py:1)
 - Secret scan: python [secret_scan.py](scripts/secret_scan.py:1)
 - Optional: install pre-commit and add a hook to run secret_scan before each commit
+
+## Future Improvements (TODO)
+
+The following enhancements are planned for future versions:
+
+- **Documentation**: Add architecture diagram and status badge to README
+- **SEO**: Implement structured data markup (JSON-LD) and canonical URLs
+- **Accessibility**: Remove emoji from summaries for screen reader compatibility
+- **Monitoring**: Set up full monitoring stack with error tracking and performance metrics
+- **CI/CD**: Add GitHub Actions concurrency controls to prevent overlapping workflows

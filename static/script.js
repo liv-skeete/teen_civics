@@ -259,8 +259,14 @@ function setupMobileNavigation() {
     const navMenu = document.querySelector('.nav-menu');
     
     if (navToggle && navMenu) {
-        navToggle.addEventListener('click', function() {
+        navToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isExpanded = navMenu.classList.contains('active');
+            
             navMenu.classList.toggle('active');
+            
+            // Update ARIA attribute
+            navToggle.setAttribute('aria-expanded', !isExpanded);
             
             // Animate hamburger icon
             const bars = navToggle.querySelectorAll('.bar');
@@ -270,14 +276,28 @@ function setupMobileNavigation() {
     
     // Close mobile menu when clicking outside
     document.addEventListener('click', function(event) {
-        if (navMenu && navMenu.classList.contains('active') && 
-            !event.target.closest('.nav-menu') && 
+        if (navMenu && navMenu.classList.contains('active') &&
+            !event.target.closest('.nav-menu') &&
             !event.target.closest('.nav-toggle')) {
             navMenu.classList.remove('active');
+            navToggle.setAttribute('aria-expanded', 'false');
             const bars = navToggle.querySelectorAll('.bar');
             bars.forEach(bar => bar.classList.remove('active'));
         }
     });
+    
+    // Close mobile menu when clicking a nav link
+    if (navMenu) {
+        const navLinks = navMenu.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                navMenu.classList.remove('active');
+                navToggle.setAttribute('aria-expanded', 'false');
+                const bars = navToggle.querySelectorAll('.bar');
+                bars.forEach(bar => bar.classList.remove('active'));
+            });
+        });
+    }
 }
 
 /**

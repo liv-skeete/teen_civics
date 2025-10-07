@@ -44,4 +44,30 @@ def ping_database():
         
     except ImportError:
         logger.error("psycopg2-binary not installed. Install with: pip install psycopg2-binary")
-        return
+        return False
+        
+    except psycopg2.OperationalError as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        logger.error("Common causes:")
+        logger.error("  1. Database server is not running")
+        logger.error("  2. Incorrect DATABASE_URL format")
+        logger.error("  3. Network connectivity issues")
+        logger.error("  4. Database credentials are incorrect")
+        return False
+        
+    except Exception as e:
+        logger.error(f"❌ Unexpected error: {e}")
+        return False
+
+if __name__ == "__main__":
+    """Main entry point for the script."""
+    logger.info("=== Database Connectivity Check ===")
+    
+    success = ping_database()
+    
+    if success:
+        logger.info("=== Check Complete: SUCCESS ===")
+        sys.exit(0)
+    else:
+        logger.error("=== Check Complete: FAILED ===")
+        sys.exit(1)

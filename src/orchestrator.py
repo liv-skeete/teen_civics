@@ -2,6 +2,11 @@
 """
 Orchestrator script that combines bill fetching, summarization, and Twitter posting.
 Designed for daily automation via GitHub Actions.
+
+TODO: Future improvements (SAVE FOR LATER):
+- Add configurable timeout values for long-running operations
+- Implement circuit breaker pattern for external API calls
+- Add comprehensive monitoring and alerting
 """
 
 import os

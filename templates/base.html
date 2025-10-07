@@ -13,14 +13,16 @@
     <meta property="og:url" content="{% block og_url %}https://teencivics.org/{% endblock %}">
     <meta property="og:title" content="{% block og_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
     <meta property="og:description" content="{% block og_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
-    <meta property="og:image" content="{% block og_image %}https://teencivics.org/static/og-image.png{% endblock %}">
+    {# TODO: Create og-image.png (1200x630px) for social media sharing #}
+    {% block og_image_block %}{% endblock %}
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="{% block twitter_url %}https://teencivics.org/{% endblock %}">
     <meta name="twitter:title" content="{% block twitter_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
     <meta name="twitter:description" content="{% block twitter_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
-    <meta name="twitter:image" content="{% block twitter_image %}https://teencivics.org/static/og-image.png{% endblock %}">
+    {# TODO: Create og-image.png (1200x630px) for social media sharing #}
+    {% block twitter_image_block %}{% endblock %}
 
     <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -30,7 +32,7 @@
     <meta name="theme-color" content="#4A90E2">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2025-10-06-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2025-10-07-3') }}">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,6 +46,9 @@
     <!-- <script>/* GA placeholder - add your GA tag here in production */</script> -->
 </head>
 <body>
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="skip-to-content">Skip to main content</a>
+    
     <!-- Navigation -->
     <nav class="navbar">
         <div class="nav-container">
@@ -51,23 +56,23 @@
                 <img src="{{ url_for('static', filename='icon-removebg-preview.png') }}" alt="TeenCivics Logo" class="nav-logo-img">
                 <h1>TeenCivics</h1>
             </a>
-            <div class="nav-menu">
+            <div class="nav-menu" id="nav-menu">
                 <a href="{{ url_for('index') }}" class="nav-link">Home</a>
                 <a href="{{ url_for('archive') }}" class="nav-link">Archive</a>
                 <a href="{{ url_for('resources') }}" class="nav-link">Resources</a>
                 <a href="{{ url_for('about') }}" class="nav-link">About</a>
                 <a href="{{ url_for('contact') }}" class="nav-link">Contact</a>
             </div>
-            <div class="nav-toggle">
+            <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-menu">
                 <span class="bar"></span>
                 <span class="bar"></span>
                 <span class="bar"></span>
-            </div>
+            </button>
         </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="main-content">
+    <main class="main-content" id="main-content">
         {% block content %}{% endblock %}
     </main>
 
@@ -80,9 +85,9 @@
             </div>
             <div class="footer-section">
                 <h4>Quick Links</h4>
-                <a href="/">Home</a>
-                <a href="/archive">Bill Archive</a>
-                <a href="/resources">Resources</a>
+                <a href="{{ url_for('index') }}">Home</a>
+                <a href="{{ url_for('archive') }}">Bill Archive</a>
+                <a href="{{ url_for('resources') }}">Resources</a>
             </div>
             <div class="footer-section">
                 <h4>Connect</h4>
@@ -94,8 +99,3 @@
             <p>&copy; {{ current_year }} TeenCivics. A Congressional App Challenge Project.</p>
         </div>
     </footer>
-
-    <!-- JavaScript -->
-    <script src="{{ url_for('static', filename='script.js', v='2025-09-17-2') }}"></script>
-</body>
-</html>

@@ -56,7 +56,7 @@
         <article class="bill-card" data-status="{{ bill.status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
             <div class="bill-header">
                 <h2 class="bill-title">
-                    <a href="/bill/{{ bill.website_slug }}">{{ bill.title|shorten_title }}</a>
+                    <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.title|shorten_title }}</a>
                 </h2>
                 {% if bill.title|length > 80 %}
                 <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
@@ -84,7 +84,7 @@
                 <br>
                 
                 <div class="bill-actions">
-                    <a href="/bill/{{ bill.website_slug }}" class="btn btn-primary btn-small">
+                    <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}" class="btn btn-primary btn-small">
                         Read Summary
                     </a>
                     {% if bill.tweet_url %}
@@ -159,7 +159,7 @@
     <div class="no-bills-message">
         <h2>No bills found</h2>
         <p>{% if status_filter != 'all' %}No bills with status "{{ status_filter }}" found.{% else %}No bills available in the archive yet.{% endif %}</p>
-        <a href="/archive?status=all" class="btn btn-primary">View All Bills</a>
+        <a href="{{ url_for('archive', status='all') }}" class="btn btn-primary">View All Bills</a>
     </div>
     {% endif %}
 </div>

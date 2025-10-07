@@ -1,45 +1,49 @@
 import os
 import sys
-import logging
+import psycopg2.extras
 
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Add src to path to allow imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
-from dotenv import load_dotenv
-load_dotenv()
+from load_env import load_env
+load_env()
 
-from src.database.db import get_latest_bill, update_bill_summaries
-from src.processors.summarizer import summarize_bill_enhanced
+from database.connection import postgres_connect
+from orchestrator import main as run_orchestrator
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
-
-def reprocess_latest_bill():
+def reprocess_latest():
     """
-    Fetches the latest bill from the database, re-summarizes it, and updates the database with the new summary.
+    Deletes the most recent bill and re-runs the orchestrator to test fixes.
     """
-    logger.info("Fetching the latest bill from the database...")
-    latest_bill = get_latest_bill()
+    try:
+        with postgres_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                # Find the most recent bill
+                cursor.execute("SELECT id, bill_id FROM bills ORDER BY date_processed DESC LIMIT 1")
+                latest_bill = cursor.fetchone()
 
-    if not latest_bill:
-        logger.error("No bills found in the database.")
-        return
+                if not latest_bill:
+                    print("No bills found to reprocess.")
+                    return
 
-    logger.info(f"Reprocessing bill: {latest_bill['bill_id']}")
+                bill_db_id = latest_bill['id']
+                bill_identifier = latest_bill['bill_id']
+                print(f"Found latest bill: {bill_identifier} (DB ID: {bill_db_id})")
 
-    # Re-summarize the bill
-    summary = summarize_bill_enhanced(latest_bill)
+                # Delete the bill
+                print(f"Deleting bill {bill_identifier} to allow reprocessing...")
+                cursor.execute("DELETE FROM bills WHERE id = %s", (bill_db_id,))
+                print("Bill deleted.")
 
-    # Update the bill in the database
-    update_bill_summaries(
-        bill_id=latest_bill['bill_id'],
-        summary_overview=summary.get("overview", ""),
-        summary_detailed=summary.get("detailed", ""),
-        summary_long=summary.get("long", ""),
-        term_dictionary=summary.get("term_dictionary", "")
-    )
+        # Now, run the orchestrator
+        print("\n--- Running Orchestrator ---")
+        # We can run in dry-run mode to prevent tweeting, but still see the DB insertion logs
+        run_orchestrator(dry_run=True)
+        print("--------------------------\n")
+        print("Orchestrator run complete. Check the logs for status and slug information.")
 
-    logger.info(f"Successfully reprocessed bill: {latest_bill['bill_id']}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    reprocess_latest_bill()
+    reprocess_latest()

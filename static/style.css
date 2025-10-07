@@ -1,4 +1,13 @@
 /* TeenCivics Design System */
+
+/* TODO: Future improvements (SAVE FOR LATER):
+ * - Increase touch target sizes to 44x44px minimum for mobile (WCAG 2.5.5)
+ * - Add loading spinners for async operations
+ * - Add aria-current="page" to active navigation items
+ * - Implement keyboard navigation handlers for interactive elements
+ * - Add meta theme-color for mobile browsers
+ */
+
 :root {
     /* Color Palette */
     --color-beige: #FAF7F2;
@@ -52,6 +61,36 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+/* Skip to content link for accessibility */
+.skip-to-content {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--color-navy);
+    color: var(--color-white);
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-decoration: none;
+    z-index: 10000;
+    border-radius: 0 0 var(--border-radius) 0;
+}
+
+.skip-to-content:focus {
+    top: 0;
+}
+
+/* Visually hidden class for screen readers */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 
 body {
@@ -110,6 +149,25 @@ a {
 
 a:hover {
     color: var(--color-brown-black);
+}
+
+/* Focus styles for accessibility */
+a:focus,
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+    outline: 3px solid var(--color-navy);
+    outline-offset: 2px;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid var(--color-navy);
+    outline-offset: 2px;
 }
 
 /* Navigation */
@@ -188,6 +246,10 @@ a:hover {
     display: none;
     flex-direction: column;
     cursor: pointer;
+    background: none;
+    border: none;
+    padding: var(--spacing-sm);
+    z-index: 1001;
 }
 
 .nav-toggle .bar {
@@ -196,6 +258,19 @@ a:hover {
     background-color: var(--color-brown-black);
     margin: 3px 0;
     transition: var(--transition-normal);
+    border-radius: 2px;
+}
+
+.nav-toggle .bar.active:nth-child(1) {
+    transform: rotate(-45deg) translate(-5px, 6px);
+}
+
+.nav-toggle .bar.active:nth-child(2) {
+    opacity: 0;
+}
+
+.nav-toggle .bar.active:nth-child(3) {
+    transform: rotate(45deg) translate(-5px, -6px);
 }
 
 /* Buttons */
@@ -1155,4 +1230,78 @@ a:hover {
 .detailed-summary-text h4 {
     margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-xs);
+}
+
+/* Statistics Cards Section */
+.stats-section {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: var(--spacing-xl) var(--spacing-md);
+}
+
+.stats-section h2 {
+    text-align: center;
+    color: var(--color-navy);
+    font-size: var(--font-size-xxl);
+    margin-bottom: var(--spacing-lg);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-xl);
+}
+
+.stat-card {
+    background-color: var(--color-white);
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius-lg);
+    border: 2px solid var(--color-navy);
+    box-shadow: var(--shadow-md);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    text-align: center;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.stat-headline {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-md);
+    line-height: 1.3;
+}
+
+.stat-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-dark-gray);
+    line-height: 1.6;
+    margin: 0 0 var(--spacing-md) 0;
+}
+
+.stat-source {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+    font-style: italic;
+    display: block;
+}
+
+/* Responsive design for statistics cards */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+    }
+    
+    .stat-card {
+        padding: var(--spacing-lg);
+    }
+    
+    .stats-section {
+        padding: var(--spacing-lg) var(--spacing-md);
+    }
 }
