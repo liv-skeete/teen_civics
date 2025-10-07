@@ -113,7 +113,7 @@ def has_posted_today() -> bool:
                 cursor.execute('''
                 SELECT 1 FROM bills
                 WHERE tweet_posted = TRUE
-                AND updated_at >= NOW() - INTERVAL '24 hours'
+                AND date_processed >= NOW() - INTERVAL '24 hours'
                 LIMIT 1
                 ''')
                 result = cursor.fetchone() is not None
