@@ -345,6 +345,15 @@ a:hover {
     background-color: var(--color-error);
 }
 
+.teen-impact-badge {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius);
+    background-color: #9C27B0;
+    color: var(--color-white);
+}
+
 .bill-title {
     color: var(--color-brown-black);
     margin-bottom: var(--spacing-xs);
@@ -614,13 +623,36 @@ a:hover {
 
 /* Filter Section */
 .filter-section {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xl);
     margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
 }
 
 .filter-form {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
+}
+
+.sort-control {
+    display: flex;
+    align-items: center;
+}
+
+.sort-control label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.sort-control input[type="checkbox"] {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
 }
 
 .filter-form label {

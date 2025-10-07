@@ -36,6 +36,12 @@
                 <option value="vetoed">Vetoed</option>
             </select>
         </div>
+        <div class="sort-control">
+            <label for="sort-by-impact">
+                <input type="checkbox" id="sort-by-impact" name="sort-by-impact">
+                Sort by Teen Impact Score
+            </label>
+        </div>
     </div>
 
     {% if error or error_message %}
@@ -47,7 +53,7 @@
     {% if bills %}
     <div class="bills-grid">
         {% for bill in bills %}
-        <article class="bill-card" data-status="{{ bill.status }}">
+        <article class="bill-card" data-status="{{ bill.status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
             <div class="bill-header">
                 <h2 class="bill-title">
                     <a href="/bill/{{ bill.website_slug }}">{{ bill.title|shorten_title }}</a>
@@ -64,6 +70,9 @@
                     <span class="bill-id">{{ bill.bill_id }}</span>
                     <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
                     <span class="bill-status {{ bill.status|lower|replace('_', '-') }}">{{ bill.status|format_status }}</span>
+                    {% if bill.teen_impact_score is not none %}
+                    <span class="teen-impact-badge">Teen Impact: {{ bill.teen_impact_score }}/10</span>
+                    {% endif %}
                 </div>
             </div>
 

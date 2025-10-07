@@ -153,8 +153,8 @@ def format_detailed_html_filter(text: str) -> Markup:
         if not line:
             continue
             
-        # Headers (start with emoji)
-        if any(line.startswith(emoji) for emoji in ['🏠', '📋', '💰', '🛠️', '⚖️', '🚀', '📌', '👉', '🔍', '🔎', '📝', '🔑', '📜', '👥', '💡']):
+        # Headers (start with emoji) - using standardized emojis from summarizer.py
+        if any(line.startswith(emoji) for emoji in ['🏠', '💰', '🛠️', '⚖️', '🚀', '📌', '👉', '🔎', '📝', '🔑', '📜', '👥', '💡']):
             if in_list:
                 html_parts.append("</ul>")
                 in_list = False
@@ -190,6 +190,35 @@ def shorten_title_filter(title: str, max_length: int = 60) -> str:
     if len(title) <= max_length:
         return title
     return title[:max_length].rsplit(' ', 1)[0] + "..."
+
+def extract_teen_impact_score(summary: str) -> Optional[int]:
+    """
+    Extract teen impact score from bill summary text.
+    Looks for pattern like "Teen impact score: X/10" or "Teen Impact Score: X/10"
+    
+    Args:
+        summary: The bill summary text
+        
+    Returns:
+        The teen impact score (0-10) or None if not found
+    """
+    if not summary:
+        return None
+    
+    # Pattern to match "Teen impact score: X/10" (case insensitive)
+    pattern = r'teen\s+impact\s+score:\s*(\d+)/10'
+    match = re.search(pattern, summary, re.IGNORECASE)
+    
+    if match:
+        try:
+            score = int(match.group(1))
+            # Validate score is in valid range
+            if 0 <= score <= 10:
+                return score
+        except (ValueError, IndexError):
+            pass
+    
+    return None
 
 # --- Routes ---
 
@@ -273,6 +302,12 @@ def archive():
             logger.warning("  3. Query returned no results due to filtering")
         else:
             logger.info(f"Sample bills: {[bill.get('bill_id', 'unknown') for bill in bills[:3]]}")
+        
+        # Extract teen impact scores from summaries
+        for bill in bills:
+            summary = bill.get('summary_detailed', '')
+            teen_impact_score = extract_teen_impact_score(summary)
+            bill['teen_impact_score'] = teen_impact_score
         
         # Apply status filter if not 'all'
         if status_filter != 'all' and bills:
@@ -491,4 +526,3 @@ if __name__ == '__main__':
         )
     except Exception as e:
         logger.error(f"Failed to start Flask app: {e}", exc_info=True)
-        raise

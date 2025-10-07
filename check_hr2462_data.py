@@ -6,11 +6,18 @@ import psycopg2.extras
 # Add src to path
 sys.path.insert(0, 'src')
 
-# Set the DATABASE_URL environment variable
-os.environ['DATABASE_URL'] = 'postgresql://postgres.ogsonggpqnmwivimnpqu:Catsam-gekbod-1xebwe@aws-1-us-west-1.pooler.supabase.com:6543/postgres'
+# Load environment variables (DATABASE_URL) from .env or Supabase vars
+from load_env import load_env
+load_env()
+
+# Validate DATABASE_URL is present
+db_url = os.environ.get('DATABASE_URL')
+if not db_url:
+    print("❌ DATABASE_URL not set. Set it in .env or environment. See SECURITY.md.")
+    sys.exit(1)
 
 try:
-    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    conn = psycopg2.connect(db_url)
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
     # Get HR.2462 data

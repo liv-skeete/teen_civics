@@ -26,19 +26,8 @@ TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
 TWITTER_ACCESS_SECRET = os.getenv('TWITTER_ACCESS_SECRET')
 TWITTER_BEARER_TOKEN = os.getenv('TWITTER_BEARER_TOKEN')
 
-# Debug: Log masked API keys to confirm they are loaded
-def mask_key(key):
-    if key and len(key) > 8:
-        return f"{key[:4]}...{key[-4:]}"
-    return "not set" if not key else "set"
-
-logger.info("Checking API key availability:")
-logger.info(f"TWITTER_API_KEY: {mask_key(TWITTER_API_KEY)}")
-logger.info(f"TWITTER_API_SECRET: {mask_key(TWITTER_API_SECRET)}")
-logger.info(f"TWITTER_ACCESS_TOKEN: {mask_key(TWITTER_ACCESS_TOKEN)}")
-logger.info(f"TWITTER_ACCESS_SECRET: {mask_key(TWITTER_ACCESS_SECRET)}")
-logger.info(f"TWITTER_BEARER_TOKEN: {mask_key(TWITTER_BEARER_TOKEN)}")
-
+# Avoid logging any credential values in production
+logger.info("Twitter API credentials loaded; verifying presence only")
 # Check if all required credentials are present
 required_creds = [TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET]
 if all(required_creds):

@@ -34,22 +34,9 @@ def ping_database():
     try:
         # Import psycopg2 for PostgreSQL
         import psycopg2
-        from urllib.parse import urlparse
         
-        # Parse the database URL
-        parsed_url = urlparse(database_url)
-        
-        # Extract connection parameters
-        db_params = {
-            'host': parsed_url.hostname,
-            'port': parsed_url.port or 5432,
-            'database': parsed_url.path[1:],  # Remove leading slash
-            'user': parsed_url.username,
-            'password': parsed_url.password
-        }
-        
-        # Attempt connection
-        conn = psycopg2.connect(**db_params)
+        # Attempt connection using the full DATABASE_URL
+        conn = psycopg2.connect(database_url)
         conn.close()
         
         logger.info("✅ Database connection successful!")
@@ -57,11 +44,4 @@ def ping_database():
         
     except ImportError:
         logger.error("psycopg2-binary not installed. Install with: pip install psycopg2-binary")
-        return False
-    except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}")
-        return False
-
-if __name__ == "__main__":
-    success = ping_database()
-    sys.exit(0 if success else 1)
+        return

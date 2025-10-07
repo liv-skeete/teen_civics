@@ -52,20 +52,8 @@ def main(dry_run: bool = False) -> int:
         
         logger.info(f"⏰ Scan type: {scan_type} (Current time: {current_time_et.strftime('%I:%M %p ET')})")
         
-        # Debug: Print all environment variables to see what's available
-        logger.info("🔍 ---Dumping Environment Variables---")
-        env_vars_set = 0
-        for key, value in os.environ.items():
-            # Mask sensitive values
-            if "KEY" in key.upper() or "SECRET" in key.upper() or "TOKEN" in key.upper():
-                if len(value) > 8:
-                    value = f"{value[:4]}...{value[-4:]}"
-                else:
-                    value = "SET"
-                env_vars_set += 1
-            logger.info(f"   {key}: {value}")
-        logger.info(f"🔍 Found {env_vars_set} sensitive environment variables")
-        logger.info("🔍 ------------------------------------")
+        # Production: Do not log environment variables or secrets
+        logger.info("🔒 Environment ready (sensitive values are not logged)")
 
         # Import modules
         from src.fetchers.congress_fetcher import get_recent_bills

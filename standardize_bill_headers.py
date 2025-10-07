@@ -18,11 +18,13 @@ load_env()
 
 from database.connection import postgres_connect
 
-# Define the standard header mappings
+# Define the standard header mappings (must match summarizer.py prompt exactly)
 HEADER_MAPPINGS = {
-    # Overview headers
-    r'(?:🔍\s*)?Overview:?': '🔍 Overview',
-    r'(?:🔍\s*)?OVERVIEW:?': '🔍 Overview',
+    # Overview headers - use 🔎 (magnifying glass tilted left)
+    r'(?:🔎\s*)?Overview:?': '🔎 Overview',
+    r'(?:🔎\s*)?OVERVIEW:?': '🔎 Overview',
+    r'(?:🔍\s*)?Overview:?': '🔎 Overview',  # Fix old emoji
+    r'(?:🔍\s*)?OVERVIEW:?': '🔎 Overview',  # Fix old emoji
     
     # Who does this affect headers
     r'(?:👥\s*)?Who does this affect\??:?': '👥 Who does this affect?',
@@ -33,17 +35,21 @@ HEADER_MAPPINGS = {
     r'(?:🔑\s*)?Key Provisions:?': '🔑 Key Provisions',
     r'(?:🔑\s*)?KEY PROVISIONS:?': '🔑 Key Provisions',
     
-    # Policy Changes headers
-    r'(?:🔧\s*)?Policy Changes:?': '🔧 Policy Changes',
-    r'(?:🔧\s*)?POLICY CHANGES:?': '🔧 Policy Changes',
+    # Policy Changes headers - use 🛠️ (hammer and wrench)
+    r'(?:🛠️\s*)?Policy Changes:?': '🛠️ Policy Changes',
+    r'(?:🛠️\s*)?POLICY CHANGES:?': '🛠️ Policy Changes',
+    r'(?:🔧\s*)?Policy Changes:?': '🛠️ Policy Changes',  # Fix old emoji
+    r'(?:🔧\s*)?POLICY CHANGES:?': '🛠️ Policy Changes',  # Fix old emoji
     
     # Policy Riders headers
     r'(?:⚖️\s*)?Policy Riders or Key Rules/Changes:?': '⚖️ Policy Riders or Key Rules/Changes',
     r'(?:⚖️\s*)?POLICY RIDERS OR KEY RULES/CHANGES:?': '⚖️ Policy Riders or Key Rules/Changes',
     
-    # Procedural/Administrative Notes headers
-    r'(?:📋\s*)?Procedural/Administrative Notes:?': '📋 Procedural/Administrative Notes',
-    r'(?:📋\s*)?PROCEDURAL/ADMINISTRATIVE NOTES:?': '📋 Procedural/Administrative Notes',
+    # Procedural/Administrative Notes headers - use 📌 (pushpin)
+    r'(?:📌\s*)?Procedural/Administrative Notes:?': '📌 Procedural/Administrative Notes',
+    r'(?:📌\s*)?PROCEDURAL/ADMINISTRATIVE NOTES:?': '📌 Procedural/Administrative Notes',
+    r'(?:📋\s*)?Procedural/Administrative Notes:?': '📌 Procedural/Administrative Notes',  # Fix old emoji
+    r'(?:📋\s*)?PROCEDURAL/ADMINISTRATIVE NOTES:?': '📌 Procedural/Administrative Notes',  # Fix old emoji
     
     # Why should I care headers
     r'(?:💡\s*)?Why should I care\??:?': '💡 Why should I care?',

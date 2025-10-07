@@ -1,12 +1,23 @@
 import os
+import sys
 import psycopg2
 import psycopg2.extras
 
-# Set the DATABASE_URL environment variable
-os.environ['DATABASE_URL'] = 'postgresql://postgres.ogsonggpqnmwivimnpqu:mybsoc-raxsyd-4goRky@aws-1-us-west-1.pooler.supabase.com:6543/postgres'
+# Ensure src is on the path for local module imports
+sys.path.insert(0, 'src')
+
+# Load environment variables (DATABASE_URL) from .env or Supabase vars
+from load_env import load_env
+load_env()
+
+# Validate DATABASE_URL is present
+db_url = os.environ.get('DATABASE_URL')
+if not db_url:
+    print("❌ DATABASE_URL not set. Set it in .env or environment. See SECURITY.md.")
+    sys.exit(1)
 
 try:
-    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    conn = psycopg2.connect(db_url)
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
     # First, check if full_text column exists

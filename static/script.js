@@ -343,6 +343,7 @@ function initArchiveMiniResults() {
  */
 function initializeBillFiltering() {
     const filterSelect = document.getElementById('status-filter');
+    const sortCheckbox = document.getElementById('sort-by-impact');
     
     if (!filterSelect) {
         return; // Not on archive page
@@ -360,7 +361,7 @@ function initializeBillFiltering() {
         filterBills(initialFilter);
     }
     
-    // Add change event listener
+    // Add change event listener for status filter
     filterSelect.addEventListener('change', function() {
         const selectedStatus = this.value;
         
@@ -379,6 +380,13 @@ function initializeBillFiltering() {
         // Apply filter
         filterBills(selectedStatus);
     });
+    
+    // Add change event listener for teen impact score sorting
+    if (sortCheckbox) {
+        sortCheckbox.addEventListener('change', function() {
+            sortBillsByTeenImpact(this.checked);
+        });
+    }
 }
 
 /**
@@ -432,6 +440,49 @@ function filterBills(status) {
             billsGrid.style.display = '';
         }
     }
+}
+
+/**
+ * Sort bills by teen impact score (highest to lowest)
+ */
+function sortBillsByTeenImpact(sortEnabled) {
+    const billsGrid = document.querySelector('.bills-grid');
+    
+    if (!billsGrid) {
+        return; // Not on archive page
+    }
+    
+    // Get all bill cards
+    const billCards = Array.from(document.querySelectorAll('.bill-card'));
+    
+    if (sortEnabled) {
+        // Sort by teen impact score (highest to lowest)
+        billCards.sort((a, b) => {
+            const scoreA = parseFloat(a.dataset.teenImpact) || -1;
+            const scoreB = parseFloat(b.dataset.teenImpact) || -1;
+            
+            // Bills with scores come first, sorted highest to lowest
+            // Bills without scores come last, in their original order
+            if (scoreA === -1 && scoreB === -1) return 0;
+            if (scoreA === -1) return 1;
+            if (scoreB === -1) return -1;
+            return scoreB - scoreA;
+        });
+    } else {
+        // Restore original order by date_processed (most recent first)
+        // Since bills are already in the correct order in the DOM initially,
+        // we can sort by their original index
+        billCards.sort((a, b) => {
+            const indexA = parseInt(a.dataset.originalIndex) || 0;
+            const indexB = parseInt(b.dataset.originalIndex) || 0;
+            return indexA - indexB;
+        });
+    }
+    
+    // Re-append cards in sorted order
+    billCards.forEach(card => {
+        billsGrid.appendChild(card);
+    });
 }
 
 /**

@@ -7,10 +7,12 @@ This bill currently has no summaries, making it unhelpful for teens.
 import os
 import sys
 
-# Set up environment
-os.environ['DATABASE_URL'] = 'postgresql://postgres.ogsonggpqnmwivimnpqu:Catsam-gekbod-1xebwe@aws-1-us-west-1.pooler.supabase.com:6543/postgres'
-
+# Ensure src is on the path for local module imports
 sys.path.insert(0, 'src')
+
+# Load environment variables (including DATABASE_URL) from .env or Supabase vars
+from load_env import load_env
+load_env()
 
 from database.db import get_bill_by_id, update_bill_summaries
 from processors.summarizer import summarize_bill_enhanced
