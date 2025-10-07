@@ -258,12 +258,15 @@ function setupMobileNavigation() {
     const navToggle = document.querySelector('.nav-toggle');
     const navMenu = document.querySelector('.nav-menu');
     
+    console.log('[DEBUG] Mobile nav setup:', { navToggle: !!navToggle, navMenu: !!navMenu });
+    
     if (navToggle && navMenu) {
         navToggle.addEventListener('click', function(e) {
             e.stopPropagation();
             const isExpanded = navMenu.classList.contains('active');
             
             navMenu.classList.toggle('active');
+            console.log('[DEBUG] Nav toggled, active:', !isExpanded);
             
             // Update ARIA attribute
             navToggle.setAttribute('aria-expanded', !isExpanded);
@@ -369,41 +372,42 @@ function initializeBillFiltering() {
         return; // Not on archive page
     }
     
+    console.log('[DEBUG] Initializing bill filtering');
+    
     // Load saved filter from localStorage or URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     const urlStatus = urlParams.get('status');
-    const savedFilter = localStorage.getItem('archive_filter') || 'all';
-    const initialFilter = urlStatus || savedFilter;
     
-    // Set initial filter value
-    if (initialFilter && initialFilter !== 'all') {
-        filterSelect.value = initialFilter;
-        filterBills(initialFilter);
+    // Set initial filter value from URL if present
+    if (urlStatus) {
+        filterSelect.value = urlStatus;
+        console.log('[DEBUG] Set filter from URL:', urlStatus);
     }
     
-    // Add change event listener for status filter
+    // Add change event listener for status filter - reload page with new filter
     filterSelect.addEventListener('change', function() {
         const selectedStatus = this.value;
+        console.log('[DEBUG] Filter changed to:', selectedStatus);
         
         // Save filter preference
         localStorage.setItem('archive_filter', selectedStatus);
         
-        // Update URL without reload
+        // Reload page with new filter parameter
         const newUrl = new URL(window.location);
         if (selectedStatus === 'all') {
             newUrl.searchParams.delete('status');
         } else {
             newUrl.searchParams.set('status', selectedStatus);
         }
-        window.history.pushState({}, '', newUrl);
         
-        // Apply filter
-        filterBills(selectedStatus);
+        // Reload the page to apply server-side filtering
+        window.location.href = newUrl.toString();
     });
     
     // Add change event listener for teen impact score sorting
     if (sortCheckbox) {
         sortCheckbox.addEventListener('change', function() {
+            console.log('[DEBUG] Sort checkbox changed:', this.checked);
             sortBillsByTeenImpact(this.checked);
         });
     }
@@ -417,11 +421,15 @@ function filterBills(status) {
     const noBillsMessage = document.querySelector('.no-bills-message');
     let visibleCount = 0;
     
+    console.log('[DEBUG] Filtering bills by status:', status);
+    console.log('[DEBUG] Found bill cards:', billCards.length);
+    
     // Normalize status for comparison (case-insensitive)
     const normalizedStatus = status.toLowerCase();
     
     billCards.forEach(card => {
         const cardStatus = (card.dataset.status || '').toLowerCase();
+        console.log('[DEBUG] Card status:', cardStatus, 'matches:', normalizedStatus === 'all' || cardStatus === normalizedStatus);
         
         if (normalizedStatus === 'all' || cardStatus === normalizedStatus) {
             card.style.display = '';
@@ -430,6 +438,8 @@ function filterBills(status) {
             card.style.display = 'none';
         }
     });
+    
+    console.log('[DEBUG] Visible count:', visibleCount);
     
     // Show/hide "no bills" message
     const billsGrid = document.querySelector('.bills-grid');
@@ -468,18 +478,28 @@ function filterBills(status) {
 function sortBillsByTeenImpact(sortEnabled) {
     const billsGrid = document.querySelector('.bills-grid');
     
+    console.log('[DEBUG] Sort by teen impact:', sortEnabled);
+    
     if (!billsGrid) {
+        console.log('[DEBUG] Bills grid not found');
         return; // Not on archive page
     }
     
-    // Get all bill cards
-    const billCards = Array.from(document.querySelectorAll('.bill-card'));
+    // Get all bill cards (only visible ones)
+    const billCards = Array.from(billsGrid.querySelectorAll('.bill-card'));
+    console.log('[DEBUG] Found bill cards for sorting:', billCards.length);
+    
+    if (billCards.length === 0) {
+        console.log('[DEBUG] No bill cards to sort');
+        return;
+    }
     
     if (sortEnabled) {
         // Sort by teen impact score (highest to lowest)
         billCards.sort((a, b) => {
             const scoreA = parseFloat(a.dataset.teenImpact) || -1;
             const scoreB = parseFloat(b.dataset.teenImpact) || -1;
+            console.log('[DEBUG] Comparing:', a.querySelector('.bill-title')?.textContent?.substring(0, 30), 'score:', scoreA, 'vs', b.querySelector('.bill-title')?.textContent?.substring(0, 30), 'score:', scoreB);
             
             // Bills with scores come first, sorted highest to lowest
             // Bills without scores come last, in their original order
@@ -495,14 +515,20 @@ function sortBillsByTeenImpact(sortEnabled) {
         billCards.sort((a, b) => {
             const indexA = parseInt(a.dataset.originalIndex) || 0;
             const indexB = parseInt(b.dataset.originalIndex) || 0;
+            console.log('[DEBUG] Restoring order:', indexA, 'vs', indexB);
             return indexA - indexB;
         });
     }
     
-    // Re-append cards in sorted order
+    console.log('[DEBUG] Reordering', billCards.length, 'cards in the DOM');
+    
+    // Clear the grid and re-append cards in sorted order
+    billsGrid.innerHTML = '';
     billCards.forEach(card => {
         billsGrid.appendChild(card);
     });
+    
+    console.log('[DEBUG] Sort complete');
 }
 
 /**
@@ -543,33 +569,4 @@ window.addEventListener('resize', debounce(function() {
     }
 }, 250));
 
-// Add CSS for mobile menu animation
-const style = document.createElement('style');
-style.textContent = `
-    .nav-toggle .bar {
-        transition: all 0.3s ease;
-    }
-    
-    .nav-toggle .bar.active:nth-child(1) {
-        transform: rotate(-45deg) translate(-5px, 6px);
-    }
-    
-    .nav-toggle .bar.active:nth-child(2) {
-        opacity: 0;
-    }
-    
-    .nav-toggle .bar.active:nth-child(3) {
-        transform: rotate(45deg) translate(-5px, -6px);
-    }
-    
-    @media (max-width: 768px) {
-        .nav-menu {
-            display: none;
-        }
-        
-        .nav-menu.active {
-            display: flex;
-        }
-    }
-`;
-document.head.appendChild(style);
+// Mobile menu animation styles are now in style.css to avoid conflicts
