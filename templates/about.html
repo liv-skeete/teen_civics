@@ -14,10 +14,7 @@
 <div class="container">
   <div class="about-grid">
     <section class="about-card mission-card">
-      <div class="mission-header">
-        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="TeenCivics Logo" class="mission-logo-img">
-        <h2>Our Mission</h2>
-      </div>
+      <h2>Our Mission</h2>
       <div class="about-text">
         <p>The recent assassination of Charlie Kirk was a shocking reminder of how deeply divided our country has become and how political polarization can spill into real violence. For me, it highlighted a hard truth: when young people grow up only seeing politics through toxic arguments, war between factions, or violent events, they either withdraw from civic life entirely or become easy targets for extremism.</p>
         <p>TeenCivics is my attempt to change that.</p>
@@ -100,17 +97,6 @@
   background: linear-gradient(135deg, var(--color-white) 0%, #f8fafc 100%);
   border: 2px solid var(--color-navy);
 }
-.mission-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-}
-.mission-logo-img {
-  height: 64px;
-  width: auto;
-  flex-shrink: 0;
-}
 .tech-stack {
   margin: var(--spacing-lg) 0;
 }
@@ -165,7 +151,6 @@
   .about-grid { gap: var(--spacing-lg); padding: var(--spacing-md) 0; }
   .about-card { padding: var(--spacing-lg); }
   .creator-profile { grid-template-columns: 1fr; gap: var(--spacing-lg); }
-  .mission-logo-img { height: 56px; }
   .creator-img { max-width: 180px; }
 }
 </style>

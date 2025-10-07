@@ -145,6 +145,13 @@ a:hover {
     padding-left: 0;
 }
 
+.nav-logo-img {
+    height: 36px;
+    width: auto;
+    margin-right: var(--spacing-sm);
+    object-fit: contain;
+}
+
 .nav-logo h1 {
     font-size: var(--font-size-xl);
     color: var(--color-navy);
