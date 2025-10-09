@@ -46,7 +46,7 @@
     <section class="about-card mission-card">
       <h2>Our Mission</h2>
       <div class="about-text">
-        <p>The recent assassination of Charlie Kirk was a shocking reminder of how deeply divided our country has become and how political polarization can spill into real violence. For me, it highlighted a hard truth: when young people grow up only seeing politics through toxic arguments, war between factions, or violent events, they either withdraw from civic life entirely or become easy targets for extremism.</p>
+        <p>Recent tragedies—including the assassination of Charlie Kirk, a prominent right-leaning public figure, and the murder of Minnesota State Representative Melissa Hortman, a leading voice from the left—are somber reminders of how deeply divided our country has become and how political polarization can spill into real violence. For me, it highlighted a hard truth: when young people grow up only seeing politics through toxic arguments, war between factions, or violent events, they either withdraw from civic life entirely or become easy targets for extremism.</p>
         <p>TeenCivics is my attempt to change that.</p>
         <p>I built TeenCivics because I believe the antidote to polarization is better civic literacy. If teens can actually understand what Congress is voting on, see bills in plain language, and engage with issues directly instead of only through sensationalized media or polarized pundits, they're less likely to fall into apathy or extremism.</p>
         <p>This project is my way of making democracy accessible, educational, and less scary. I want teens to see what politics and government really are: the process of debating, creating, and passing laws that affect everyday life, not just the highlights of scandal, outrage, or violence.</p>
@@ -96,92 +96,4 @@
 </div>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-.about-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--spacing-xl);
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: var(--spacing-lg) 0;
-}
-.about-card {
-  background-color: var(--color-white);
-  padding: var(--spacing-xl);
-  border-radius: var(--border-radius-lg);
-  box-shadow: var(--shadow-md);
-}
-.about-card h2 {
-  color: var(--color-navy);
-  margin-bottom: var(--spacing-lg);
-  font-size: var(--font-size-xxl);
-  line-height: 1.2;
-}
-.about-text p {
-  line-height: 1.75;
-  margin-bottom: var(--spacing-md);
-  color: var(--color-brown-black);
-}
-.mission-card {
-  background: linear-gradient(135deg, var(--color-white) 0%, #f8fafc 100%);
-  border: 2px solid var(--color-navy);
-}
-.tech-stack {
-  margin: var(--spacing-lg) 0;
-}
-.tech-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-sm);
-  background-color: var(--color-light-gray);
-  border-radius: var(--border-radius);
-}
-.github-button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: #24292e;
-  color: white;
-  text-decoration: none;
-  border-radius: var(--border-radius);
-  font-weight: 500;
-  transition: background-color var(--transition-fast);
-  margin-top: var(--spacing-lg);
-}
-.github-button:hover { background: #2d333b; }
-
-.creator-profile {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: var(--spacing-xl);
-  align-items: start;
-}
-.creator-bio p {
-  line-height: 1.75;
-  margin-bottom: var(--spacing-md);
-}
-.creator-img {
-  max-width: 220px;
-  width: 100%;
-  border-radius: var(--border-radius-lg);
-  box-shadow: var(--shadow-md);
-  display: block;
-  margin: 0 auto;
-}
-
-@media (max-width: 992px) {
-  .creator-profile { grid-template-columns: 1fr 1fr; }
-  .creator-img { max-width: 200px; }
-}
-@media (max-width: 768px) {
-  .about-grid { gap: var(--spacing-lg); padding: var(--spacing-md) 0; }
-  .about-card { padding: var(--spacing-lg); }
-  .creator-profile { grid-template-columns: 1fr; gap: var(--spacing-lg); }
-  .creator-img { max-width: 180px; }
-}
-</style>
-{% endblock %}
+{% block extra_css %}{% endblock %}

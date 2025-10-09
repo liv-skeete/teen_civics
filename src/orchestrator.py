@@ -76,9 +76,10 @@ def main(dry_run: bool = False) -> int:
         logger.info("✅ Database initialization complete")
         
         # DUPLICATE PREVENTION: Check if we already posted today
-        if not dry_run and has_posted_today():
+        # Only apply duplicate prevention for evening scans
+        if not dry_run and scan_type == "EVENING" and has_posted_today():
             logger.info("🛑 DUPLICATE PREVENTION: A bill was already posted in the last 24 hours")
-            logger.info(f"🛑 Skipping {scan_type} scan to prevent duplicate posts")
+            logger.info("🛑 Skipping EVENING scan to prevent duplicate posts")
             logger.info("✅ Orchestrator completed - no action needed")
             return 0
 

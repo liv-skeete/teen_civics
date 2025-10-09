@@ -17,11 +17,36 @@ config = get_config()
 
 # Configure logging
 import logging
+from logging.handlers import RotatingFileHandler
+import os
+
+# Base logging configuration
 logging.basicConfig(
     level=getattr(logging, config.logging.level),
-    format=config.logging.format
+    format=config.logging.format,
+    handlers=[logging.StreamHandler()]  # Log to console by default
 )
+
 logger = logging.getLogger(__name__)
+
+# Add file handler if specified in config
+if config.logging.file_path:
+    # Create log directory if it doesn't exist
+    log_dir = os.path.dirname(config.logging.file_path)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    # Use a rotating file handler
+    file_handler = RotatingFileHandler(
+        config.logging.file_path,
+        maxBytes=1024 * 1024 * 5,  # 5 MB
+        backupCount=2
+    )
+    file_handler.setFormatter(logging.Formatter(config.logging.format))
+    
+    # Add the handler to the root logger
+    logging.getLogger().addHandler(file_handler)
+    logger.info(f"Logging configured to file: {config.logging.file_path}")
 
 from flask import Flask, render_template, request, jsonify, abort
 from markupsafe import Markup, escape
@@ -76,8 +101,9 @@ def add_security_headers(response):
     # Content Security Policy
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.googletagmanager.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "connect-src 'self' https://www.google-analytics.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: https:; "
         "connect-src 'self'; "
@@ -96,6 +122,18 @@ def add_security_headers(response):
     
     return response
 
+# --- Context Processors ---
+
+@app.context_processor
+def inject_ga_measurement_id():
+    """Inject GA_MEASUREMENT_ID into all templates."""
+    ga_id = config.flask.ga_measurement_id
+    return dict(ga_measurement_id=ga_id)
+
+@app.context_processor
+def inject_current_year():
+    """Inject the current year into all templates for the footer."""
+    return {'current_year': datetime.utcnow().year}
 # Helper to format dates
 @app.template_filter('format_date')
 def format_date_filter(date_str: Optional[str]) -> str:
@@ -279,19 +317,26 @@ def extract_teen_impact_score(summary: str) -> Optional[int]:
 
 @app.route('/')
 def index():
-    """Homepage: Displays the most recent tweeted bill."""
+    """Homepage: Displays the most recent tweeted bill, falls back to latest bill if none tweeted."""
     import time
     start_time = time.time()
     logger.info("=== Homepage request started ===")
     
     try:
         db_start = time.time()
+        # First try to get the latest tweeted bill
         latest_bill = get_latest_tweeted_bill()
+        
+        # If no tweeted bills, fall back to the most recent bill regardless of tweet status
+        if not latest_bill:
+            logger.info("No tweeted bills found, falling back to most recent bill")
+            latest_bill = get_latest_bill()
+        
         db_time = time.time() - db_start
         logger.info(f"Database query completed in {db_time:.3f}s")
         
         if not latest_bill:
-            logger.warning("No latest bill found")
+            logger.warning("No bills found in database")
             return render_template('index.html', bill=None)
         
         render_start = time.time()

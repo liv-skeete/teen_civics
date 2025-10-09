@@ -29,8 +29,8 @@
                 <option value="committee_consideration">Committee Consideration</option>
                 <option value="reported_by_committee">Reported by Committee</option>
                 <option value="passed_house">Passed House</option>
-                <option value="failed_house">Failed House</option>
                 <option value="passed_senate">Passed Senate</option>
+                <option value="failed_house">Failed House</option>
                 <option value="failed_senate">Failed Senate</option>
                 <option value="became_law">Became Law</option>
                 <option value="vetoed">Vetoed</option>
@@ -69,7 +69,7 @@
                 <div class="bill-meta">
                     <span class="bill-id">{{ bill.bill_id }}</span>
                     <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
-                    <span class="bill-status {{ bill.status|lower|replace('_', '-') }}">{{ bill.status|format_status }}</span>
+                    <span class="bill-status {{ (bill.status or '')|lower|replace('_', '-')|replace(' ', '-') }}">{{ bill.status|format_status }}</span>
                     {% if bill.teen_impact_score is not none %}
                     <span class="teen-impact-badge">Teen Impact: {{ bill.teen_impact_score }}/10</span>
                     {% endif %}
@@ -159,4 +159,7 @@
     <div class="no-bills-message">
         <h2>No bills found</h2>
         <p>{% if status_filter != 'all' %}No bills with status "{{ status_filter }}" found.{% else %}No bills available in the archive yet.{% endif %}</p>
-        <a href="{{ url_for('archive', status='all') }}" class="btn btn-primary">Vi
+        <a href="{{ url_for('archive', status='all') }}" class="btn btn-primary">View All Bills</a>
+    </div>
+    {% endif %}
+{% endblock %}

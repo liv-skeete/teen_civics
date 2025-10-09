@@ -241,6 +241,11 @@ textarea:focus-visible {
     background-color: var(--color-light-gray);
     color: var(--color-navy);
 }
+.nav-link[aria-current="page"] {
+    color: var(--color-navy);
+    font-weight: 600;
+    background-color: var(--color-light-gray);
+}
 
 .nav-toggle {
     display: none;
@@ -395,36 +400,58 @@ textarea:focus-visible {
     font-weight: 500;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    color: var(--color-white);
+    color: var(--color-brown-black);
+    background-color: #B0B0B0;
 }
 
 .bill-status.introduced,
 .bill-status.referred-to-committee {
     background-color: var(--color-info);
+    color: var(--color-white);
 }
 
 .bill-status.committee-consideration,
 .bill-status.reported-by-committee {
     background-color: var(--color-warning);
+    color: var(--color-white);
 }
 
 .bill-status.passed-house,
-.bill-status.passed-senate {
+.bill-status.passed-senate,
+.bill-status.agreed-to-in-house,
+.bill-status.agreed-to-in-senate {
     background-color: var(--color-success);
+    color: var(--color-white);
+}
+/* Override: Force white text and green background for "Agreed" statuses */
+.bill-status.agreed-to-in-house,
+.bill-status.agreed-to-in-senate {
+    background-color: #4CAF50 !important;
+    color: #FFFFFF !important;
 }
 
+
+/* Ensure all status badges with spaces in names render properly */
+.bill-status.became-law,
+.bill-status.vetoed {
+    background-color: #B0B0B0;
+    color: var(--color-brown-black);
+}
 .bill-status.failed-house,
 .bill-status.failed-senate {
     background-color: var(--color-error);
+    color: var(--color-white);
 }
 
 .bill-status.became-law,
 .bill-status.enacted {
     background-color: var(--color-success);
+    color: var(--color-white);
 }
 
 .bill-status.vetoed {
     background-color: var(--color-error);
+    color: var(--color-white);
 }
 
 .teen-impact-badge {
@@ -439,6 +466,12 @@ textarea:focus-visible {
 .bill-title {
     color: var(--color-brown-black);
     margin-bottom: var(--spacing-xs);
+}
+
+/* Ensure bill title on detail page is larger than subheadings */
+.bill-detail .bill-title {
+    font-size: var(--font-size-xxxl);
+    line-height: 1.2;
 }
 
 .bill-short-title {
@@ -1128,4 +1161,217 @@ textarea:focus-visible {
         align-items: flex-start;
         gap: var(--spacing-xs);
     }
-    
+}
+/* Term Dictionary */
+.term-dictionary-section {
+    margin: var(--spacing-lg) 0;
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.term-dictionary-section h3 {
+    margin-bottom: var(--spacing-md);
+}
+
+.term-dictionary-content {
+    padding: var(--spacing-md);
+    background-color: var(--color-light-gray);
+    border-radius: var(--border-radius);
+}
+
+.term-dictionary-content p {
+    margin-bottom: var(--spacing-sm);
+    font-style: italic;
+    color: var(--color-dark-gray);
+}
+
+.term-dictionary-content ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.term-dictionary-content li {
+    margin-bottom: var(--spacing-xs);
+}
+
+.term-dictionary-content a {
+    text-decoration: none;
+    color: var(--color-navy);
+    font-weight: 500;
+}
+
+.term-dictionary-content a:hover {
+    text-decoration: underline;
+}
+/* Statistics Section */
+.stats-section {
+  padding: var(--spacing-xl) 0;
+  background-color: var(--color-white);
+}
+.stats-section h2 {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+  color: var(--color-navy);
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-lg);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+.stat-card {
+  background-color: var(--color-beige);
+  padding: var(--spacing-lg);
+  border-radius: var(--border-radius-lg);
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+.stat-headline {
+  font-size: var(--font-size-lg);
+  color: var(--color-brown-black);
+  margin-bottom: var(--spacing-sm);
+}
+.stat-text {
+  font-size: var(--font-size-md);
+  line-height: 1.6;
+  color: var(--color-dark-gray);
+  margin-bottom: var(--spacing-md);
+}
+.stat-source {
+  font-size: var(--font-size-sm);
+  color: var(--color-dark-gray);
+  font-style: italic;
+}
+
+@media (max-width: 992px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================
+   About Page Styles
+   ======================================== */
+
+.about-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xl);
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: var(--spacing-lg) 0;
+}
+
+.about-card {
+    background-color: var(--color-white);
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.about-card h2 {
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-lg);
+    font-size: var(--font-size-xxl);
+    line-height: 1.2;
+}
+
+.about-text p {
+    line-height: 1.75;
+    margin-bottom: var(--spacing-md);
+    color: var(--color-brown-black);
+}
+
+.mission-card {
+    background: linear-gradient(135deg, var(--color-white) 0%, #f8fafc 100%);
+    border: 2px solid var(--color-navy);
+}
+
+.tech-stack {
+    margin: var(--spacing-lg) 0;
+}
+
+.tech-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    background-color: var(--color-light-gray);
+    border-radius: var(--border-radius);
+}
+
+.github-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: #24292e;
+    color: white;
+    text-decoration: none;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    transition: background-color var(--transition-fast);
+    margin-top: var(--spacing-lg);
+}
+
+.github-button:hover {
+    background: #2d333b;
+    color: white;
+}
+
+.creator-profile {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: var(--spacing-xl);
+    align-items: start;
+}
+
+.creator-bio p {
+    line-height: 1.75;
+    margin-bottom: var(--spacing-md);
+}
+
+.creator-img {
+    max-width: 220px;
+    width: 100%;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    display: block;
+    margin: 0 auto;
+}
+
+@media (max-width: 992px) {
+    .creator-profile {
+        grid-template-columns: 1fr 1fr;
+    }
+    .creator-img {
+        max-width: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    .about-grid {
+        gap: var(--spacing-lg);
+        padding: var(--spacing-md) 0;
+    }
+    .about-card {
+        padding: var(--spacing-lg);
+    }
+    .creator-profile {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-lg);
+    }
+    .creator-img {
+        max-width: 180px;
+    }
+}

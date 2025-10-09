@@ -89,6 +89,7 @@ class FlaskConfig:
     debug: bool = False
     port: int = 5000
     host: str = '0.0.0.0'
+    ga_measurement_id: Optional[str] = None
     
     @classmethod
     def from_env(cls) -> 'FlaskConfig':
@@ -96,7 +97,8 @@ class FlaskConfig:
         return cls(
             debug=os.getenv('FLASK_DEBUG', 'False').lower() == 'true',
             port=int(os.getenv('PORT', '5000')),
-            host=os.getenv('FLASK_HOST', '0.0.0.0')
+            host=os.getenv('FLASK_HOST', '0.0.0.0'),
+            ga_measurement_id=os.getenv('GA_MEASUREMENT_ID')
         )
 
 
@@ -105,13 +107,15 @@ class LoggingConfig:
     """Logging configuration."""
     level: str = 'INFO'
     format: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    file_path: Optional[str] = None
     
     @classmethod
     def from_env(cls) -> 'LoggingConfig':
         """Create logging config from environment variables."""
         return cls(
             level=os.getenv('LOG_LEVEL', 'INFO').upper(),
-            format=os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            format=os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s'),
+            file_path=os.getenv('LOG_FILE')
         )
 
 

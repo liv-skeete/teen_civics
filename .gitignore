@@ -56,3 +56,9 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Environment variables
+.env
+
+# Instance folder
+/instance/

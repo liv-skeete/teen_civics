@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 
 from dotenv import load_dotenv
 from anthropic import Anthropic
+from .teen_impact import score_teen_impact
 
 # Configure logging similarly to other modules
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -16,15 +17,15 @@ logger = logging.getLogger(__name__)
 # Load environment variables at import time for CLI and function usage
 load_dotenv()
 
-# Prefer Claude 3.5 Sonnet by default, allow override via environment variables
-# Valid models as of Oct 2024: claude-3-5-sonnet-20241022 (latest), claude-3-5-haiku-20241022
-PREFERRED_MODEL = os.getenv("ANTHROPIC_MODEL_PREFERRED", "claude-3-5-sonnet-20241022")
-FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-3-5-sonnet-20240620")
-SECOND_FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_SECOND_FALLBACK", "claude-3-5-haiku-20241022")
+# Prefer Claude Sonnet 4 by default, allow override via environment variables
+# Valid models as of Oct 2024: claude-sonnet-4-5 (latest), claude-3-5-haiku-20241022
+PREFERRED_MODEL = os.getenv("ANTHROPIC_MODEL_PREFERRED", "claude-sonnet-4-5")
+FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-3-5-haiku-20241022")
 
 # Valid model names for validation
 VALID_MODELS = {
-    "claude-3-5-sonnet-20241022",  # Latest Sonnet (Oct 2024)
+    "claude-sonnet-4-5",           # Latest Sonnet 4 (Oct 2024)
+    "claude-3-5-sonnet-20241022",  # Claude 3.5 Sonnet (Oct 2024)
     "claude-3-5-sonnet-20240620",  # Previous Sonnet (June 2024)
     "claude-3-5-haiku-20241022",   # Latest Haiku (Oct 2024)
     "claude-3-opus-20240229",      # Opus (Feb 2024)
@@ -121,9 +122,19 @@ def _build_enhanced_system_prompt() -> str:
         "    - Main groups: [Name the specific groups touched by the bill, e.g., gun owners, law enforcement, states with concealed carry laws]\n"
         "    - Who benefits/loses: [Note who is likely to benefit or lose out based on the bill's provisions]\n"
         "    - **MANDATORY** Teen impact score: MUST use exact format 'Teen impact score: X/10 (brief description)'\n"
-        "      * X must be a number from 1-10\n"
-        "      * Score based on: direct impact on education/employment/healthcare/tech access (40%), indirect impact through family/community (30%), long-term implications for their generation (30%)\n"
-        "      * Examples: 'Teen impact score: 3/10 (minimal direct impact)', 'Teen impact score: 8/10 (affects college affordability)'\n"
+        "      * **Evaluation Guidelines:**\n"
+        "      * Evaluate bills on a 0-10 scale considering these weighted categories:\n"
+        "      * - Education & School Life (25%): Direct impact on schools, curriculum, student resources\n"
+        "      * - Civic Engagement & Rights (25%): Voting access, free speech, protest rights, civic participation\n"
+        "      * - Teen Health (20%): Healthcare access, mental health services, wellness programs\n"
+        "      * - Economic Opportunity (15%): Job opportunities, family economic security, housing\n"
+        "      * - Environment & Future (10%): Climate change, environmental quality, long-term impact\n"
+        "      * - Symbolism/Awareness (5%): Educational value of awareness campaigns\n"
+        "      * **Score tiers:**\n"
+        "      * - 8-10: Direct, immediate impact on teen daily life\n"
+        "      * - 5-7: Significant but indirect impact through family/community\n"
+        "      * - 2-4: Symbolic/awareness with abstract teen relevance\n"
+        "      * - 0-1: Minimal or no connection to teen experience\n"
         "      * This field is REQUIRED - do NOT omit it\n"
         "    - [ONLY if score > 5]: Teen-specific impact: [Explain concretely how this affects teenagers' daily lives, future opportunities, or rights]\n"
         "  🔑 Key Provisions (REQUIRED - extract from full text when available):\n"
@@ -534,14 +545,14 @@ def _model_call_with_fallback(client: Anthropic, system: str, user: str) -> str:
     """
     # Validate models before attempting to use them
     models_to_try = []
-    for model in (PREFERRED_MODEL, FALLBACK_MODEL, SECOND_FALLBACK_MODEL):
+    for model in (PREFERRED_MODEL, FALLBACK_MODEL):
         if model not in VALID_MODELS:
             logger.error(f"Invalid model configured: {model}. Must be one of: {', '.join(sorted(VALID_MODELS))}")
             continue
         models_to_try.append(model)
     
     if not models_to_try:
-        raise ValueError(f"No valid models configured. Check ANTHROPIC_MODEL_PREFERRED, ANTHROPIC_MODEL_FALLBACK, and ANTHROPIC_MODEL_SECOND_FALLBACK environment variables. Valid models: {', '.join(sorted(VALID_MODELS))}")
+        raise ValueError(f"No valid models configured. Check ANTHROPIC_MODEL_PREFERRED and ANTHROPIC_MODEL_FALLBACK environment variables. Valid models: {', '.join(sorted(VALID_MODELS))}")
     
     last_err: Optional[Exception] = None
     for model in models_to_try:
@@ -817,6 +828,67 @@ def _normalize_structured_text(value: Any) -> str:
     text = re.sub(r"[ \t]+", " ", text)  # Normalize spaces/tabs
     
     return text.strip()
+
+# --- Deterministic Teen Impact score injection helpers ---
+
+def _format_teen_impact_line(impact: Dict[str, Any]) -> str:
+    """Return a standardized teen impact score line per rubric."""
+    try:
+        score = int(round(float(impact.get("score", 0))))
+    except Exception:
+        score = int(impact.get("score", 0) or 0)
+
+    # Map to concise description
+    is_symbolic = bool(impact.get("is_symbolic_awareness"))
+    has_action = bool(impact.get("has_action"))
+    teen_targeted = bool(impact.get("teen_targeted"))
+
+    if is_symbolic and not has_action:
+        desc = "symbolic/awareness; minimal direct impact"
+    elif has_action and teen_targeted:
+        desc = "direct teen-targeted changes"
+    elif has_action:
+        desc = "indirect impact via families/community"
+    else:
+        desc = "limited teen relevance"
+
+    return f"- Teen impact score: {score}/10 ({desc})"
+
+
+def _inject_teen_impact_score_line(detailed: str, impact: Dict[str, Any]) -> str:
+    """
+    Ensure 'detailed' contains exactly one 'Teen impact score: X/10 (...)' line
+    in the '👥 Who does this affect?' section. Replace if present, insert if absent.
+    """
+    if not detailed or not isinstance(detailed, str):
+        return detailed
+
+    line = _format_teen_impact_line(impact)
+
+    # Replace existing line if present
+    pat = re.compile(r"(?im)^\s*-\s*Teen\s+impact\s+score:\s*\d{1,2}/10[^\n]*$")
+    if pat.search(detailed):
+        return pat.sub(line, detailed)
+
+    # Insert in the 'Who does this affect?' section if found
+    lines = detailed.split("\n")
+    header_idx = None
+    for idx, l in enumerate(lines):
+        if l.strip().lower().startswith("👥 who does this affect?"):
+            header_idx = idx
+            break
+
+    if header_idx is None:
+        # Fallback: append at end
+        lines.append(line)
+        return "\n".join(lines)
+
+    # Default insertion: right after header, or after 'Main groups' and the next line if present
+    insert_at = header_idx + 1
+    if insert_at < len(lines) and "Main groups:" in lines[insert_at]:
+        insert_at += 1
+    lines.insert(insert_at, line)
+    return "\n".join(lines)
 
 
 def _chunk_text(text: str, max_chars: int = 50000, overlap: int = 1000) -> List[str]:
@@ -1227,29 +1299,27 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     if (len(overview.strip()) < ov_min or len(detailed.strip()) < det_min) and not full_text_content:
         logger.info("Overview/detailed still short; synthesizing structured content from metadata")
         synth = _synthesize_from_metadata_py()
-        if len(synth.get("overview", "").strip()) > len(overview.strip()):
-            overview = synth["overview"]
-        if len(synth.get("detailed", "").strip()) > len(detailed.strip()):
-            detailed = synth["detailed"]
-        _merge_term_dictionary(term_dictionary_obj, synth.get("term_dictionary", []))
+        if isinstance(synth, dict) and synth:
+            if len(str(synth.get("overview", "")).strip()) > len(overview.strip()):
+                overview = str(synth.get("overview", "")).strip()
+            if len(str(synth.get("detailed", "")).strip()) > len(detailed.strip()):
+                detailed = str(synth.get("detailed", "")).strip()
+            _merge_term_dictionary(term_dictionary_obj, synth.get("term_dictionary", []))
 
-    # Build long summary from overview + detailed
-    if overview and detailed:
-        long_summary = f"{overview}\n\n{detailed}".strip()
-    else:
-        long_summary = overview or detailed or "Summary not available."
-    
     # Serialize term_dictionary back to JSON string
-    term_dictionary_str = json.dumps(term_dictionary_obj, ensure_ascii=False)
-    
-    elapsed = time.monotonic() - start
-    logger.info(f"✅ Summaries generated successfully")
-    logger.debug(f"Enhanced summary generation took {elapsed:.2f}s")
-    
+    term_dictionary = json.dumps(term_dictionary_obj, ensure_ascii=False)
+
+    # Deterministic Teen Impact scoring and injection into 'detailed'
+    try:
+        impact = score_teen_impact(bill)
+        detailed = _inject_teen_impact_score_line(detailed, impact)
+    except Exception as e:
+        logger.warning(f"Teen impact scoring/injection failed: {e}")
+
+    # Final check to ensure all keys are present
     return {
-        "tweet": tweet,
-        "long": long_summary,
         "overview": overview,
         "detailed": detailed,
-        "term_dictionary": term_dictionary_str
+        "term_dictionary": term_dictionary,
+        "tweet": tweet
     }

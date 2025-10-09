@@ -139,6 +139,12 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
             else:
                 logger.error("v2 API response missing tweet data")
                 # Consider this a failure to allow fallback to v1
+        except tweepy.Forbidden as e:
+            error_msg = str(e)
+            logger.error(f"v2 API failed with Forbidden error (likely permissions): {e}")
+            logger.error("This may indicate limited API access. Check your app permissions.")
+            # Don't fallback to v1 for permission errors
+            return False, None
         except tweepy.TweepyException as e:
             error_msg = str(e)
             logger.error(f"v2 API failed: {e}")
@@ -160,6 +166,12 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
             tweet_url = f"https://twitter.com/i/web/status/{tweet.id}"
             logger.info(f"Tweet posted successfully via v1.1 API: {tweet_url}")
             return True, tweet_url
+        except tweepy.Forbidden as e:
+            error_msg = str(e)
+            logger.error(f"v1.1 API failed with Forbidden error (likely permissions): {e}")
+            logger.error("This may indicate limited API access. Check your app permissions.")
+            # This is a critical error, don't continue
+            return False, None
         except tweepy.TweepyException as e:
             error_msg = str(e)
             logger.warning(f"v1.1 API failed: {e}")

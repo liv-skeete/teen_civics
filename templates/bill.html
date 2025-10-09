@@ -8,19 +8,21 @@
 {% block og_title %}{{ bill.title }} - TeenCivics{% endblock %}
 {% block og_description %}AI summary of {{ bill.title }} with key points and community poll.{% endblock %}
 {% block og_url %}{{ request.url }}{% endblock %}
+{% block og_image %}https://teencivics.org/api/og-image/{{ bill.bill_id }}{% endblock %}
 {% block twitter_title %}{{ bill.title }} - TeenCivics{% endblock %}
 {% block twitter_description %}AI summary of {{ bill.title }} with key points and community poll.{% endblock %}
+{% block twitter_image %}https://teencivics.org/api/og-image/{{ bill.bill_id }}{% endblock %}
 
 {% block content %}
 <div class="container bill-detail">
     <article class="bill-card">
         <div class="bill-header">
-            <h1 class="bill-title">{{ bill.title|shorten_title }}</h1>
+            <h2 class="bill-title">{{ bill.title|shorten_title }}</h2>
             {% if bill.title|length > 80 %}
             <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
             {% endif %}
             {% if bill.short_title %}
-            <h2 class="bill-short-title">{{ bill.short_title }}</h2>
+            <h3 class="bill-short-title">{{ bill.short_title }}</h3>
             {% endif %}
         </div>
 
