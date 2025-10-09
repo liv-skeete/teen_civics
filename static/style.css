@@ -400,28 +400,28 @@ textarea:focus-visible {
     font-weight: 500;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    color: var(--color-brown-black);
-    background-color: #B0B0B0;
+    color: var(--color-white) !important;
+    background-color: #666666 !important; /* Darker grey with white text */
 }
 
 .bill-status.introduced,
 .bill-status.referred-to-committee {
-    background-color: var(--color-info);
-    color: var(--color-white);
+    background-color: var(--color-info) !important;
+    color: var(--color-white) !important;
 }
 
 .bill-status.committee-consideration,
 .bill-status.reported-by-committee {
-    background-color: var(--color-warning);
-    color: var(--color-white);
+    background-color: var(--color-warning) !important;
+    color: var(--color-white) !important;
 }
 
 .bill-status.passed-house,
 .bill-status.passed-senate,
 .bill-status.agreed-to-in-house,
 .bill-status.agreed-to-in-senate {
-    background-color: var(--color-success);
-    color: var(--color-white);
+    background-color: var(--color-success) !important;
+    color: var(--color-white) !important;
 }
 /* Override: Force white text and green background for "Agreed" statuses */
 .bill-status.agreed-to-in-house,
@@ -434,19 +434,19 @@ textarea:focus-visible {
 /* Ensure all status badges with spaces in names render properly */
 .bill-status.became-law,
 .bill-status.vetoed {
-    background-color: #B0B0B0;
-    color: var(--color-brown-black);
+    background-color: #666666 !important; /* Darker grey with white text */
+    color: var(--color-white) !important;
 }
 .bill-status.failed-house,
 .bill-status.failed-senate {
-    background-color: var(--color-error);
-    color: var(--color-white);
+    background-color: var(--color-error) !important;
+    color: var(--color-white) !important;
 }
 
 .bill-status.became-law,
 .bill-status.enacted {
-    background-color: var(--color-success);
-    color: var(--color-white);
+    background-color: var(--color-success) !important;
+    color: var(--color-white) !important;
 }
 
 .bill-status.vetoed {

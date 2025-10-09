@@ -210,6 +210,8 @@ def normalize_status(action_text: str, source_url: Optional[str] = None) -> str:
         return "Passed Senate"
     if "reported" in action_text_lower or "placed on the union calendar" in action_text_lower:
         return "Reported by Committee"
+    if "placed on senate legislative calendar" in action_text_lower or "placed on calendar" in action_text_lower:
+        return "Introduced"
     if "introduced" in action_text_lower:
         return "Introduced"
         

@@ -19,7 +19,7 @@ load_dotenv()
 
 # Prefer Claude Sonnet 4 by default, allow override via environment variables
 # Valid models as of Oct 2024: claude-sonnet-4-5 (latest), claude-3-5-haiku-20241022
-PREFERRED_MODEL = os.getenv("ANTHROPIC_MODEL_PREFERRED", "claude-sonnet-4-5")
+PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-4-5")
 FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-3-5-haiku-20241022")
 
 # Valid model names for validation
@@ -72,7 +72,7 @@ def _build_system_prompt() -> str:
         "  - Defines acronyms on first use (e.g., \"DEA = Drug Enforcement Administration\").\n"
         "- Keep tone factual, neutral, and civic-friendly.\n\n"
         "**Output format (strict JSON):**\n"
-        '{"tweet": "...", "long": "..."}'
+        '{"tweet": "...", "long": "..."}\n'
     )
 
 def _build_enhanced_system_prompt() -> str:
@@ -220,7 +220,7 @@ def _build_enhanced_system_prompt() -> str:
         "- Use stage-appropriate verbs (proposes, passed, became law).\n\n"
         "**Output format (strict JSON):**\n"
         '{"overview": "...", "detailed": "...", "term_dictionary": [...], "tweet": "..."}'
-    )
+        )
 
 
 def _build_user_prompt(bill: Dict[str, Any]) -> str:
@@ -495,15 +495,16 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
             result.setdefault('tweet', '')
             return result
         
-        # If the enhanced fallback didn't find anything, do not proceed to legacy.
-        # Instead, ensure all keys are present with default values.
-        logger.warning("No structured content found in fallback, returning empty summary object.")
+        # If the enhanced fallback didn't find anything, build a minimal, usable object.
+        logger.warning("No structured content found in fallback, building minimal fallback object.")
+        plain = _sanitize_json_text(text).strip()
+        tweet = plain if len(plain) <= 200 else plain[:200].rstrip()
         return {
             "overview": "",
             "detailed": "",
             "term_dictionary": "[]",
-            "tweet": "",
-            "long": ""
+            "tweet": tweet,
+            "long": plain
         }
 
 
@@ -889,7 +890,103 @@ def _inject_teen_impact_score_line(detailed: str, impact: Dict[str, Any]) -> str
         insert_at += 1
     lines.insert(insert_at, line)
     return "\n".join(lines)
+def _deduplicate_headers_and_scores(text: str) -> str:
+    """
+    Deduplicate any repeated headers and Teen Impact score lines.
+    Also validate that exactly one Teen Impact score line exists in dev/test modes.
+    """
+    if not text or not isinstance(text, str):
+        return text
+    
+    lines = text.split('\n')
+    seen_headers = set()
+    seen_scores = 0
+    score_line = None
+    new_lines = []
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Check for headers (emoji + text)
+        # Use a broader Unicode range that includes emojis
+        header_match = re.match(r'^([\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]+)\s*(.+)', stripped)
+        if header_match:
+            header_key = header_match.group(2).lower().strip()
+            if header_key in seen_headers:
+                # Skip duplicate header
+                continue
+            seen_headers.add(header_key)
+        
+        # Check for Teen Impact score lines
+        if re.match(r'^-?\s*Teen\s+impact\s+score:\s*\d{1,2}/10', stripped, re.IGNORECASE):
+            seen_scores += 1
+            if seen_scores > 1:
+                # Skip additional score lines
+                continue
+            score_line = line
+        
+        new_lines.append(line)
+    
+    # In development/testing environments, log if multiple scores were detected (duplicates removed above)
+    if os.getenv('FLASK_ENV') != 'production' and seen_scores > 1:
+        logger.warning(f"Detected {seen_scores} Teen Impact score lines; deduplicated to one.")
+    
+    return '\n'.join(new_lines)
 
+
+def _validate_summary_format(detailed: str) -> bool:
+    """
+    Validate that the detailed summary follows the required format.
+    Returns True if valid, False otherwise.
+    """
+    if not detailed or not isinstance(detailed, str):
+        return False
+    
+    # Required sections in order
+    required_sections = [
+        "Overview",
+        "Who does this affect?",
+        "Key Provisions",
+        "Policy Changes",
+        "Policy Riders or Key Rules/Changes",
+        "Procedural/Administrative Notes",
+        "In short",
+        "Why should I care?"
+    ]
+    
+    lines = detailed.split('\n')
+    current_section_index = 0
+    
+    for line in lines:
+        stripped = line.strip()
+        # Skip empty lines
+        if not stripped:
+            continue
+        
+        # Check if this line starts a new section
+        section_match = re.match(r'^(\p{Emoji}*)\s*(.+)', stripped)
+        if section_match:
+            section_title = section_match.group(2).strip()
+            # Check if this is the next required section
+            if current_section_index < len(required_sections) and section_title == required_sections[current_section_index]:
+                current_section_index += 1
+            # If it's a required section but out of order, that's an error
+            elif section_title in required_sections:
+                # Find the index of this section
+                try:
+                    section_index = required_sections.index(section_title)
+                    # If this section comes before our current expected section, it's out of order
+                    if section_index < current_section_index:
+                        return False
+                    # If it's a future section, update our current index
+                    elif section_index > current_section_index:
+                        current_section_index = section_index + 1
+                except ValueError:
+                    # This shouldn't happen as we checked if it's in required_sections
+                    pass
+    
+    # Check that we've seen all required sections
+    return current_section_index >= len(required_sections)
 
 def _chunk_text(text: str, max_chars: int = 50000, overlap: int = 1000) -> List[str]:
     """
@@ -1261,6 +1358,77 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     logger.info(f"DEBUG - overview raw length: {len(str(parsed.get('overview', '')))}")
     logger.info(f"DEBUG - detailed raw length: {len(str(parsed.get('detailed', '')))}")
 
+    # Post-process the detailed summary
+    detailed_summary = parsed.get('detailed', '')
+    if detailed_summary:
+        # Deduplicate headers and scores
+        detailed_summary = _deduplicate_headers_and_scores(detailed_summary)
+        
+        # Validate format in non-production environments
+        if os.getenv('FLASK_ENV') != 'production':
+            if not _validate_summary_format(detailed_summary):
+                logger.warning("Summary format validation failed, but continuing")
+        
+        parsed['detailed'] = detailed_summary
+
+    # Return the completed summary
+    return parsed
+
+def _validate_summary_format(detailed: str) -> bool:
+    """
+    Validate that the detailed summary follows the required format.
+    Returns True if valid, False otherwise.
+    """
+    if not detailed or not isinstance(detailed, str):
+        return False
+    
+    # Required sections in order
+    required_sections = [
+        "Overview",
+        "Who does this affect?",
+        "Key Provisions",
+        "Policy Changes",
+        "Policy Riders or Key Rules/Changes",
+        "Procedural/Administrative Notes",
+        "In short",
+        "Why should I care?"
+    ]
+    
+    lines = detailed.split('\n')
+    current_section_index = 0
+    
+    for line in lines:
+        stripped = line.strip()
+        # Skip empty lines
+        if not stripped:
+            continue
+        
+        # Check if this line starts a new section
+        section_match = re.match(r'^([\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]*)\s*(.+)', stripped)
+        if section_match:
+            section_title = section_match.group(2).strip()
+            # Check if this is the next required section
+            if current_section_index < len(required_sections) and section_title == required_sections[current_section_index]:
+                current_section_index += 1
+            # If it's a required section but out of order, that's an error
+            elif section_title in required_sections:
+                # Find the index of this section
+                try:
+                    section_index = required_sections.index(section_title)
+                    # If this section comes before our current expected section, it's out of order
+                    if section_index < current_section_index:
+                        return False
+                    # If it's a future section, update our current index
+                    elif section_index > current_section_index:
+                        current_section_index = section_index + 1
+                except ValueError:
+                    # This shouldn't happen as we checked if it's in required_sections
+                    pass
+    
+    # Check that we've seen all required sections
+    return current_section_index >= len(required_sections)
+
+
     # Normalize fields that may be lists or stringified lists
     overview = _normalize_structured_text(parsed.get("overview", ""))
     detailed = _normalize_structured_text(parsed.get("detailed", ""))
@@ -1313,6 +1481,19 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     try:
         impact = score_teen_impact(bill)
         detailed = _inject_teen_impact_score_line(detailed, impact)
+        
+        # Post-processing: deduplicate headers and Teen Impact score lines
+        detailed = _deduplicate_headers_and_scores(detailed)
+        
+        # Validate summary format in development/test environments
+        if os.getenv('FLASK_ENV') != 'production':
+            if not _validate_summary_format(detailed):
+                logger.warning("Summary does not follow required format")
+            # Check for exactly one Teen Impact score
+            teen_scores = re.findall(r'^-?\s*Teen\s+impact\s+score:\s*\d{1,2}/10', detailed, re.MULTILINE | re.IGNORECASE)
+            if len(teen_scores) != 1:
+                logger.warning(f"Found {len(teen_scores)} Teen Impact score lines, expected exactly 1")
+                raise ValueError(f"Found {len(teen_scores)} Teen Impact score lines, expected exactly 1")
     except Exception as e:
         logger.warning(f"Teen impact scoring/injection failed: {e}")
 
