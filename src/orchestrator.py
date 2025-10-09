@@ -46,11 +46,13 @@ def main(dry_run: bool = False) -> int:
         et_tz = pytz.timezone('America/New_York')
         current_time_et = datetime.now(et_tz)
         current_hour = current_time_et.hour
+        current_minute = current_time_et.minute
         
-        # Morning scan: 8-11 AM ET, Evening scan: 9 PM - 1 AM ET
-        if 8 <= current_hour < 12:
+        # Morning scan: 9:00 AM ET with 10-minute buffer (8:50 AM - 9:10 AM ET)
+        # Evening scan: 10:30 PM ET with 10-minute buffer (10:20 PM - 10:40 PM ET)
+        if (current_hour == 8 and current_minute >= 50) or (current_hour == 9 and current_minute <= 10):
             scan_type = "MORNING"
-        elif current_hour >= 21 or current_hour < 2:
+        elif (current_hour == 22 and current_minute >= 20 and current_minute <= 40):
             scan_type = "EVENING"
         else:
             scan_type = "MANUAL"
