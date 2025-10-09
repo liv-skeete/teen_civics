@@ -121,5 +121,4 @@ jobs:
       run: |
         if [ -f orchestrator.log ]; then
           echo "📋 Archiving orchestrator log..."
-          cp orchestrator.log orchestrator_$(date +%Y%m%d_%H%M%S).log
-        fi
+          cp o

@@ -190,6 +190,11 @@ def main(dry_run: bool = False) -> int:
             logger.info("✅ Summaries generated successfully")
             
             # Create bill_data for insertion with new fields
+            term_dict_obj = summary.get("term_dictionary", [])
+            # Convert term dictionary to JSON string for database storage
+            import json
+            term_dict_json = json.dumps(term_dict_obj, ensure_ascii=False, separators=(',', ':'))
+            
             bill_data = {
                 "bill_id": bill_id,
                 "title": selected_bill.get("title", ""),
@@ -199,7 +204,7 @@ def main(dry_run: bool = False) -> int:
                 "summary_long": summary.get("long", ""),
                 "summary_overview": summary.get("overview", ""),
                 "summary_detailed": summary.get("detailed", ""),
-                "term_dictionary": summary.get("term_dictionary", ""),
+                "term_dictionary": term_dict_json,
                 "congress_session": selected_bill.get("congress", ""),
                 "date_introduced": selected_bill.get("introduced_date", ""),
                 "source_url": selected_bill.get("source_url", ""),
