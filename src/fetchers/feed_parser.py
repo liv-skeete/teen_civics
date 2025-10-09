@@ -154,7 +154,17 @@ def scrape_tracker_status(source_url: str) -> Optional[str]:
             # Parse with BeautifulSoup
             soup = BeautifulSoup(content, 'lxml')
             
-            # Find the tracker section - it's an <ol> with class "bill_progress"
+            # Method 1: Find the hide_fromsighted paragraph that contains the status
+            # This is the most reliable method as it's explicitly labeled
+            status_paragraphs = soup.find_all('p', class_='hide_fromsighted')
+            for para in status_paragraphs:
+                if para and 'This bill has the status' in para.text:
+                    # Extract status from text like "This bill has the status Passed House"
+                    status_text = para.text.replace('This bill has the status', '').strip()
+                    logger.info(f"✅ Scraped tracker status from hidden paragraph: {status_text}")
+                    return status_text
+            
+            # Method 2 (Fallback): Find the tracker section - it's an <ol> with class "bill_progress"
             tracker = soup.find('ol', class_='bill_progress')
             
             if tracker:
@@ -163,9 +173,11 @@ def scrape_tracker_status(source_url: str) -> Optional[str]:
                 
                 if selected_item:
                     # Extract only the direct text of the <li> element, ignoring children like divs.
-                    status_text = selected_item.find(text=True, recursive=False).strip()
-                    logger.info(f"✅ Scraped tracker status: {status_text}")
-                    return status_text
+                    status_text = selected_item.find(text=True, recursive=False)
+                    if status_text:
+                        status_text = status_text.strip()
+                        logger.info(f"✅ Scraped tracker status from selected li (fallback): {status_text}")
+                        return status_text
                 else:
                     logger.warning(f"⚠️ Found tracker but no selected item on page: {source_url}")
             else:

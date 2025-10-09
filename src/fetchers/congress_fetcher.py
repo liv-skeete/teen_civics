@@ -322,14 +322,26 @@ def download_bill_text(source_url: str, bill_id: Optional[str] = None) -> tuple[
         # Parse bill status from the progress bar
         status = None
         try:
-            bill_progress_list = soup.find('ol', class_='bill_progress')
-            if bill_progress_list:
-                selected_item = bill_progress_list.find('li', class_='selected')
-                if selected_item:
-                    status_text = selected_item.text.strip()
-                    # Clean up status text, e.g., "Introduced\nHouse" -> "Introduced"
-                    status = status_text.split('\n')[0]
-                    logger.info(f"✅ Parsed bill status for {bill_id or 'unknown'}: {status}")
+            # Method 1: Find the hide_fromsighted paragraph that contains the status
+            # This is the most reliable method as it's explicitly labeled
+            status_paragraphs = soup.find_all('p', class_='hide_fromsighted')
+            for para in status_paragraphs:
+                if para and 'This bill has the status' in para.text:
+                    # Extract status from text like "This bill has the status Passed House"
+                    status = para.text.replace('This bill has the status', '').strip()
+                    logger.info(f"✅ Parsed bill status from hidden paragraph for {bill_id or 'unknown'}: {status}")
+                    break
+            
+            # Method 2 (Fallback): Parse from the bill_progress list
+            if not status:
+                bill_progress_list = soup.find('ol', class_='bill_progress')
+                if bill_progress_list:
+                    selected_item = bill_progress_list.find('li', class_='selected')
+                    if selected_item:
+                        status_text = selected_item.text.strip()
+                        # Clean up status text, e.g., "Introduced\nHouse" -> "Introduced"
+                        status = status_text.split('\n')[0]
+                        logger.info(f"✅ Parsed bill status from selected li (fallback) for {bill_id or 'unknown'}: {status}")
         except Exception as e:
             logger.warning(f"Could not parse bill status for {bill_id or 'unknown'}: {e}")
         
