@@ -870,3 +870,67 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
     except Exception as e:
         logger.error(f"FTS count failed: {e}. Falling back to LIKE count.")
         return _count_search_tweeted_bills_like(phrases, tokens, status, start_date, end_date)
+
+
+def select_and_lock_unposted_bill() -> Optional[Dict[str, Any]]:
+    """
+    Atomically select and lock one unposted bill to prevent race conditions.
+    Uses 'SELECT FOR UPDATE SKIP LOCKED' to ensure that concurrent workers
+    do not select the same bill.
+    
+    Returns:
+        A dictionary representing the locked bill, or None if no bills are available.
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                # This query finds the most recently introduced bill that has not been
+                # posted, is not marked as problematic, and locks it.
+                # If the row is already locked, SKIP LOCKED ensures we don't wait.
+                cursor.execute('''
+                    SELECT * FROM bills
+                    WHERE tweet_posted = FALSE
+                    AND (problematic IS NULL OR problematic = FALSE)
+                    ORDER BY date_introduced DESC
+                    LIMIT 1
+                    FOR UPDATE SKIP LOCKED
+                ''')
+                row = cursor.fetchone()
+                if row:
+                    logger.info(f"Locked bill for processing: {row['bill_id']}")
+                    return dict(row)
+                else:
+                    logger.info("No unposted bills available to lock.")
+                    return None
+    except Exception as e:
+        logger.error(f"Error selecting and locking unposted bill: {e}")
+        return None
+
+def generate_website_slug(title: str, bill_id: str) -> str:
+    """
+    Generate a URL-friendly slug from a bill title and ID.
+    
+    Args:
+        title: The title of the bill.
+        bill_id: The unique ID of the bill (e.g., 'hr123-118').
+        
+    Returns:
+        A URL-friendly slug string.
+    """
+    if not title:
+        # Fallback to bill_id if title is empty
+        return normalize_bill_id(bill_id)
+
+    # Normalize, remove special characters, and truncate
+    s = title.lower()
+    s = re.sub(r'[^\w\s-]', '', s)
+    s = re.sub(r'[\s_-]+', '-', s).strip('-')
+    s = s[:80] # Truncate to 80 chars
+
+    # Append normalized bill_id to ensure uniqueness
+    normalized_id = normalize_bill_id(bill_id)
+    
+    # Clean up the bill_id part for the slug
+    slug_id = normalized_id.replace('-', '')
+    
+    return f"{s}-{slug_id}"

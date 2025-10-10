@@ -67,7 +67,7 @@ def main(dry_run: bool = False) -> int:
         from src.processors.summarizer import summarize_bill_enhanced
         from src.publishers.twitter_publisher import post_tweet
         from src.database.db import (
-            bill_exists, bill_already_posted, get_bill_by_id, get_most_recent_unposted_bill,
+            bill_exists, bill_already_posted, get_bill_by_id,
             insert_bill, update_tweet_info, generate_website_slug, init_db,
             normalize_bill_id, select_and_lock_unposted_bill, has_posted_today
         )
