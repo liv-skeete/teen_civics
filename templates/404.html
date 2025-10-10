@@ -20,7 +20,7 @@
             <p>Or try searching for a specific bill:</p>
             <form action="{{ url_for('archive') }}" method="GET" class="search-form">
                 <label for="search-input" class="visually-hidden">Search bills</label>
-                <input type="text" id="search-input" name="search" placeholder="Search bills..." class="search-input">
+                <input type="search" id="search-input" name="search" placeholder="Search bills..." class="search-input" enterkeyhint="search">
                 <button type="submit" class="btn btn-primary">Search</button>
             </form>
         </div>

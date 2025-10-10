@@ -392,13 +392,15 @@ function initializeBillFiltering() {
         // Save filter preference
         localStorage.setItem('archive_filter', selectedStatus);
         
-        // Reload page with new filter parameter
+        // Reload page with new filter parameter, preserving 'q'
         const newUrl = new URL(window.location);
         if (selectedStatus === 'all') {
             newUrl.searchParams.delete('status');
         } else {
             newUrl.searchParams.set('status', selectedStatus);
         }
+        // Reset to page 1 when filter changes
+        newUrl.searchParams.delete('page');
         
         // Reload the page to apply server-side filtering
         window.location.href = newUrl.toString();

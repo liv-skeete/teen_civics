@@ -5,11 +5,58 @@
 
 {% block content %}
 <style>
-    .poll-results .yes-fill {
-        width: var(--yes-width, 0%);
+    /* Keep existing poll progress widths */
+    .poll-results .yes-fill { width: var(--yes-width, 0%); }
+    .poll-results .no-fill { width: var(--no-width, 0%); }
+
+    /* Force grey Search button on all devices (esp. iOS Safari) */
+    .search-form .btn-search {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        background: var(--color-gray) !important;
+        background-image: none !important;
+        color: var(--color-brown-black) !important;
+        border: 1px solid var(--color-gray) !important;
+        box-shadow: none !important;
+        border-radius: var(--border-radius);
     }
-    .poll-results .no-fill {
-        width: var(--no-width, 0%);
+    .search-form .btn-search:hover {
+        background: var(--color-dark-gray) !important;
+        color: var(--color-white) !important;
+    }
+    /* Strong ID-based override to force grey on iOS Safari */
+    #archive-search-button,
+    #archive-search-button:hover,
+    #archive-search-button:active,
+    #archive-search-button:focus {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        background: var(--color-gray) !important;
+        background-color: var(--color-gray) !important;
+        background-image: none !important;
+        color: var(--color-brown-black) !important;
+        border: 1px solid var(--color-gray) !important;
+        border-radius: var(--border-radius);
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+    /* WebKit safeguard */
+    @supports (-webkit-touch-callout: none) {
+        .search-form .btn-search {
+            -webkit-appearance: none !important;
+            appearance: none !important;
+        }
+    }
+    /* Restore stacked layout and full-width button on mobile */
+    @media (max-width: 768px) {
+        .search-form {
+            flex-direction: column;
+        }
+        .search-form .btn-search {
+            width: 100% !important;
+            padding: var(--spacing-md) 0 !important;
+            font-size: var(--font-size-md);
+        }
     }
 </style>
 <div class="container">
@@ -18,22 +65,30 @@
         <p>Browse all congressional bills summarized by TeenCivics</p>
     </div>
 
-    <!-- Filter Section -->
-    <div class="filter-section">
+    <!-- Search and Filter Section -->
+    <div class="search-and-filter-section">
+        <form class="search-form" method="get" action="{{ url_for('archive') }}">
+            <input type="search" class="search-input" name="q" value="{{ q or '' }}" placeholder="Search by bill ID, title, or keywords" aria-label="Search bills" enterkeyhint="search">
+            <input type="hidden" name="status" value="{{ status_filter if status_filter != 'all' else '' }}">
+            <button id="archive-search-button" type="submit" class="btn btn-search" style="background: var(--color-gray); background-color: var(--color-gray); background-image: none; color: var(--color-brown-black); border: 1px solid var(--color-gray); box-shadow: none; text-shadow: none; -webkit-appearance: none; appearance: none;">Search</button>
+            {% if q %}
+            <a href="{{ url_for('archive', status=status_filter if status_filter != 'all' else None) }}" class="btn btn-clear">Clear</a>
+            {% endif %}
+        </form>
         <div class="filter-form">
             <label for="status-filter">Filter by status:</label>
             <select name="status" id="status-filter">
-                <option value="all">All Statuses</option>
-                <option value="introduced">Introduced</option>
-                <option value="referred_to_committee">Referred to Committee</option>
-                <option value="committee_consideration">Committee Consideration</option>
-                <option value="reported_by_committee">Reported by Committee</option>
-                <option value="passed_house">Passed House</option>
-                <option value="passed_senate">Passed Senate</option>
-                <option value="failed_house">Failed House</option>
-                <option value="failed_senate">Failed Senate</option>
-                <option value="became_law">Became Law</option>
-                <option value="vetoed">Vetoed</option>
+                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+                <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
+                <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+                <option value="committee_consideration" {% if status_filter == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
+                <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
+                <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
+                <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
+                <option value="failed_house" {% if status_filter == 'failed_house' %}selected{% endif %}>Failed House</option>
+                <option value="failed_senate" {% if status_filter == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
+                <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
+                <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
             </select>
         </div>
         <div class="sort-control">
@@ -51,6 +106,12 @@
     {% endif %}
 
     {% if bills %}
+    <div class="results-summary">
+        {% if total_results > 0 %}
+            Showing {{ ((current_page - 1) * page_size) + 1 }}–{{ ((current_page - 1) * page_size) + bills|length }} of {{ total_results }} results
+            {% if q %} for "<strong>{{ q }}</strong>"{% endif %}.
+        {% endif %}
+    </div>
     <div class="bills-grid">
         {% for bill in bills %}
         <article class="bill-card" data-status="{{ bill.status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
@@ -132,7 +193,7 @@
     {% if total_pages > 1 %}
     <div class="pagination">
         {% if current_page > 1 %}
-        <a href="?page={{ current_page - 1 }}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}" class="page-link prev">
+        <a href="{{ url_for('archive', page=current_page - 1, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link prev">
             ← Previous
         </a>
         {% endif %}
@@ -141,14 +202,14 @@
             {% if page_num == current_page %}
             <span class="page-link current">{{ page_num }}</span>
             {% else %}
-            <a href="?page={{ page_num }}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}" class="page-link">
+            <a href="{{ url_for('archive', page=page_num, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link">
                 {{ page_num }}
             </a>
             {% endif %}
         {% endfor %}
 
         {% if current_page < total_pages %}
-        <a href="?page={{ current_page + 1 }}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}" class="page-link next">
+        <a href="{{ url_for('archive', page=current_page + 1, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link next">
             Next →
         </a>
         {% endif %}
@@ -157,9 +218,13 @@
 
     {% else %}
     <div class="no-bills-message">
-        <h2>No bills found</h2>
-        <p>{% if status_filter != 'all' %}No bills with status "{{ status_filter }}" found.{% else %}No bills available in the archive yet.{% endif %}</p>
-        <a href="{{ url_for('archive', status='all') }}" class="btn btn-primary">View All Bills</a>
+        <h2>No Results Found</h2>
+        {% if q %}
+            <p>No bills found for your search query "<strong>{{ q }}</strong>".</p>
+            <a href="{{ url_for('archive', status=status_filter if status_filter != 'all' else None) }}" class="btn btn-primary">Clear Search</a>
+        {% else %}
+            <p>No bills available in the archive yet.</p>
+        {% endif %}
     </div>
     {% endif %}
 {% endblock %}

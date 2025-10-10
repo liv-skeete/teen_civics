@@ -14,11 +14,13 @@ class TestOrchestratorDuplicatePrevention(unittest.TestCase):
     def test_normalize_bill_id_basic(self):
         """Test basic bill ID normalization."""
         # Test lowercase conversion
-        self.assertEqual(normalize_bill_id("HR1234"), "hr1234-118")
-        self.assertEqual(normalize_bill_id("S5678"), "s5678-118")
+        from src.database.db import get_current_congress
+        current_congress = get_current_congress()
+        self.assertEqual(normalize_bill_id("HR1234"), f"hr1234-{current_congress}")
+        self.assertEqual(normalize_bill_id("S5678"), f"s5678-{current_congress}")
         
         # Test that already normalized IDs remain unchanged
-        self.assertEqual(normalize_bill_id("hr1234-118"), "hr1234-118")
+        self.assertEqual(normalize_bill_id(f"hr1234-{current_congress}"), f"hr1234-{current_congress}")
         self.assertEqual(normalize_bill_id("s5678-117"), "s5678-117")
         
         # Test with mixed case and existing congress
@@ -75,16 +77,19 @@ class TestOrchestratorDuplicatePrevention(unittest.TestCase):
     
     def test_bill_id_normalization_consistency(self):
         """Test that bill ID normalization is consistent across different formats."""
+        from src.database.db import get_current_congress
+        current_congress = get_current_congress()
+        
         test_cases = [
-            ("HR1234", "hr1234-118"),
-            ("hr1234", "hr1234-118"), 
+            ("HR1234", f"hr1234-{current_congress}"),
+            ("hr1234", f"hr1234-{current_congress}"),
             ("HR1234-118", "hr1234-118"),
-            ("S5678", "s5678-118"),
+            ("S5678", f"s5678-{current_congress}"),
             ("s5678-117", "s5678-117"),
-            ("HRes456", "hres456-118"),
+            ("HRes456", f"hres456-{current_congress}"),
             ("hres456-116", "hres456-116"),
         ]
-        
+    
         for input_id, expected_output in test_cases:
             with self.subTest(input_id=input_id):
                 result = normalize_bill_id(input_id)

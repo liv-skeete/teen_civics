@@ -64,6 +64,8 @@ from src.database.db import (
     get_all_tweeted_bills,
     get_bill_by_slug,
     update_poll_results,
+    search_tweeted_bills,
+    count_search_tweeted_bills,
 )
 
 # Configure Flask app
@@ -90,6 +92,10 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://"
 )
+
+# --- Constants ---
+DEFAULT_ARCHIVE_PAGE_SIZE = 24
+
 
 # Security: Add security headers middleware
 @app.after_request
@@ -353,81 +359,63 @@ def index():
 
 @app.route('/archive')
 def archive():
-    """Archive page: Displays all tweeted bills with optional filtering."""
+    """Archive page: Displays all tweeted bills with search, filtering, and pagination."""
     import time
-    import os
+    import math
     from src.database.connection import get_connection_string
-    
+
     start_time = time.time()
     logger.info("=== Archive request started ===")
-    
+
     try:
-        # Verify database configuration before proceeding
-        conn_string = get_connection_string()
-        if not conn_string:
-            error_msg = "Database connection not configured. Missing DATABASE_URL or Supabase environment variables."
+        # Verify database configuration
+        if not get_connection_string():
+            error_msg = "Database connection not configured."
             logger.error(error_msg)
-            logger.error("Environment check: DATABASE_URL=%s, SUPABASE_DB_HOST=%s",
-                        'SET' if os.environ.get('DATABASE_URL') else 'NOT SET',
-                        'SET' if os.environ.get('SUPABASE_DB_HOST') else 'NOT SET')
-            return render_template(
-                'archive.html',
-                bills=[],
-                status_filter='all',
-                current_page=1,
-                total_pages=1,
-                error_message=error_msg
-            ), 500
+            return render_template('archive.html', bills=[], error_message=error_msg), 500
+
+        # Get query parameters
+        q = request.args.get('q', '').strip()
+        status = request.args.get('status', 'all')
+        try:
+            page = int(request.args.get('page', 1))
+            if page < 1: page = 1
+        except ValueError:
+            page = 1
         
-        logger.info("Database connection string configured: %s",
-                   conn_string[:20] + '...' if len(conn_string) > 20 else conn_string)
+        page_size = DEFAULT_ARCHIVE_PAGE_SIZE
         
-        # Get filter parameter
-        status_filter = request.args.get('status', 'all')
-        
-        # Get all bills with enhanced logging
         db_start = time.time()
-        logger.info("Calling get_all_tweeted_bills()...")
-        bills = get_all_tweeted_bills()
+        total_results = 0
+        bills = []
+
+        logger.info(f"Searching for query='{q}', status='{status}', page={page}")
+        bills = search_tweeted_bills(q, status, page, page_size)
+        total_results = count_search_tweeted_bills(q, status)
+
         db_time = time.time() - db_start
-        
-        # Log detailed results
-        logger.info(f"Database query completed in {db_time:.3f}s")
-        logger.info(f"Retrieved {len(bills)} bills from database")
-        
-        if not bills:
-            logger.warning("No bills returned from database. This may indicate:")
-            logger.warning("  1. Database is empty (no bills have been tweeted)")
-            logger.warning("  2. Database connection failed silently")
-            logger.warning("  3. Query returned no results due to filtering")
-        else:
-            logger.info(f"Sample bills: {[bill.get('bill_id', 'unknown') for bill in bills[:3]]}")
-        
-        # Extract teen impact scores from summaries
+        logger.info(f"Database query completed in {db_time:.3f}s, found {total_results} total results.")
+
+        # Calculate pagination
+        total_pages = math.ceil(total_results / page_size) if total_results > 0 else 1
+        if page > total_pages:
+            page = total_pages
+
+        # Add teen impact score to each bill
         for bill in bills:
             summary = bill.get('summary_detailed', '')
-            teen_impact_score = extract_teen_impact_score(summary)
-            bill['teen_impact_score'] = teen_impact_score
-        
-        # Apply status filter if not 'all'
-        if status_filter != 'all' and bills:
-            # Normalize the filter value to match database format (lowercase with underscores)
-            normalized_filter = status_filter.lower().replace(' ', '_')
-            bills = [bill for bill in bills if bill.get('status') == normalized_filter]
-            logger.info(f"Filtered to {len(bills)} bills with status '{status_filter}'")
-        
-        # For now, we'll show all bills on one page (no pagination)
-        # If pagination is needed in the future, we can add it
-        current_page = 1
-        total_pages = 1
-        
+            bill['teen_impact_score'] = extract_teen_impact_score(summary)
+
         render_start = time.time()
         response = render_template(
             'archive.html',
             bills=bills,
-            status_filter=status_filter,
-            current_page=current_page,
-            total_pages=total_pages
+            q=q,
+            status_filter=status,
+            current_page=page,
+            total_pages=total_pages,
+            total_results=total_results,
+            page_size=page_size
         )
         render_time = time.time() - render_start
         total_time = time.time() - start_time
@@ -435,26 +423,11 @@ def archive():
         logger.info(f"Template rendered in {render_time:.3f}s")
         logger.info(f"=== Archive request completed in {total_time:.3f}s ===")
         return response
+
     except Exception as e:
         error_msg = f"Failed to load archive: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        logger.error("Exception type: %s", type(e).__name__)
-        
-        # Provide detailed error context
-        import os
-        logger.error("Environment diagnostics:")
-        logger.error("  DATABASE_URL: %s", 'SET' if os.environ.get('DATABASE_URL') else 'NOT SET')
-        logger.error("  SUPABASE_DB_HOST: %s", 'SET' if os.environ.get('SUPABASE_DB_HOST') else 'NOT SET')
-        logger.error("  Working directory: %s", os.getcwd())
-        
-        return render_template(
-            'archive.html',
-            bills=[],
-            status_filter='all',
-            current_page=1,
-            total_pages=1,
-            error_message=error_msg
-        ), 500
+        return render_template('archive.html', bills=[], error_message=error_msg), 500
 
 @app.route('/debug/env')
 def debug_env():

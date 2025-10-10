@@ -362,22 +362,21 @@ def postgres_connect() -> Iterator[psycopg2.extensions.connection]:
             except Exception as e:
                 logger.error(f"[DIAG] Failed to return connection {conn_id} to pool: {e}")
 
-def init_postgres_tables() -> None:
+def init_db_tables() -> None:
     """
-    Initialize the PostgreSQL database with the bills table schema.
+    Initialize the database with the bills table schema.
     Creates all necessary tables and indexes.
     """
-    if not is_postgres_available():
-        logger.warning("PostgreSQL not available - skipping table initialization")
-        return
-    
+    db_url = get_connection_string()
+    is_sqlite = "sqlite" in db_url
+
     try:
         with postgres_connect() as conn:
             with conn.cursor() as cursor:
                 # Create bills table
                 cursor.execute('''
                 CREATE TABLE IF NOT EXISTS bills (
-                    id SERIAL PRIMARY KEY,
+                    id INTEGER PRIMARY KEY,
                     bill_id TEXT UNIQUE NOT NULL,
                     title TEXT NOT NULL,
                     short_title TEXT,
@@ -389,7 +388,7 @@ def init_postgres_tables() -> None:
                     term_dictionary TEXT,
                     congress_session TEXT,
                     date_introduced TEXT,
-                    date_processed TIMESTAMP WITH TIME ZONE NOT NULL,
+                    date_processed TIMESTAMP NOT NULL,
                     tweet_posted BOOLEAN DEFAULT FALSE,
                     tweet_url TEXT,
                     source_url TEXT NOT NULL,
@@ -400,8 +399,8 @@ def init_postgres_tables() -> None:
                     poll_results_unsure INTEGER DEFAULT 0,
                     problematic BOOLEAN DEFAULT FALSE,
                     problem_reason TEXT,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 ''')
 
@@ -410,30 +409,31 @@ def init_postgres_tables() -> None:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_bills_date_processed ON bills (date_processed)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_bills_website_slug ON bills (website_slug)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_bills_tweet_posted ON bills (tweet_posted)')
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_bills_tweeted_processed ON bills (tweet_posted, date_processed DESC)')
                 
-                # Create function to update updated_at timestamp
-                cursor.execute('''
-                CREATE OR REPLACE FUNCTION update_updated_at_column()
-                RETURNS TRIGGER AS $$
-                BEGIN
-                    NEW.updated_at = CURRENT_TIMESTAMP;
-                    RETURN NEW;
-                END;
-                $$ LANGUAGE plpgsql;
-                ''')
-                
-                # Create trigger to automatically update updated_at
-                cursor.execute('''
-                DROP TRIGGER IF EXISTS update_bills_updated_at ON bills;
-                CREATE TRIGGER update_bills_updated_at
-                    BEFORE UPDATE ON bills
-                    FOR EACH ROW
-                    EXECUTE FUNCTION update_updated_at_column();
-                ''')
+                if not is_sqlite:
+                    cursor.execute('CREATE INDEX IF NOT EXISTS idx_bills_tweeted_processed ON bills (tweet_posted, date_processed DESC)')
+                    # Create function to update updated_at timestamp
+                    cursor.execute('''
+                    CREATE OR REPLACE FUNCTION update_updated_at_column()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        NEW.updated_at = CURRENT_TIMESTAMP;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+                    ''')
+                    
+                    # Create trigger to automatically update updated_at
+                    cursor.execute('''
+                    DROP TRIGGER IF EXISTS update_bills_updated_at ON bills;
+                    CREATE TRIGGER update_bills_updated_at
+                        BEFORE UPDATE ON bills
+                        FOR EACH ROW
+                        EXECUTE FUNCTION update_updated_at_column();
+                    ''')
 
-        logger.info("PostgreSQL tables initialized successfully")
+        logger.info("Database tables initialized successfully")
 
     except Exception as e:
-        logger.error(f"Failed to initialize PostgreSQL tables: {e}")
+        logger.error(f"Failed to initialize database tables: {e}")
         raise

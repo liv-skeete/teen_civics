@@ -93,12 +93,17 @@
     border-width: 0;
 }
 
+/* Stabilize viewport height on mobile browsers */
+html { height: -webkit-fill-available; }
+
 body {
     font-family: var(--font-family);
     line-height: 1.6;
     color: var(--color-brown-black);
     background-color: var(--color-beige);
-    min-height: 100vh;
+    min-height: 100vh;              /* legacy fallback */
+    min-height: 100svh;             /* stable viewport unit */
+    min-height: -webkit-fill-available; /* iOS Safari fallback */
     display: flex;
     flex-direction: column;
 }
@@ -114,6 +119,14 @@ body {
 }
 
 /* Typography */
+
+/* Global long-word/URL wrapping to prevent mobile overflow */
+body, .container, .summary-text, .bill-title, .meta-value, .resource-link, .page-link {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
 h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     line-height: 1.2;
@@ -149,6 +162,31 @@ a {
 
 a:hover {
     color: var(--color-brown-black);
+}
+
+/* Responsive media baseline */
+img, svg, video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Generic containment for wide content */
+pre {
+  white-space: pre-wrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+code, kbd, samp {
+  white-space: pre-wrap;
+}
+
+table {
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Focus styles for accessibility */
@@ -232,7 +270,7 @@ textarea:focus-visible {
 .nav-link {
     color: var(--color-brown-black);
     font-weight: 500;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: calc(var(--spacing-sm) + 2px) var(--spacing-md);
     border-radius: var(--border-radius);
     transition: background-color var(--transition-fast);
 }
@@ -470,8 +508,8 @@ textarea:focus-visible {
 
 /* Ensure bill title on detail page is larger than subheadings */
 .bill-detail .bill-title {
-    font-size: var(--font-size-xxxl);
-    line-height: 1.2;
+  font-size: clamp(1.5rem, 6vw, 2.5rem);
+  line-height: 1.2;
 }
 
 .bill-short-title {
@@ -618,6 +656,18 @@ textarea:focus-visible {
     padding: 0 var(--spacing-sm);
 }
 
+@media (max-width: 480px) {
+  .result-fill {
+    justify-content: flex-start;
+    padding-left: var(--spacing-xs);
+  }
+  .result-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 .total-votes {
     text-align: center;
     color: var(--color-dark-gray);
@@ -736,12 +786,94 @@ textarea:focus-visible {
     margin-bottom: var(--spacing-xl);
 }
 
-/* Filter Section */
+/* Search and Filter Section */
+.search-and-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background-color: var(--color-white);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.search-form {
+    display: flex;
+    gap: var(--spacing-md);
+    width: 100%;
+}
+
+.search-form .btn-search {
+    background-color: var(--color-gray) !important;
+    color: var(--color-brown-black) !important;
+    border: 1px solid var(--color-gray);
+    border-radius: var(--border-radius);
+    -webkit-appearance: none;
+    appearance: none;
+    box-shadow: none;
+}
+
+/* Make Clear button match Search styling inside the search header */
+.search-form .btn-clear {
+    background-color: var(--color-gray) !important;
+    color: var(--color-brown-black) !important;
+    border: 1px solid var(--color-gray);
+    border-radius: var(--border-radius);
+    -webkit-appearance: none;
+    appearance: none;
+    box-shadow: none;
+}
+
+.search-form .btn-clear:hover {
+    background-color: var(--color-dark-gray) !important;
+    color: var(--color-white) !important;
+}
+
+/* Make Clear match Search styling in the search header */
+.search-form .btn-clear {
+    background-color: var(--color-gray) !important;
+    color: var(--color-brown-black) !important;
+    border: 1px solid var(--color-gray);
+    border-radius: var(--border-radius);
+}
+
+.search-form .btn-search:hover {
+    background-color: var(--color-dark-gray) !important;
+    color: var(--color-white) !important;
+}
+
+@media (max-width: 768px) {
+    .search-form .btn-search,
+    .search-form .btn-clear {
+        width: 100%;
+        padding: 1rem 0;
+        font-size: var(--font-size-md);
+        display: inline-block;
+    }
+}
+
+.search-input {
+    flex: 1;
+    padding: 0.75rem var(--spacing-md);
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+}
+
+.btn-clear {
+    background-color: var(--color-gray);
+    color: var(--color-brown-black);
+}
+.btn-clear:hover {
+    background-color: var(--color-dark-gray);
+    color: var(--color-white);
+}
+
 .filter-section {
     display: flex;
     align-items: center;
     gap: var(--spacing-xl);
-    margin-bottom: var(--spacing-lg);
     flex-wrap: wrap;
 }
 
@@ -805,6 +937,8 @@ textarea:focus-visible {
     justify-content: center;
     gap: var(--spacing-sm);
     margin: var(--spacing-xl) 0;
+    flex-wrap: wrap;
+    row-gap: var(--spacing-sm);
 }
 
 .page-link {
@@ -814,6 +948,7 @@ textarea:focus-visible {
     color: var(--color-navy);
     text-decoration: none;
     transition: all var(--transition-fast);
+    white-space: nowrap; /* keep tokens intact while container wraps */
 }
 
 .page-link:hover {
@@ -925,7 +1060,9 @@ textarea:focus-visible {
 
 .feature-card h3 {
     color: var(--color-navy);
-    white-space: nowrap;
+    white-space: normal;          /* allow wrapping */
+    overflow-wrap: anywhere;
+    text-wrap: balance;
     text-align: center; /* Use text-align for better centering */
     display: flex;
     justify-content: center;
@@ -946,7 +1083,8 @@ textarea:focus-visible {
 }
 
 .error-content h1 {
-    font-size: 4rem;
+    font-size: clamp(2rem, 10vw, 3rem);
+    line-height: 1.1;
     color: var(--color-navy);
     margin-bottom: var(--spacing-sm);
 }
@@ -968,22 +1106,9 @@ textarea:focus-visible {
     margin-top: var(--spacing-xl);
 }
 
-.search-form {
-    display: flex;
-    gap: var(--spacing-sm);
-    margin-top: var(--spacing-md);
-    max-width: 400px;
-    margin-left: auto;
-    margin-right: auto;
-}
+/* No need for duplicate .search-form styles here */
 
-.search-input {
-    flex: 1;
-    padding: var(--spacing-sm);
-    border: var(--border-width) solid var(--border-color);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-md);
-}
+/* duplicate .search-input removed (consolidated above) */
 
 /* Footer */
 .footer {
@@ -1040,6 +1165,23 @@ textarea:focus-visible {
 }
 
 /* Responsive Design */
+
+/* Ensure ≥44px tap targets for buttons and pagination on tablet widths (769–1200px) */
+@media (min-width: 769px) and (max-width: 1200px) {
+    .btn,
+    .page-link {
+        min-height: 44px;
+    }
+}
+
+/* Ensure checkboxes meet 44px tap target on touch/tablet widths without template changes */
+@media (max-width: 1200px) {
+    input[type="checkbox"] {
+        min-width: 44px;
+        min-height: 44px;
+        vertical-align: middle; /* keep label text aligned */
+    }
+}
 @media (max-width: 768px) {
     .nav-menu {
         display: none;
@@ -1051,6 +1193,18 @@ textarea:focus-visible {
         background-color: var(--color-white);
         box-shadow: var(--shadow-md);
         padding: var(--spacing-md);
+    }
+
+    .nav-link,
+    .btn,
+    .page-link {
+        min-height: 44px;
+        padding-block: 0.75rem; /* Adjust if tokens exist: var(--spacing-sm) */
+    }
+    .nav-toggle {
+        padding: 0.75rem;
+        min-width: 44px;
+        min-height: 44px;
     }
     
     .nav-menu.active {
@@ -1089,6 +1243,17 @@ textarea:focus-visible {
     
     .search-form {
         flex-direction: column;
+    }
+    .search-and-filter-section {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .filter-section {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .filter-form, .sort-control {
+        width: 100%;
     }
 }
 
@@ -1328,50 +1493,79 @@ textarea:focus-visible {
     background: #2d333b;
     color: white;
 }
-
-.creator-profile {
-    display: grid;
-    grid-template-columns: 3fr 2fr;
-    gap: var(--spacing-xl);
-    align-items: start;
+/* About: Creator profile layout improvements */
+.creator-card .creator-profile {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: var(--spacing-xl);
+  align-items: center;
 }
 
-.creator-bio p {
-    line-height: 1.75;
-    margin-bottom: var(--spacing-md);
+.creator-card .creator-info h3 {
+  color: var(--color-navy);
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--spacing-sm);
+  text-wrap: balance;
 }
 
-.creator-img {
-    max-width: 220px;
-    width: 100%;
-    border-radius: var(--border-radius-lg);
-    box-shadow: var(--shadow-md);
-    display: block;
-    margin: 0 auto;
+.creator-card .creator-bio p {
+  margin-bottom: var(--spacing-md);
+  overflow-wrap: anywhere; /* guard against long words/handles */
 }
 
+.creator-card .creator-photo {
+  display: flex;
+  justify-content: center;
+}
+
+.creator-card .creator-img {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* Responsive adjustments for Creator section */
 @media (max-width: 992px) {
-    .creator-profile {
-        grid-template-columns: 1fr 1fr;
-    }
-    .creator-img {
-        max-width: 200px;
-    }
+  .creator-card .creator-profile {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 768px) {
-    .about-grid {
-        gap: var(--spacing-lg);
-        padding: var(--spacing-md) 0;
-    }
-    .about-card {
-        padding: var(--spacing-lg);
-    }
-    .creator-profile {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-lg);
-    }
-    .creator-img {
-        max-width: 180px;
-    }
+  .creator-card .creator-profile {
+    grid-template-columns: 1fr;
+    row-gap: var(--spacing-lg);
+  }
+  .creator-card .creator-photo {
+    order: -1; /* Photo first on mobile for visual emphasis */
+  }
+  .creator-card .creator-img {
+    max-width: 260px;
+  }
+}
+
+/* ========================================================================== */
+/* Component-specific overrides: Heading wrapping safety                       */
+/* Prevent mid-word breaks/hyphenation in headings while allowing natural wrap */
+/* ========================================================================== */
+
+/* Site-wide heading safety: prefer whole-word wrapping, allow long-word breaks if needed */
+h1, h2, h3, h4, h5, h6 {
+  hyphens: none;
+  word-break: normal;
+  overflow-wrap: break-word; /* only break very long words if absolutely necessary */
+  text-wrap: balance;        /* nicer two-line headings where supported */
+}
+
+/* Contact page heading specificity: resource cards and header */
+.resources-header h1,
+.resource-card h2 {
+  hyphens: none;
+  word-break: normal;
+  overflow-wrap: break-word;
+  white-space: normal;
+  text-wrap: balance;
 }
