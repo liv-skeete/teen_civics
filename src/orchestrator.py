@@ -48,11 +48,11 @@ def main(dry_run: bool = False) -> int:
         current_hour = current_time_et.hour
         current_minute = current_time_et.minute
         
-        # Morning scan: 9:00 AM ET with 10-minute buffer (8:50 AM - 9:10 AM ET)
-        # Evening scan: 10:30 PM ET with 10-minute buffer (10:20 PM - 10:40 PM ET)
-        if (current_hour == 8 and current_minute >= 50) or (current_hour == 9 and current_minute <= 10):
+        # Morning scan: 9:00 AM ET with 30-minute buffer (8:30 AM - 9:30 AM ET)
+        # Evening scan: 10:30 PM ET with 30-minute buffer (10:00 PM - 11:00 PM ET)
+        if (current_hour == 8 and current_minute >= 30) or (current_hour == 9 and current_minute <= 30):
             scan_type = "MORNING"
-        elif (current_hour == 22 and current_minute >= 20 and current_minute <= 40):
+        elif (current_hour == 22 and current_minute >= 0) or (current_hour == 23 and current_minute <= 0):
             scan_type = "EVENING"
         else:
             scan_type = "MANUAL"
