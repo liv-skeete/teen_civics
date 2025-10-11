@@ -5,7 +5,7 @@ This module provides functionality to fetch bills from the Congress.gov API and 
 
 import os
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import re
 import requests
 from dotenv import load_dotenv
@@ -41,105 +41,87 @@ def update_session_headers():
     })
 
 
-def fetch_bill_text_from_api(congress: str, bill_type: str, bill_number: str, api_key: str) -> tuple:
+def fetch_bill_details_from_api(congress: str, bill_type: str, bill_number: str, api_key: str) -> Dict[str, Any]:
     """
-    Fetch bill text directly from the Congress.gov API text endpoint.
-    This is more reliable than scraping as it doesn't trigger 403 errors.
+    Fetch bill details including actions from the Congress.gov API.
     
     Args:
         congress: Congress number (e.g., '119')
-        bill_type: Bill type (e.g., 'sres', 's', 'hr')
-        bill_number: Bill number (e.g., '412')
+        bill_type: Bill type (e.g., 'sjres')
+        bill_number: Bill number (e.g., '83')
         api_key: Congress.gov API key
     
     Returns:
-        Tuple of (text_content, format_type) or (None, None) if failed
+        Dictionary with bill details, including 'actions' and 'latest_action'
     """
     try:
-        # Get text versions from API
-        text_versions_url = f'https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/text?format=json'
+        base_url = f'https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}?format=json'
         if api_key:
-            text_versions_url += f'&api_key={api_key}'
+            base_url += f'&api_key={api_key}'
         
-        logger.info(f"Fetching text versions from API: {text_versions_url}")
-        response = requests.get(text_versions_url, timeout=30)
+        logger.info(f"Fetching bill details from API: {base_url}")
+        response = requests.get(base_url, timeout=30)
+        response.raise_for_status()
+        data = response.json().get('bill', {})
         
-        if response.status_code != 200:
-            logger.warning(f"Failed to fetch text versions from API: {response.status_code}")
-            return None, None
+        # Fetch actions separately if needed
+        actions_url = f'https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/actions?format=json'
+        if api_key:
+            actions_url += f'&api_key={api_key}'
+        actions_response = requests.get(actions_url, timeout=30)
+        actions_response.raise_for_status()
+        data['actions'] = actions_response.json().get('actions', [])
         
-        data = response.json()
-        text_versions = data.get('textVersions', [])
-        
-        if not text_versions:
-            logger.warning(f"No text versions available for {bill_type}{bill_number}-{congress}")
-            return None, None
-        
-        # Try each text version until we find one with substantial legislative content
-        # Some versions (like "Reported in House") may just be cover pages
-        for version_idx, version in enumerate(text_versions):
-            version_type = version.get('type', 'Unknown')
-            logger.info(f"Trying text version {version_idx + 1}/{len(text_versions)}: {version_type}")
-            
-            # Get formats available for this version
-            formats = version.get('formats', [])
-            
-            # Try to get text in order of preference: Formatted Text (HTML), XML, TXT, PDF
-            for format_type in ['Formatted Text', 'XML', 'Formatted XML', 'TXT']:
-                for fmt in formats:
-                    if fmt.get('type') == format_type:
-                        url = fmt.get('url')
-                        if url:
-                            logger.info(f"  Downloading {format_type} from: {url}")
-                            try:
-                                text_response = requests.get(url, timeout=30)
-                                if text_response.status_code == 200:
-                                    content = text_response.text
-                                    logger.info(f"  Downloaded {format_type} ({len(content)} characters)")
-                                    
-                                    # Check if this version has substantial LEGISLATIVE content
-                                    # Look for key indicators of actual bill text vs cover pages
-                                    has_sections = 'SECTION 1.' in content.upper() or 'SEC. 1.' in content.upper()
-                                    has_be_it_enacted = 'Be it enacted' in content
-                                    
-                                    if has_sections or has_be_it_enacted:
-                                        logger.info(f"✅ Found legislative content in {version_type} ({format_type})")
-                                        return content, format_type
-                                    else:
-                                        logger.info(f"  ⚠️ No legislative sections found, trying next version...")
-                            except Exception as e:
-                                logger.warning(f"  Failed to download {format_type}: {e}")
-            
-            # If no text format worked for this version, try PDF as last resort
-            for fmt in formats:
-                if fmt.get('type') == 'PDF':
-                    url = fmt.get('url')
-                    if url:
-                        logger.info(f"  Downloading PDF from: {url}")
-                        try:
-                            pdf_response = requests.get(url, timeout=30)
-                            if pdf_response.status_code == 200:
-                                # Extract text from PDF
-                                text = _extract_text_from_pdf(pdf_response.content)
-                                if text:
-                                    # Check for legislative content in PDF
-                                    has_sections = 'SECTION 1.' in text.upper() or 'SEC. 1.' in text.upper()
-                                    has_be_it_enacted = 'Be it enacted' in text
-                                    
-                                    if has_sections or has_be_it_enacted:
-                                        logger.info(f"✅ Found legislative content in {version_type} (PDF)")
-                                        return text, 'PDF'
-                                    else:
-                                        logger.info(f"  ⚠️ PDF has no legislative sections, trying next version...")
-                        except Exception as e:
-                            logger.warning(f"  Failed to download/extract PDF: {e}")
-        
-        logger.warning(f"No downloadable text format found for {bill_type}{bill_number}-{congress}")
-        return None, None
-        
+        return data
     except Exception as e:
-        logger.error(f"Error fetching bill text from API: {e}")
-        return None, None
+        logger.error(f"Error fetching bill details from API: {e}")
+        return {}
+
+def derive_tracker_from_actions(actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Derive tracker progression from bill actions.
+    
+    Args:
+        actions: List of action dictionaries from API
+        
+    Returns:
+        List of {"name": str, "selected": bool}
+    """
+    steps = [
+        {"name": "Introduced", "selected": False},
+        {"name": "Passed Senate", "selected": False},
+        {"name": "Passed House", "selected": False},
+        {"name": "To President", "selected": False},
+        {"name": "Became Law", "selected": False}
+    ]
+    
+    if not actions:
+        steps[0]['selected'] = True
+        return steps
+    
+    # Sort actions by date descending
+    sorted_actions = sorted(actions, key=lambda x: x.get('actionDate', ''), reverse=True)
+    latest_action = sorted_actions[0].get('text', '').lower()
+    
+    if "became public law" in latest_action or "signed by president" in latest_action:
+        steps[4]['selected'] = True
+    elif "passed house" in latest_action or "agreed to in house" in latest_action:
+        steps[2]['selected'] = True
+    elif "passed senate" in latest_action or "agreed to in senate" in latest_action:
+        steps[1]['selected'] = True
+    elif "to president" in latest_action:
+        steps[3]['selected'] = True
+    else:
+        steps[0]['selected'] = True
+    
+    # Mark all previous steps as completed (selected True for previous)
+    for i in range(len(steps)):
+        if steps[i]['selected']:
+            for j in range(i):
+                steps[j]['selected'] = True
+            break
+    
+    return steps
 
 def get_recent_bills(limit: int = 10, include_text: bool = False, text_chars: int = 15000) -> List[Dict[str, str]]:
     """
@@ -192,6 +174,22 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
         
         for bill in feed_bills:
             try:
+                # Fetch additional details from API
+                congress = bill.get('congress')
+                bill_type = bill.get('bill_type')
+                bill_number = bill.get('bill_number')
+                if congress and bill_type and bill_number and CONGRESS_API_KEY:
+                    details = fetch_bill_details_from_api(congress, bill_type, bill_number, CONGRESS_API_KEY)
+                    bill['latest_action'] = details.get('latestAction', {})
+                    actions = details.get('actions', [])
+                    bill['tracker'] = derive_tracker_from_actions(actions)
+                
+                # Override tracker with scraped version if available
+                if bill.get('source_url'):
+                    scraped_tracker = scrape_bill_tracker(bill['source_url'])
+                    if scraped_tracker:
+                        bill['tracker'] = scraped_tracker
+                
                 if include_text:
                     full_text = ""
                     text_source = 'none'

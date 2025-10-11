@@ -156,6 +156,87 @@ def format_date_filter(date_str: Optional[str]) -> str:
     except (ValueError, TypeError):
         return date_str
 
+@app.template_filter('format_datetime_simple')
+def format_datetime_simple_filter(date_str: Optional[str]) -> str:
+    """Format ISO datetime string into a simple format: YYYY-MM-DD HH:MM:SS"""
+    if not date_str:
+        return "Not available"
+    try:
+        # Handle datetime strings with timezone info and microseconds
+        if isinstance(date_str, str):
+            # Handle the different timestamp formats we might encounter
+            if 'T' in date_str:
+                # Handle ISO format like "2025-10-10T04:35:51.745392+00:00"
+                if '.' in date_str:
+                    # Remove microseconds
+                    date_part = date_str.split('.')[0]
+                else:
+                    date_part = date_str
+                
+                # Remove timezone info
+                if '+' in date_part:
+                    date_part = date_part.split('+')[0]
+                elif date_part.endswith('Z'):
+                    date_part = date_part[:-1]
+                
+                date_obj = datetime.fromisoformat(date_part)
+            elif '+' in date_str:
+                # Handle format like "2025-10-10 04:35:51+00" or "2025-10-10 04:35:51+00:00"
+                date_part = date_str.split('+')[0]
+                date_obj = datetime.fromisoformat(date_part)
+            elif len(date_str) == 19 and date_str[4] == '-' and date_str[7] == '-' and date_str[10] == ' ' and date_str[13] == ':' and date_str[16] == ':':
+                # Already in our target format, return as is
+                return date_str
+            else:
+                # Try to parse as datetime string
+                try:
+                    date_obj = datetime.fromisoformat(date_str)
+                except ValueError:
+                    # If that fails, try to parse with space instead of T
+                    if 'T' in date_str:
+                        fixed_str = date_str.replace('T', ' ')
+                        if '+' in fixed_str:
+                            fixed_str = fixed_str.split('+')[0]
+                        date_obj = datetime.fromisoformat(fixed_str)
+                    else:
+                        # Try to handle other formats
+                        # For "YYYY-MM-DD HH:MM:SS+00" format
+                        if '+' in date_str:
+                            date_part = date_str.split('+')[0]
+                            date_obj = datetime.fromisoformat(date_part)
+                        else:
+                            raise
+            return date_obj.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            # Handle datetime objects
+            return date_str.strftime('%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError) as e:
+        # Log the error for debugging but don't crash
+        logger.debug(f"Date formatting error for '{date_str}': {e}")
+        return str(date_str) if date_str else "Not available"
+
+@app.template_filter('format_status')
+def format_datetime_simple_filter(date_str: Optional[str]) -> str:
+    """Format ISO datetime string into a simple format: YYYY-MM-DD HH:MM:SS"""
+    if not date_str:
+        return "Not available"
+    try:
+        # Handle datetime strings with timezone info
+        if 'T' in date_str:
+            # Remove timezone info and microseconds
+            if '.' in date_str:
+                date_str = date_str.split('.')[0]
+            if '+' in date_str:
+                date_str = date_str.split('+')[0]
+            if date_str.endswith('Z'):
+                date_str = date_str[:-1]
+            date_obj = datetime.fromisoformat(date_str)
+        else:
+            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        return date_obj.strftime('%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError):
+        return date_str
+
 @app.template_filter('format_status')
 def format_status_filter(status: str) -> str:
     """Format bill status string into a more readable format."""
@@ -592,6 +673,9 @@ def get_poll_results(bill_id: str):
         return jsonify({"success": False, "error": "An error occurred while fetching poll results"}), 500
 
 if __name__ == '__main__':
+    from src.load_env import load_env
+    load_env()  # Manually load .env using custom function
+    os.environ['FLASK_SKIP_DOTENV'] = '1'  # Skip Flask's auto dotenv loading to avoid timeout
     try:
         logger.info(f"Starting Flask app on {config.flask.host}:{config.flask.port}")
         logger.info(f"Debug mode: {config.flask.debug}")

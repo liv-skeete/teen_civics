@@ -15,10 +15,8 @@ from .db import (
     get_bill_by_id,
     get_latest_bill,
     get_bill_by_slug,
-    get_bills_by_date_range,
     generate_website_slug,
     update_poll_results,
-    update_bill_summaries,
 )
 
 __all__ = [
@@ -33,5 +31,4 @@ __all__ = [
     'get_bills_by_date_range',
     'generate_website_slug',
     'update_poll_results',
-    'update_bill_summaries',
 ]

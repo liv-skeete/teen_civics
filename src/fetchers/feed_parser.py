@@ -114,79 +114,50 @@ def fetch_feed_with_browser(url: str, timeout: int = 30000) -> Optional[str]:
         return None
 
 
-def scrape_tracker_status(source_url: str) -> Optional[str]:
+def scrape_bill_tracker(source_url: str) -> Optional[List[Dict[str, any]]]:
     """
-    Scrape the tracker status from a Congress.gov bill page using Playwright.
-    
-    Args:
-        source_url: The URL to the bill page on Congress.gov
-        
-    Returns:
-        The current tracker status (e.g., "Introduced", "Passed House", "Passed Senate")
-        or None if scraping fails
+    Scrape the full bill progress tracker from a Congress.gov bill page using Playwright.
+    Returns list of {"name": str, "selected": bool}
+    or None if scraping fails
     """
     if not PLAYWRIGHT_AVAILABLE:
-        logger.warning("Playwright not available, cannot scrape tracker status")
+        logger.warning("Playwright not available, cannot scrape tracker")
         return None
-    
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            
-            # Set realistic user agent
             page.set_extra_http_headers({
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
             })
-            
             logger.debug(f"🌐 Fetching bill page for tracker: {source_url}")
             response = page.goto(source_url, timeout=15000, wait_until='networkidle')
-            
             if not response or response.status != 200:
                 logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
                 browser.close()
                 return None
-            
-            # Get the page content
             content = page.content()
             browser.close()
-            
-            # Parse with BeautifulSoup
-            soup = BeautifulSoup(content, 'lxml')
-            
-            # Method 1: Find the hide_fromsighted paragraph that contains the status
-            # This is the most reliable method as it's explicitly labeled
-            status_paragraphs = soup.find_all('p', class_='hide_fromsighted')
-            for para in status_paragraphs:
-                if para and 'This bill has the status' in para.text:
-                    # Extract status from text like "This bill has the status Passed House"
-                    status_text = para.text.replace('This bill has the status', '').strip()
-                    logger.info(f"✅ Scraped tracker status from hidden paragraph: {status_text}")
-                    return status_text
-            
-            # Method 2 (Fallback): Find the tracker section - it's an <ol> with class "bill_progress"
+            soup = BeautifulSoup(content, 'html.parser')
             tracker = soup.find('ol', class_='bill_progress')
-            
-            if tracker:
-                # Find the <li> element with class "selected" - this is the current status
-                selected_item = tracker.find('li', class_='selected')
-                
-                if selected_item:
-                    # Extract only the direct text of the <li> element, ignoring children like divs.
-                    status_text = selected_item.find(text=True, recursive=False)
-                    if status_text:
-                        status_text = status_text.strip()
-                        logger.info(f"✅ Scraped tracker status from selected li (fallback): {status_text}")
-                        return status_text
-                else:
-                    logger.warning(f"⚠️ Found tracker but no selected item on page: {source_url}")
-            else:
+            if not tracker:
                 logger.warning(f"⚠️ Could not find bill_progress tracker on page: {source_url}")
-            
-            return None
-            
+                return None
+            steps = []
+            for li in tracker.find_all('li'):
+                # Get only the direct text content, not including nested elements
+                name = li.find(text=True, recursive=False)
+                if name:
+                    name = name.strip()
+                else:
+                    # Fallback to get_text if direct text fails
+                    name = li.get_text(strip=True)
+                selected = 'selected' in li.get('class', [])
+                steps.append({"name": name, "selected": selected})
+            logger.info(f"✅ Scraped {len(steps)} tracker steps from {source_url}")
+            return steps
     except Exception as e:
-        logger.warning(f"⚠️ Failed to scrape tracker status from {source_url}: {e}")
+        logger.warning(f"⚠️ Failed to scrape tracker from {source_url}: {e}")
         return None
 
 

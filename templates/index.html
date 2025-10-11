@@ -115,7 +115,7 @@
             </div>
             <div class="meta-item">
                 <span class="meta-label">Date Processed:</span>
-                <span class="meta-value">{{ bill.date_processed|format_date }}</span>
+                <span class="meta-value">{{ bill.date_processed|format_datetime_simple }}</span>
             </div>
             <div class="meta-item">
                 <span class="meta-label">Introduced:</span>
@@ -123,7 +123,7 @@
             </div>
             <div class="meta-item">
                 <span class="meta-label">Status:</span>
-                <span class="meta-value bill-status {{ (bill.status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.status or 'Unknown' }}</span>
+                <span class="meta-value bill-status {{ (bill.normalized_status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.normalized_status|format_status or 'Unknown' }}</span>
             </div>
         </div>
     </article>

@@ -114,7 +114,7 @@
     </div>
     <div class="bills-grid">
         {% for bill in bills %}
-        <article class="bill-card" data-status="{{ bill.status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
+        <article class="bill-card" data-status="{{ bill.normalized_status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
             <div class="bill-header">
                 <h2 class="bill-title">
                     <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.title|shorten_title }}</a>
@@ -130,7 +130,7 @@
                 <div class="bill-meta">
                     <span class="bill-id">{{ bill.bill_id }}</span>
                     <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
-                    <span class="bill-status {{ (bill.status or '')|lower|replace('_', '-')|replace(' ', '-') }}">{{ bill.status|format_status }}</span>
+                    <span class="bill-status {{ (bill.normalized_status or '')|lower|replace('_', '-')|replace(' ', '-') }}">{{ bill.normalized_status|format_status }}</span>
                     {% if bill.teen_impact_score is not none %}
                     <span class="teen-impact-badge">Teen Impact: {{ bill.teen_impact_score }}/10</span>
                     {% endif %}

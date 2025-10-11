@@ -96,7 +96,9 @@ def scan():
             if not should_scan_file(fpath):
                 continue
             try:
-                text = fpath.read_text(encoding='utf-8', errors='ignore')
+                # Use a more robust reading approach to avoid pathlib issues
+                with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                    text = f.read()
             except Exception as e:
                 print(f"Skipping unreadable file: {rel} ({e})", file=sys.stderr)
                 continue

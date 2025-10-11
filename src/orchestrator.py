@@ -195,11 +195,38 @@ def main(dry_run: bool = False) -> int:
             import json
             term_dict_json = json.dumps(term_dict_obj, ensure_ascii=False, separators=(',', ':'))
             
+            # Extract latest action text from the latest_action dict
+            latest_action_dict = selected_bill.get("latest_action", {})
+            latest_action_text = latest_action_dict.get("text", "") if isinstance(latest_action_dict, dict) else str(latest_action_dict)
+            
+            # Extract tracker data
+            tracker_data = selected_bill.get("tracker")
+            
+            # Derive normalized status from tracker
+            normalized_status = "unknown"
+            if tracker_data:
+                if isinstance(tracker_data, list):
+                    # List of steps with selected flag
+                    for step in tracker_data:
+                        if step.get("selected", False):
+                            normalized_status = step["name"].lower().replace(" ", "_")
+                            break
+                elif isinstance(tracker_data, dict):
+                    # Dict with steps in 'steps' key
+                    steps = tracker_data.get("steps", [])
+                    for step in steps:
+                        if step.get("selected", False):
+                            normalized_status = step["name"].lower().replace(" ", "_")
+                            break
+            
             bill_data = {
                 "bill_id": bill_id,
                 "title": selected_bill.get("title", ""),
                 "short_title": selected_bill.get("short_title", ""),
-                "status": selected_bill.get("latest_action", ""),
+                "status": selected_bill.get("status", ""),  # Old field for backward compatibility
+                "raw_latest_action": latest_action_text,
+                "tracker_raw": tracker_data,
+                "normalized_status": normalized_status,
                 "summary_tweet": summary.get("tweet", ""),
                 "summary_long": summary.get("long", ""),
                 "summary_overview": summary.get("overview", ""),
