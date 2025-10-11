@@ -35,8 +35,12 @@ def ping_database():
         # Import psycopg2 for PostgreSQL
         import psycopg2
         
-        # Attempt connection using the full DATABASE_URL
-        conn = psycopg2.connect(database_url)
+        # Attempt connection with explicit encoding settings
+        # This fixes the "server didn't return client encoding" error
+        conn = psycopg2.connect(
+            database_url,
+            client_encoding='UTF8'
+        )
         conn.close()
         
         logger.info("✅ Database connection successful!")
