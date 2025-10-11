@@ -481,7 +481,8 @@ def build_status_filter(status: Optional[str]) -> Tuple[str, Dict[str, Any]]:
     """
     if status and status != 'all':
         normalized_status = status.lower().replace(' ', '_')
-        return "AND status = %(status)s", {'status': normalized_status}
+        # Use normalized_status column with fallback to normalized status column
+        return "AND (normalized_status = %(status)s OR REPLACE(LOWER(COALESCE(status, '')), ' ', '_') = %(status)s)", {'status': normalized_status}
     return "", {}
 
 def parse_date_range_from_query(q: str) -> Tuple[str, Optional[str], Optional[str]]:

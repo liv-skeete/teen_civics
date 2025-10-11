@@ -69,28 +69,38 @@
     <div class="search-and-filter-section">
         <form class="search-form" method="get" action="{{ url_for('archive') }}">
             <input type="search" class="search-input" name="q" value="{{ q or '' }}" placeholder="Search by bill ID, title, or keywords" aria-label="Search bills" enterkeyhint="search">
-            <input type="hidden" name="status" value="{{ status_filter if status_filter != 'all' else '' }}">
             <button id="archive-search-button" type="submit" class="btn btn-search" style="background: var(--color-gray); background-color: var(--color-gray); background-image: none; color: var(--color-brown-black); border: 1px solid var(--color-gray); box-shadow: none; text-shadow: none; -webkit-appearance: none; appearance: none;">Search</button>
             {% if q %}
             <a href="{{ url_for('archive', status=status_filter if status_filter != 'all' else None) }}" class="btn btn-clear">Clear</a>
             {% endif %}
+            <div class="filter-form">
+                <label for="status-filter">Filter by status:</label>
+                <select name="status" id="status-filter">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+                    <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
+                    <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+                    <option value="committee_consideration" {% if status_filter == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
+                    <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
+                    <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
+                    <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
+                    <option value="failed_house" {% if status_filter == 'failed_house' %}selected{% endif %}>Failed House</option>
+                    <option value="failed_senate" {% if status_filter == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
+                    <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
+                    <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
+                </select>
+            </div>
         </form>
-        <div class="filter-form">
-            <label for="status-filter">Filter by status:</label>
-            <select name="status" id="status-filter">
-                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
-                <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
-                <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
-                <option value="committee_consideration" {% if status_filter == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
-                <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
-                <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
-                <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
-                <option value="failed_house" {% if status_filter == 'failed_house' %}selected{% endif %}>Failed House</option>
-                <option value="failed_senate" {% if status_filter == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
-                <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
-                <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
-            </select>
-        </div>
+        <script>
+            // Submit form when status filter changes
+            document.addEventListener('DOMContentLoaded', function() {
+                var statusFilter = document.getElementById('status-filter');
+                if (statusFilter) {
+                    statusFilter.addEventListener('change', function() {
+                        this.form.submit();
+                    });
+                }
+            });
+        </script>
         <div class="sort-control">
             <label for="sort-by-impact">
                 <input type="checkbox" id="sort-by-impact" name="sort-by-impact">
@@ -227,4 +237,6 @@
         {% endif %}
     </div>
     {% endif %}
+    <script>
+    </script>
 {% endblock %}
