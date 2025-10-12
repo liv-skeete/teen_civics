@@ -114,21 +114,119 @@ def fetch_feed_with_browser(url: str, timeout: int = 30000) -> Optional[str]:
         return None
 
 
-def scrape_bill_tracker(source_url: str) -> Optional[List[Dict[str, any]]]:
+def scrape_bill_tracker(source_url: str, browser_context=None) -> Optional[List[Dict[str, any]]]:
     """
     Scrape the full bill progress tracker from a Congress.gov bill page using Playwright.
     Returns list of {"name": str, "selected": bool}
     or None if scraping fails
+    
+    Args:
+        source_url: The URL of the bill page
+        browser_context: An existing Playwright browser context to reuse (optional)
     """
     if not PLAYWRIGHT_AVAILABLE:
         logger.warning("Playwright not available, cannot scrape tracker")
         return None
+    
+    # If a browser context is provided, use it; otherwise create a new one
+    should_close_browser = browser_context is None
     try:
+        if browser_context is None:
+            from playwright.sync_api import sync_playwright
+            p = sync_playwright().start()
+            browser = p.chromium.launch(headless=True)
+            browser_context = browser.new_context()
+        
+        page = browser_context.new_page()
+        # Set realistic user agent and headers
+        page.set_extra_http_headers({
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
+            'DNT': '1',
+            'Referer': 'https://www.congress.gov/'
+        })
+        logger.debug(f"🌐 Fetching bill page for tracker: {source_url}")
+        # Add a small delay to help with anti-bot measures
+        import time
+        time.sleep(1)
+        response = page.goto(source_url, timeout=15000, wait_until='networkidle')
+        if not response or response.status != 200:
+            logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
+            if should_close_browser:
+                browser_context.close()
+                if 'p' in locals():
+                    p.stop()
+            return None
+        content = page.content()
+        soup = BeautifulSoup(content, 'html.parser')
+        tracker = soup.find('ol', class_='bill_progress')
+        if not tracker:
+            logger.warning(f"⚠️ Could not find bill_progress tracker on page: {source_url}")
+            if should_close_browser:
+                browser_context.close()
+                if 'p' in locals():
+                    p.stop()
+            return None
+        steps = []
+        for li in tracker.find_all('li'):
+            # Get only the direct text content, not including nested elements
+            name = li.find(text=True, recursive=False)
+            if name:
+                name = name.strip()
+            else:
+                # Fallback to get_text if direct text fails
+                name = li.get_text(strip=True)
+            selected = 'selected' in li.get('class', [])
+            steps.append({"name": name, "selected": selected})
+        logger.info(f"✅ Scraped {len(steps)} tracker steps from {source_url}")
+        if should_close_browser:
+            browser_context.close()
+            if 'p' in locals():
+                p.stop()
+        return steps
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to scrape tracker from {source_url}: {e}")
+        if should_close_browser and 'browser_context' in locals():
+            browser_context.close()
+            if 'p' in locals():
+                p.stop()
+        return None
+
+def scrape_multiple_bill_trackers(source_urls: List[str]) -> Dict[str, Optional[List[Dict[str, any]]]]:
+    """
+    Scrape multiple bill progress trackers from Congress.gov bill pages using a single browser session.
+    
+    Args:
+        source_urls: List of URLs to bill pages
+        
+    Returns:
+        Dictionary mapping source_url to tracker data (list of steps)
+    """
+    if not PLAYWRIGHT_AVAILABLE:
+        logger.warning("Playwright not available, cannot scrape trackers")
+        return {url: None for url in source_urls}
+    
+    results = {}
+    try:
+        from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            # Set realistic user agent and headers
-            page.set_extra_http_headers({
+            context = browser.new_context()
+            
+            # Set realistic user agent and headers for the context
+            context.set_extra_http_headers({
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
                 'Accept-Language': 'en-US,en;q=0.9',
@@ -146,38 +244,28 @@ def scrape_bill_tracker(source_url: str) -> Optional[List[Dict[str, any]]]:
                 'DNT': '1',
                 'Referer': 'https://www.congress.gov/'
             })
-            logger.debug(f"🌐 Fetching bill page for tracker: {source_url}")
-            # Add a small delay to help with anti-bot measures
-            import time
-            time.sleep(1)
-            response = page.goto(source_url, timeout=15000, wait_until='networkidle')
-            if not response or response.status != 200:
-                logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
-                browser.close()
-                return None
-            content = page.content()
+            
+            for url in source_urls:
+                try:
+                    # Reuse the same browser context for all requests
+                    results[url] = scrape_bill_tracker(url, context)
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to scrape tracker from {url}: {e}")
+                    results[url] = None
+            
             browser.close()
-            soup = BeautifulSoup(content, 'html.parser')
-            tracker = soup.find('ol', class_='bill_progress')
-            if not tracker:
-                logger.warning(f"⚠️ Could not find bill_progress tracker on page: {source_url}")
-                return None
-            steps = []
-            for li in tracker.find_all('li'):
-                # Get only the direct text content, not including nested elements
-                name = li.find(text=True, recursive=False)
-                if name:
-                    name = name.strip()
-                else:
-                    # Fallback to get_text if direct text fails
-                    name = li.get_text(strip=True)
-                selected = 'selected' in li.get('class', [])
-                steps.append({"name": name, "selected": selected})
-            logger.info(f"✅ Scraped {len(steps)} tracker steps from {source_url}")
-            return steps
+            
     except Exception as e:
-        logger.warning(f"⚠️ Failed to scrape tracker from {source_url}: {e}")
-        return None
+        logger.error(f"❌ Failed to create browser context for scraping: {e}")
+        # Fallback to individual scraping if context creation fails
+        for url in source_urls:
+            try:
+                results[url] = scrape_bill_tracker(url)
+            except Exception as e2:
+                logger.warning(f"⚠️ Failed to scrape tracker from {url} (fallback): {e2}")
+                results[url] = None
+    
+    return results
 
 
 def scrape_tracker_status(source_url: str) -> Optional[str]:

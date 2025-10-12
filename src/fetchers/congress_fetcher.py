@@ -259,10 +259,16 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                     bill['tracker'] = derive_tracker_from_actions(actions)
                 
                 # Override tracker with scraped version if available
-                if bill.get('source_url'):
-                    scraped_tracker = scrape_bill_tracker(bill['source_url'])
-                    if scraped_tracker:
-                        bill['tracker'] = scraped_tracker
+                # Collect all source URLs first for batch scraping
+                source_urls = [bill.get('source_url') for bill in feed_bills if bill.get('source_url')]
+                if source_urls:
+                    from .feed_parser import scrape_multiple_bill_trackers
+                    scraped_trackers = scrape_multiple_bill_trackers(source_urls)
+                    
+                    # Update each bill with its scraped tracker
+                    for bill in feed_bills:
+                        if bill.get('source_url') and scraped_trackers.get(bill['source_url']):
+                            bill['tracker'] = scraped_trackers[bill['source_url']]
                 
                 if include_text:
                     full_text = ""
