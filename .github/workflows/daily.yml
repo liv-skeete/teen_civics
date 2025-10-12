@@ -90,6 +90,10 @@ jobs:
         pip install psycopg2-binary
         # Install timezone support
         pip install pytz
+        
+    - name: Install Playwright browsers
+      run: |
+        playwright install --with-deps
 
     - name: Setup environment variables
       run: |

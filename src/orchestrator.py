@@ -12,6 +12,7 @@ TODO: Future improvements (SAVE FOR LATER):
 import os
 import sys
 import logging
+import json
 from typing import Dict, Any
 
 # Configure logging
@@ -224,7 +225,7 @@ def main(dry_run: bool = False) -> int:
                 "short_title": selected_bill.get("short_title", ""),
                 "status": selected_bill.get("status", ""),  # Old field for backward compatibility
                 "raw_latest_action": latest_action_text,
-                "tracker_raw": tracker_data,
+                "tracker_raw": json.dumps(tracker_data) if tracker_data else None,
                 "normalized_status": normalized_status,
                 "summary_tweet": summary.get("tweet", ""),
                 "summary_long": summary.get("long", ""),
