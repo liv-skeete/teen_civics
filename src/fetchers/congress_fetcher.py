@@ -15,7 +15,7 @@ import fitz  # PyMuPDF
 from datetime import datetime
 
 # Import headers from feed_parser to avoid 403 errors
-from .feed_parser import HEADERS, USER_AGENTS, get_random_user_agent
+from .feed_parser import HEADERS, USER_AGENTS, get_random_user_agent, scrape_bill_tracker
 import time
 import random
 
