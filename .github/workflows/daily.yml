@@ -94,6 +94,10 @@ jobs:
     - name: Install Playwright browsers
       run: |
         playwright install --with-deps
+        
+    - name: Verify Playwright installation
+      run: |
+        python -c "from playwright.sync_api import sync_playwright; print('Playwright is correctly installed')"
 
     - name: Setup environment variables
       run: |

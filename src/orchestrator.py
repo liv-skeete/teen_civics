@@ -202,22 +202,33 @@ def main(dry_run: bool = False) -> int:
             # Extract tracker data
             tracker_data = selected_bill.get("tracker")
             
-            # Derive normalized status from tracker
+            # Derive normalized status from tracker and ensure proper serialization
             normalized_status = "unknown"
+            tracker_raw_serialized = None
+            
             if tracker_data:
-                if isinstance(tracker_data, list):
-                    # List of steps with selected flag
-                    for step in tracker_data:
-                        if step.get("selected", False):
-                            normalized_status = step["name"].lower().replace(" ", "_")
-                            break
-                elif isinstance(tracker_data, dict):
-                    # Dict with steps in 'steps' key
-                    steps = tracker_data.get("steps", [])
-                    for step in steps:
-                        if step.get("selected", False):
-                            normalized_status = step["name"].lower().replace(" ", "_")
-                            break
+                try:
+                    # Try to serialize tracker_data to JSON string
+                    tracker_raw_serialized = json.dumps(tracker_data)
+                    
+                    # Derive normalized status from tracker
+                    if isinstance(tracker_data, list):
+                        # List of steps with selected flag
+                        for step in tracker_data:
+                            if step.get("selected", False):
+                                normalized_status = step["name"].lower().replace(" ", "_")
+                                break
+                    elif isinstance(tracker_data, dict):
+                        # Dict with steps in 'steps' key
+                        steps = tracker_data.get("steps", [])
+                        for step in steps:
+                            if step.get("selected", False):
+                                normalized_status = step["name"].lower().replace(" ", "_")
+                                break
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"Failed to serialize tracker_data for bill {bill_id}: {e}")
+                    # Set to None if serialization fails
+                    tracker_raw_serialized = None
             
             bill_data = {
                 "bill_id": bill_id,
@@ -225,7 +236,7 @@ def main(dry_run: bool = False) -> int:
                 "short_title": selected_bill.get("short_title", ""),
                 "status": selected_bill.get("status", ""),  # Old field for backward compatibility
                 "raw_latest_action": latest_action_text,
-                "tracker_raw": json.dumps(tracker_data) if tracker_data else None,
+                "tracker_raw": tracker_raw_serialized,
                 "normalized_status": normalized_status,
                 "summary_tweet": summary.get("tweet", ""),
                 "summary_long": summary.get("long", ""),
