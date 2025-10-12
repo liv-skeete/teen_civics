@@ -1,0 +1,143 @@
+name: Daily TeenCivics Bill Posting
+
+on:
+  schedule:
+    # Morning scan: 9:00 AM EDT = 1:00 PM UTC (13:00 UTC) during summer
+    # Note: During EST (winter), this runs at 8:00 AM ET
+    - cron: '0 13 * * *'
+    # Evening scan: 10:30 PM EDT = 2:30 AM UTC next day (02:30 UTC) during summer
+    # Note: During EST (winter), this runs at 9:30 PM ET
+    - cron: '30 2 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Secret scan
+      run: |
+        python scripts/secret_scan.py
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install psycopg2-binary python-dotenv
+
+    - name: Ping database
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 5
+        max_attempts: 3
+        retry_wait_seconds: 30
+        command: |
+          python - <<'PY'
+          import os, sys
+          import psycopg2
+          
+          dsn = os.environ.get("DATABASE_URL")
+          if not dsn:
+              print("DATABASE_URL not set", file=sys.stderr)
+              sys.exit(1)
+          
+          try:
+              conn = psycopg2.connect(dsn, connect_timeout=10, sslmode="require")
+              with conn.cursor() as cur:
+                  cur.execute("SELECT 1;")
+                  print("Database reachable")
+              conn.close()
+          except Exception as e:
+              print(f"Database ping failed: {e}", file=sys.stderr)
+              sys.exit(1)
+          PY
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "❌ Database ping failed after retries"
+        echo "::error::Database connectivity check failed. Please verify DATABASE_URL secret and database availability."
+
+  post-bill:
+    runs-on: ubuntu-latest
+    needs: ping-database
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        # Install PostgreSQL driver
+        pip install psycopg2-binary
+        # Install timezone support
+        pip install pytz
+
+    - name: Setup environment variables
+      run: |
+        echo "TESTING=false" >> $GITHUB_ENV
+
+    - name: Run daily bill posting
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 25
+        max_attempts: 2
+        retry_wait_seconds: 60
+        command: |
+          echo "🚀 Starting daily bill posting workflow"
+          echo "⏰ Current UTC time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "⏰ Current ET time: $(TZ='America/New_York' date '+%Y-%m-%d %I:%M:%S %p ET')"
+          
+          # Determine which scan this is
+          HOUR_ET=$(TZ='America/New_York' date '+%H')
+          if [ "$HOUR_ET" -ge 8 ] && [ "$HOUR_ET" -lt 12 ]; then
+            echo "☀️ Running MORNING scan (9 AM ET)"
+          elif [ "$HOUR_ET" -ge 21 ] || [ "$HOUR_ET" -lt 2 ]; then
+            echo "🌙 Running EVENING scan (10:30 PM ET)"
+          else
+            echo "🔧 Running MANUAL scan"
+          fi
+          
+          # Run the orchestrator
+          python src/orchestrator.py
+      env:
+        CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+        TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+        TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+        TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+        TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "❌ Daily bill posting failed after retries"
+        echo "::error::Bill posting workflow failed. Check logs for details."
+
+    - name: Archive logs (if exists)
+      if: always()
+      run: |
+        if [ -f orchestrator.log ]; then
+          echo "📋 Archiving orchestrator log..."
+          cp orchestrator.log orchestrator_$(date +%Y%m%d_%H%M%S).log
+        fi

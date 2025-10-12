@@ -1,0 +1,17 @@
+# Development and Testing Dependencies for TeenCivics
+# Install with: pip install -r requirements-dev.txt
+
+# Testing frameworks
+pytest==8.2.0
+pytest-cov==4.1.0
+
+# Browser automation for testing
+playwright>=1.40.0
+
+# Code quality tools
+flake8==7.0.0
+black==24.3.0
+mypy==1.9.0
+
+# Development utilities
+ipython==8.22.0

@@ -1,0 +1,16 @@
+requests==2.31.0
+tweepy>=4.15.0
+python-dotenv==1.0.0
+feedparser==6.0.10
+anthropic==0.25.4
+httpx<0.28
+Flask==3.0.0
+Flask-Limiter==3.5.0
+Flask-WTF==1.2.1
+beautifulsoup4==4.12.3
+lxml==5.1.0
+PyMuPDF>=1.25.1
+pdfminer.six==20231228
+regex==2024.5.15
+psycopg2-binary==2.9.10
+pytz==2024.1
