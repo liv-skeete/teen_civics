@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Contact - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="resources-header">
+    <h1>Contact</h1>
+    <p>We'd love to hear from you. Follow us and share feedback.</p>
+  </div>
+
+  <div class="resources-grid">
+    <!-- X/Twitter: daily updates -->
+    <div class="resource-card">
+      <h2>🔔 X (Twitter) </h2>
+      <p>We post daily updates about bills fetched from Congress.gov.</p>
+      <div class="resource-links">
+        <a href="https://x.com/TeenCivics" target="_blank" rel="noopener" class="resource-link">
+          Follow @TeenCivics on X
+        </a>
+      </div>
+    </div>
+
+    <!-- Feedback form -->
+    <div class="resource-card">
+      <h2>📝 Feedback</h2>
+      <p>Have ideas, suggestions, or found a bug? Send us your feedback.</p>
+      <div class="resource-links">
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdEJ36im-9qby_fmNBFCQHRTNUWFZpo_OMGyXtsqLA6QnNeqQ/viewform?usp=header" target="_blank" rel="noopener" class="resource-link">
+          Open Feedback Form
+        </a>
+      </div>
+    </div>
+
+    <!-- Professional inquiries -->
+    <div class="resource-card">
+      <h2>✉️ Professional Inquiries</h2>
+      <p>Media, partnerships, or other professional inquiries.</p>
+      <div class="resource-links">
+        <a href="mailto:contact@teencivics.org" class="resource-link">contact@teencivics.org</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

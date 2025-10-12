@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{# Updated poll results design - 2025-10-03 #}
+
+{% block title %}Bill Archive - TeenCivics{% endblock %}
+
+{% block content %}
+<style>
+    /* Keep existing poll progress widths */
+    .poll-results .yes-fill { width: var(--yes-width, 0%); }
+    .poll-results .no-fill { width: var(--no-width, 0%); }
+
+    /* Force grey Search button on all devices (esp. iOS Safari) */
+    .search-form .btn-search {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        background: var(--color-gray) !important;
+        background-image: none !important;
+        color: var(--color-brown-black) !important;
+        border: 1px solid var(--color-gray) !important;
+        box-shadow: none !important;
+        border-radius: var(--border-radius);
+    }
+    .search-form .btn-search:hover {
+        background: var(--color-dark-gray) !important;
+        color: var(--color-white) !important;
+    }
+    /* Strong ID-based override to force grey on iOS Safari */
+    #archive-search-button,
+    #archive-search-button:hover,
+    #archive-search-button:active,
+    #archive-search-button:focus {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        background: var(--color-gray) !important;
+        background-color: var(--color-gray) !important;
+        background-image: none !important;
+        color: var(--color-brown-black) !important;
+        border: 1px solid var(--color-gray) !important;
+        border-radius: var(--border-radius);
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+    /* WebKit safeguard */
+    @supports (-webkit-touch-callout: none) {
+        .search-form .btn-search {
+            -webkit-appearance: none !important;
+            appearance: none !important;
+        }
+    }
+    /* Restore stacked layout and full-width button on mobile */
+    @media (max-width: 768px) {
+        .search-form {
+            flex-direction: column;
+        }
+        .search-form .btn-search {
+            width: 100% !important;
+            padding: var(--spacing-md) 0 !important;
+            font-size: var(--font-size-md);
+        }
+    }
+</style>
+<div class="container">
+    <div class="archive-header">
+        <h1>Bill Archive</h1>
+        <p>Browse all congressional bills summarized by TeenCivics</p>
+    </div>
+
+    <!-- Search and Filter Section -->
+    <div class="search-and-filter-section">
+        <form class="search-form" method="get" action="{{ url_for('archive') }}">
+            <input type="search" class="search-input" name="q" value="{{ q or '' }}" placeholder="Search by bill ID, title, or keywords" aria-label="Search bills" enterkeyhint="search">
+            <button id="archive-search-button" type="submit" class="btn btn-search" style="background: var(--color-gray); background-color: var(--color-gray); background-image: none; color: var(--color-brown-black); border: 1px solid var(--color-gray); box-shadow: none; text-shadow: none; -webkit-appearance: none; appearance: none;">Search</button>
+            {% if q %}
+            <a href="{{ url_for('archive', status=status_filter if status_filter != 'all' else None) }}" class="btn btn-clear">Clear</a>
+            {% endif %}
+            <div class="filter-form">
+                <label for="status-filter">Filter by status:</label>
+                <select name="status" id="status-filter">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+                    <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
+                    <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+                    <option value="committee_consideration" {% if status_filter == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
+                    <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
+                    <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
+                    <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
+                    <option value="failed_house" {% if status_filter == 'failed_house' %}selected{% endif %}>Failed House</option>
+                    <option value="failed_senate" {% if status_filter == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
+                    <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
+                    <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
+                </select>
+            </div>
+        </form>
+        <script>
+            // Submit form when status filter changes
+            document.addEventListener('DOMContentLoaded', function() {
+                var statusFilter = document.getElementById('status-filter');
+                if (statusFilter) {
+                    statusFilter.addEventListener('change', function() {
+                        this.form.submit();
+                    });
+                }
+            });
+        </script>
+        <div class="sort-control">
+            <label for="sort-by-impact">
+                <input type="checkbox" id="sort-by-impact" name="sort-by-impact">
+                Sort by Teen Impact Score
+            </label>
+        </div>
+    </div>
+
+    {% if error or error_message %}
+    <div class="error-message">
+        <p>{{ error or error_message }}</p>
+    </div>
+    {% endif %}
+
+    {% if bills %}
+    <div class="results-summary">
+        {% if total_results > 0 %}
+            Showing {{ ((current_page - 1) * page_size) + 1 }}–{{ ((current_page - 1) * page_size) + bills|length }} of {{ total_results }} results
+            {% if q %} for "<strong>{{ q }}</strong>"{% endif %}.
+        {% endif %}
+    </div>
+    <div class="bills-grid">
+        {% for bill in bills %}
+        <article class="bill-card" data-status="{{ bill.normalized_status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
+            <div class="bill-header">
+                <h2 class="bill-title">
+                    <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.title|shorten_title }}</a>
+                </h2>
+                {% if bill.title|length > 80 %}
+                <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
+                {% endif %}
+                {% if bill.short_title %}
+                <h3 class="bill-short-title">{{ bill.short_title }}</h3>
+                {% endif %}
+                
+                <!-- Bill metadata moved here -->
+                <div class="bill-meta">
+                    <span class="bill-id">{{ bill.bill_id }}</span>
+                    <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
+                    <span class="bill-status {{ (bill.normalized_status or '')|lower|replace('_', '-')|replace(' ', '-') }}">{{ bill.normalized_status|format_status }}</span>
+                    {% if bill.teen_impact_score is not none %}
+                    <span class="teen-impact-badge">Teen Impact: {{ bill.teen_impact_score }}/10</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="bill-content">
+                <div class="summary-preview">
+                    {{ bill.summary_tweet|truncate(200) }}
+                </div>
+                
+                <br>
+                
+                <div class="bill-actions">
+                    <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}" class="btn btn-primary btn-small">
+                        Read Summary
+                    </a>
+                    {% if bill.tweet_url %}
+                    <a href="{{ bill.tweet_url }}" target="_blank" rel="noopener" class="btn btn-twitter btn-small">
+                        View Tweet
+                    </a>
+                    {% endif %}
+                </div>
+
+                {% if bill.poll_results_yes is defined or bill.poll_results_no is defined %}
+                <div class="poll-preview">
+                    <h4>Community Poll</h4>
+                    {% set total_votes = (bill.poll_results_yes or 0) + (bill.poll_results_no or 0) %}
+                    {% if total_votes > 0 %}
+                        {% set yes_percentage = ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) %}
+                        {% set no_percentage = ((bill.poll_results_no or 0) / total_votes * 100)|round(1) %}
+                        <div class="poll-results" style="--yes-width: {{ yes_percentage }}%; --no-width: {{ no_percentage }}%;">
+                            <div class="poll-option">
+                                <span class="poll-label">Yes</span>
+                                <div class="poll-bar">
+                                    <div class="poll-fill yes-fill"></div>
+                                </div>
+                                <span class="poll-percentage">{{ yes_percentage }}%</span>
+                            </div>
+                            <div class="poll-option">
+                                <span class="poll-label">No</span>
+                                <div class="poll-bar">
+                                    <div class="poll-fill no-fill"></div>
+                                </div>
+                                <span class="poll-percentage">{{ no_percentage }}%</span>
+                            </div>
+                            <p class="poll-total">{{ total_votes }} total vote{{ 's' if total_votes != 1 else '' }}</p>
+                        </div>
+                    {% else %}
+                        <p class="no-votes">No votes yet</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if current_page > 1 %}
+        <a href="{{ url_for('archive', page=current_page - 1, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link prev">
+            ← Previous
+        </a>
+        {% endif %}
+
+        {% for page_num in range(1, total_pages + 1) %}
+            {% if page_num == current_page %}
+            <span class="page-link current">{{ page_num }}</span>
+            {% else %}
+            <a href="{{ url_for('archive', page=page_num, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link">
+                {{ page_num }}
+            </a>
+            {% endif %}
+        {% endfor %}
+
+        {% if current_page < total_pages %}
+        <a href="{{ url_for('archive', page=current_page + 1, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link next">
+            Next →
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="no-bills-message">
+        <h2>No Results Found</h2>
+        {% if q %}
+            <p>No bills found for your search query "<strong>{{ q }}</strong>".</p>
+            <a href="{{ url_for('archive', status=status_filter if status_filter != 'all' else None) }}" class="btn btn-primary">Clear Search</a>
+        {% else %}
+            <p>No bills available in the archive yet.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+    <script>
+    </script>
+{% endblock %}

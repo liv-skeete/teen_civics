@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Educational Resources - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="resources-header">
+        <h1>Educational Resources</h1>
+        <p>Learn more about how the U.S. government works and how you can get involved</p>
+    </div>
+
+    <div class="resources-grid">
+        <!-- 1) How a Bill Becomes a Law -->
+        <div class="resource-card">
+            <h2>📜 How a Bill Becomes a Law</h2>
+            <p>Understand the step-by-step process of how ideas become laws in the United States.</p>
+            <div class="resource-links">
+                <a href="https://www.usa.gov/how-laws-are-made" target="_blank" rel="noopener" class="resource-link">
+                    USA.gov Guide
+                </a>
+                <a href="https://www.congress.gov/help/learn-about-the-legislative-process" target="_blank" rel="noopener" class="resource-link">
+                    Congress.gov Learning Center
+                </a>
+            </div>
+        </div>
+
+        <!-- 2) Understanding Government -->
+        <div class="resource-card">
+            <h2>🏛️ Understanding Government</h2>
+            <p>Special resources designed for students learning about government.</p>
+            <div class="resource-links">
+                <a href="https://www.khanacademy.org/humanities/us-government-and-civics" target="_blank" rel="noopener" class="resource-link">
+                    Khan Academy Civics
+                </a>
+                <a href="https://www.icivics.org/" target="_blank" rel="noopener" class="resource-link">
+                    iCivics
+                </a>
+            </div>
+        </div>
+
+        <!-- 3) Register to Vote -->
+        <div class="resource-card">
+            <h2>✅ Register to Vote</h2>
+            <p>Prepare to vote and learn about the registration process.</p>
+            <div class="resource-links">
+                <a href="https://www.vote.org/" target="_blank" rel="noopener" class="resource-link">
+                    Vote.org
+                </a>
+                <a href="https://www.rockthevote.org/" target="_blank" rel="noopener" class="resource-link">
+                    Rock the Vote
+                </a>
+            </div>
+        </div>
+
+        <!-- 4) Stay Informed -->
+        <div class="resource-card">
+            <h2>📰 Stay Informed</h2>
+            <p>Stay informed about what's happening in government and politics.</p>
+            <div class="resource-links">
+                <a href="https://ground.news" target="_blank" rel="noopener" class="resource-link">
+                    Ground News
+                </a>
+                <a href="https://www.c-span.org/" target="_blank" rel="noopener" class="resource-link">
+                    C-SPAN
+                </a>
+            </div>
+        </div>
+
+        <!-- 5) Engage & Explore -->
+        <div class="resource-card">
+            <h2>🙌 Engage & Explore</h2>
+            <p>Take action in your community and explore your civic perspective.</p>
+            <div class="resource-links">
+                <a href="https://www.dosomething.org" target="_blank" rel="noopener" class="resource-link">
+                    DoSomething.org
+                </a>
+                <a href="https://www.pewresearch.org/politics/quiz/political-typology/?group=f59f3d84036f699747c2f205b4cb3675" target="_blank" rel="noopener" class="resource-link">
+                    Pew Political Typology Quiz
+                </a>
+            </div>
+        </div>
+
+        <!-- 6) Contact Government -->
+        <div class="resource-card">
+            <h2>📞 Contact Your Representatives</h2>
+            <p>Find and contact your elected officials to share your opinions.</p>
+            <div class="resource-links">
+                <a href="https://www.usa.gov/elected-officials" target="_blank" rel="noopener" class="resource-link">
+                    Find Your Representatives
+                </a>
+                <a href="https://www.house.gov/representatives/find-your-representative" target="_blank" rel="noopener" class="resource-link">
+                    Find Your House Representative
+                </a>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="additional-info">
+        <h2>Why Civic Education Matters</h2>
+        <div class="info-content">
+            <p>Civic education helps you understand how decisions are made in our democracy and how you can participate. 
+            By learning about government and current issues, you become better prepared to:</p>
+            
+            <ul>
+                <li>Make informed decisions when you vote</li>
+                <li>Understand how laws affect your daily life</li>
+                <li>Participate in community discussions</li>
+                <li>Advocate for issues you care about</li>
+                <li>Become an active, engaged citizen</li>
+            </ul>
+            
+            <p>Remember: You don't have to wait until you're 18 to start learning about government and making a difference!</p>
+        </div>
+    </div>
+
+    <div class="cta-section">
+        <h2>Ready to Get Involved?</h2>
+        <p>Start by exploring the bills on our site and sharing your opinions through our polls.</p>
+        <div class="cta-buttons">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">View Latest Bill</a>
+            <a href="{{ url_for('archive') }}" class="btn btn-secondary">Browse Archive</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

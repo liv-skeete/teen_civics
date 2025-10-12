@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Page Not Found - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container error-container">
+    <div class="error-content">
+        <h1>404</h1>
+        <h2>Page Not Found</h2>
+        <p>Sorry, the page you're looking for doesn't exist.</p>
+        <p>It might have been moved, deleted, or you may have typed the wrong URL.</p>
+        
+        <div class="error-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Go Home</a>
+            <a href="{{ url_for('archive') }}" class="btn btn-secondary">Browse Bills</a>
+            <a href="{{ url_for('resources') }}" class="btn btn-secondary">View Resources</a>
+        </div>
+
+        <div class="error-search">
+            <p>Or try searching for a specific bill:</p>
+            <form action="{{ url_for('archive') }}" method="GET" class="search-form">
+                <label for="search-input" class="visually-hidden">Search bills</label>
+                <input type="search" id="search-input" name="search" placeholder="Search bills..." class="search-input" enterkeyhint="search">
+                <button type="submit" class="btn btn-primary">Search</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

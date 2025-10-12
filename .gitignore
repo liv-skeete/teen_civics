@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pye
+
+# Log files
+*.log
+*.pid
+dev-start.log
+dev-start.pid
+migration.log
+orchestrator_run.log
+run_orchestrator.log
+
+# Environments
+.env
+.env.local
+.env.*.local
+venv/
+ENV/
+.venv*
+venv*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Databases / Data
+# Note: Database files should not be tracked in Git.
+# Use a managed database service for production and local database for development.
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+data/bills.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Environment variables
+.env
+
+# Instance folder
+/instance/

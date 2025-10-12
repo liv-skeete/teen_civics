@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ bill.title }} - TeenCivics
+{% endblock %}
+
+{% block meta_description %}AI summary of {{ bill.title }}. See key points, status, and vote in the community poll.{% endblock %}
+{% block og_title %}{{ bill.title }} - TeenCivics{% endblock %}
+{% block og_description %}AI summary of {{ bill.title }} with key points and community poll.{% endblock %}
+{% block og_url %}{{ request.url }}{% endblock %}
+{% block og_image %}https://teencivics.org/api/og-image/{{ bill.bill_id }}{% endblock %}
+{% block twitter_title %}{{ bill.title }} - TeenCivics{% endblock %}
+{% block twitter_description %}AI summary of {{ bill.title }} with key points and community poll.{% endblock %}
+{% block twitter_image %}https://teencivics.org/api/og-image/{{ bill.bill_id }}{% endblock %}
+
+{% block content %}
+<div class="container bill-detail">
+    <article class="bill-card">
+        <div class="bill-header">
+            <h2 class="bill-title">{{ bill.title|shorten_title }}</h2>
+            {% if bill.title|length > 80 %}
+            <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
+            {% endif %}
+            {% if bill.short_title %}
+            <h3 class="bill-short-title">{{ bill.short_title }}</h3>
+            {% endif %}
+        </div>
+
+        <div class="bill-content">
+            <!-- Term Dictionary Section -->
+            <div class="term-dictionary-section">
+                <h3>Term Dictionary</h3>
+                <div class="term-dictionary-content">
+                    {# Hide term dictionary definitions for visual appeal - keep only educational resources #}
+                    
+                    <div class="term-resources">
+                        <p><em>If you come across any unfamiliar words while reading, these resources can help make everything clearer. Pick whichever one works best for you!</em></p>
+                        <ul>
+                            <li><a href="https://www.congress.gov/help/legislative-glossary" target="_blank" rel="noopener">📚 Congress.gov Legislative Glossary</a> - Comprehensive congressional terms</li>
+                            <li><a href="https://www.nvfc.org/glossary-of-congressional-terms/" target="_blank" rel="noopener">📖 NVFC Congressional Terms Glossary</a> - Concise, easy-to-understand definitions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary-section">
+                <h3>Summary</h3>
+                <div class="summary-text">
+                    {% if bill.summary_overview or bill.summary_detailed %}
+                        {% if bill.summary_overview %}
+                            <p>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</p>
+                        {% endif %}
+                        {% if bill.summary_detailed %}
+                            <div>{{ bill.summary_detailed|format_detailed_html }}</div>
+                        {% else %}
+                            <div>{{ bill.summary_long|format_detailed_html }}</div>
+                        {% endif %}
+                    {% else %}
+                        <div>{{ bill.summary_long|format_detailed_html }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+
+            {% if bill.tags %}
+            <div class="tags-section">
+                <h4>Tags</h4>
+                <div class="tags">
+                    {% for tag in bill.tags.split(',') %}
+                    <span class="tag">{{ tag.strip() }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="bill-actions">
+                <a href="{{ bill.bill_id|generate_congress_url(bill.congress_session) }}" target="_blank" rel="noopener" class="btn btn-primary">
+                    Read Full Bill on Congress.gov
+                </a>
+                {% if bill.tweet_url %}
+                <a href="{{ bill.tweet_url }}" target="_blank" rel="noopener" class="btn btn-twitter">
+                    View on Twitter
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Poll Widget -->
+        <div class="poll-widget" data-bill-id="{{ bill.bill_id }}">
+            <h3>What do you think about this bill?</h3>
+            <div class="poll-options">
+                <button class="poll-option" data-vote="yes">
+                    👍 Yes, support it
+                </button>
+                <button class="poll-option" data-vote="no">
+                    👎 No, oppose it
+                </button>
+            </div>
+            <div class="poll-results" style="display: none;">
+                <h4>Community Results</h4>
+                <div class="result-bar">
+                    <div class="result-fill yes-fill" style="width: 0%">
+                        <span class="result-label">Yes: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <div class="result-bar">
+                    <div class="result-fill no-fill" style="width: 0%">
+                        <span class="result-label">No: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <p class="total-votes">Total votes: <span class="votes-count">0</span></p>
+            </div>
+            <div class="poll-message"></div>
+        </div>
+
+        <!-- Bill metadata moved to bottom -->
+        <div class="bill-meta-bottom">
+            <div class="meta-item">
+                <span class="meta-label">Bill ID:</span>
+                <span class="meta-value">{{ bill.bill_id }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Congress Session:</span>
+                <span class="meta-value">{{ bill.congress_session or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Date Processed:</span>
+                <span class="meta-value">{{ bill.date_processed|format_datetime_simple }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Introduced:</span>
+                <span class="meta-value">{{ bill.date_introduced or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+               <span class="meta-label">Status:</span>
+               <span class="meta-value bill-status {{ (bill.normalized_status or 'unknown')|lower|replace('_', '-')|replace(' ', '-') }}">{{ bill.normalized_status|format_status or 'Unknown' }}</span>
+           </div>
+       </div>
+   </article>
+</div>
+{% endblock %}

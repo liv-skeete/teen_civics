@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}About Us - TeenCivics{% endblock %}
+{% block meta_description %}Learn about the mission behind TeenCivics, how it was built, and meet the creator Liv Skeete - a teen passionate about civic engagement and technology.{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+  <div class="container">
+    <h1>About TeenCivics</h1>
+    <p class="hero-subtitle">Learn about our mission, how it works, and the creator behind this civic education project</p>
+  </div>
+</div>
+
+<!-- Statistics Section -->
+<section class="stats-section">
+  <h2>Why Civic Education Matters</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3 class="stat-headline">📉 Youth Civic Scores Slide</h3>
+      <p class="stat-text">Just 22% of eighth graders scored proficient in civics on the 2024 National Assessment of Educational Progress, dropping from 24% in 2018.</p>
+      <span class="stat-source">(NAEP, 2024)</span>
+    </div>
+
+    <div class="stat-card">
+      <h3 class="stat-headline">🚨 Misinformation Hits Gen Z</h3>
+      <p class="stat-text">Nearly 60% of teens have encountered political misinformation online in the past year, affecting their understanding of civic issues.</p>
+      <span class="stat-source">(Common Sense Media, 2024)</span>
+    </div>
+    
+    <div class="stat-card">
+      <h3 class="stat-headline">🙄 Rising Government Distrust</h3>
+      <p class="stat-text">Only 17% of Americans aged 18–29 say they trust the federal government to "do what is right" most of the time.</p>
+      <span class="stat-source">(Pew Research, 2024)</span>
+    </div>
+    
+    <div class="stat-card">
+      <h3 class="stat-headline">🛑 2025 Shutdown Disrupts Civics</h3>
+      <p class="stat-text">This year's prolonged federal government shutdown delayed key student programs nationwide, highlighting real consequences of Congressional gridlock.</p>
+      <span class="stat-source">(Reuters, 2025)</span>
+    </div>
+  </div>
+</section>
+
+<div class="container">
+  <div class="about-grid">
+    <section class="about-card mission-card">
+      <h2>Our Mission</h2>
+      <div class="about-text">
+        <p>Recent tragedies—including the assassination of Charlie Kirk, a prominent right-leaning public figure, and the murder of Minnesota State Representative Melissa Hortman, a leading voice from the left—are somber reminders of how deeply divided our country has become and how political polarization can spill into real violence. For me, it highlighted a hard truth: when young people grow up only seeing politics through toxic arguments, war between factions, or violent events, they either withdraw from civic life entirely or become easy targets for extremism.</p>
+        <p>TeenCivics is my attempt to change that.</p>
+        <p>I built TeenCivics because I believe the antidote to polarization is better civic literacy. If teens can actually understand what Congress is voting on, see bills in plain language, and engage with issues directly instead of only through sensationalized media or polarized pundits, they're less likely to fall into apathy or extremism.</p>
+        <p>This project is my way of making democracy accessible, educational, and less scary. I want teens to see what politics and government really are: the process of debating, creating, and passing laws that affect everyday life, not just the highlights of scandal, outrage, or violence.</p>
+        <p>Through education, I believe teens can learn to value democracy and see that violence is never the answer to catalyzing change. Instead, they can advocate for themselves by voting, reaching out to their representatives, or engaging in community activism, supported by the guides and links on the TeenCivics Resources page.</p>
+        <p>Instead of turning away in frustration or fear, I want the next generation to lean in, learn, and participate with confidence.</p>
+      </div>
+    </section>
+
+    <section class="about-card tech-card">
+      <h2>How TeenCivics Works</h2>
+      <div class="about-text">
+        <p>TeenCivics is built using modern web technologies to make congressional bills accessible and engaging:</p>
+        <div class="tech-stack">
+          <div class="tech-item"><div class="tech-info"><strong>Backend:</strong> Python Flask web framework</div></div>
+          <div class="tech-item"><div class="tech-info"><strong>Frontend:</strong> HTML, CSS, JavaScript with responsive design</div></div>
+          <div class="tech-item"><div class="tech-info"><strong>Database:</strong> SQLite for storing bill data and poll results</div></div>
+          <div class="tech-item"><div class="tech-info"><strong>APIs:</strong> Congress.gov API for bill data fetching</div></div>
+          <div class="tech-item"><div class="tech-info"><strong>AI:</strong> Anthropic Claude for intelligent bill summarization</div></div>
+        </div>
+        <div class="github-link">
+          <a href="https://github.com/liv-skeete/teen_civics" target="_blank" class="github-button" rel="noopener">
+            <span>View on GitHub</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="about-card creator-card">
+      <h2>About the Creator</h2>
+      <div class="creator-profile">
+        <div class="creator-info">
+          <h3>Liv Skeete</h3>
+          <div class="creator-bio">
+            <p>Hi, I'm Liv, a 17-year-old high school student from California passionate about technology and civic engagement. My long term goal is to create tools that serve humanity. I like to study digital intelligence, neuroscience, and philosophy because they help me think about how humans learn, reason, and make choices. I want to use those insights to design human centered AI that is ethical, practical, and shaped by how people actually think and live.</p>
+            <p>Beyond the technical side, I have been inspired recently by my incredible teachers who encourage me to explore my political beliefs, think seriously about what it means to be a good citizen, and understand how to bring positive change to my country. To me TeenCivics is both a coding project and a civic mission: a way of stepping into civic life while inviting other teenagers to do the same.</p>
+          </div>
+        </div>
+        <div class="creator-photo">
+          <img src="{{ creator_photo or url_for('static', filename='img/creator.jpg') }}" alt="Portrait of Liv Skeete" class="creator-img" loading="lazy" decoding="async" width="657" height="566">
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}{% endblock %}

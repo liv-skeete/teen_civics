@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if bill %}{{ bill.title }} - TeenCivics{% else %}TeenCivics - Congressional Bills for Teens{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="container">
+        <h1>Congress Made Simple</h1>
+        <p class="hero-subtitle">Understand congressional bills through AI-powered summaries designed for teenagers</p>
+    </div>
+</div>
+
+<div class="container">
+    {% if bill %}
+    <article class="bill-card featured-bill">
+        <div class="bill-header">
+            <h3 class="bill-title">{{ bill.title|shorten_title }}</h3>
+            {% if bill.title|length > 80 %}
+            <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
+            {% endif %}
+            {% if bill.short_title %}
+            <h4 class="bill-short-title">{{ bill.short_title }}</h4>
+            {% endif %}
+        </div>
+
+        <div class="bill-content">
+            <!-- Term Dictionary Section -->
+            <div class="term-dictionary-section">
+                <h3>Term Dictionaries</h3>
+                <div class="term-dictionary-content">
+                    {# Hide term dictionary definitions for visual appeal - keep only educational resources #}
+                    
+                    <div class="term-resources">
+                        <p><em>If you come across any unfamiliar words while reading, these resources can help make everything clearer. Pick whichever one works best for you!</em></p>
+                        <ul>
+                            <li><a href="https://www.congress.gov/help/legislative-glossary" target="_blank" rel="noopener">📚 Congress.gov Legislative Glossary</a> - Comprehensive congressional terms</li>
+                            <li><a href="https://www.nvfc.org/glossary-of-congressional-terms/" target="_blank" rel="noopener">📖 NVFC Congressional Terms Glossary</a> - Concise, easy-to-understand definitions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="summary-section">
+                <h3>Summary</h3>
+                <div class="summary-text">
+                    {% if bill.summary_overview or bill.summary_detailed %}
+                        {% if bill.summary_overview %}
+                            <p>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</p>
+                        {% endif %}
+                        {% if bill.summary_detailed %}
+                            <div>{{ bill.summary_detailed|format_detailed_html }}</div>
+                        {% else %}
+                            <div>{{ bill.summary_long|format_detailed_html }}</div>
+                        {% endif %}
+                    {% else %}
+                        <div>{{ bill.summary_long|format_detailed_html }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="bill-actions">
+                <a href="{{ bill.bill_id|generate_congress_url(bill.congress_session) }}" target="_blank" rel="noopener" class="btn btn-primary">
+                    Read Full Bill on Congress.gov
+                </a>
+                <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}" class="btn btn-secondary">
+                    View Bill Details
+                </a>
+                {% if bill.tweet_url %}
+                <a href="{{ bill.tweet_url }}" target="_blank" rel="noopener" class="btn btn-twitter">
+                    View on Twitter
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Poll Widget -->
+        <div class="poll-widget" data-bill-id="{{ bill.bill_id }}">
+            <h3>What do you think about this bill?</h3>
+            <div class="poll-options">
+                <button class="poll-option" data-vote="yes">
+                    👍 Yes, support it
+                </button>
+                <button class="poll-option" data-vote="no">
+                    👎 No, oppose it
+                </button>
+            </div>
+            <div class="poll-results" style="display: none;" aria-live="polite">
+                <h4>Community Results</h4>
+                <div class="result-bar">
+                    <div class="result-fill yes-fill" style="width: 0%">
+                        <span class="result-label">Yes: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <div class="result-bar">
+                    <div class="result-fill no-fill" style="width: 0%">
+                        <span class="result-label">No: <span class="result-count">0</span></span>
+                    </div>
+                </div>
+                <p class="total-votes">Total votes: <span class="votes-count">0</span></p>
+            </div>
+            <div class="poll-message"></div>
+        </div>
+
+        <!-- Bill metadata moved to bottom -->
+        <div class="bill-meta-bottom">
+            <div class="meta-item">
+                <span class="meta-label">Bill ID:</span>
+                <span class="meta-value">{{ bill.bill_id }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Congress Session:</span>
+                <span class="meta-value">{{ bill.congress_session or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Date Processed:</span>
+                <span class="meta-value">{{ bill.date_processed|format_datetime_simple }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Introduced:</span>
+                <span class="meta-value">{{ bill.date_introduced or 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Status:</span>
+                <span class="meta-value bill-status {{ (bill.normalized_status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.normalized_status|format_status or 'Unknown' }}</span>
+            </div>
+        </div>
+    </article>
+    {% else %}
+    <div class="no-bills-message">
+        <h2>No bills available yet</h2>
+        <p>We're working on summarizing the latest congressional bills. Check back soon!</p>
+        {% if error %}
+        <p class="error-message">{{ error }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="cta-section">
+        <h2>Explore More Bills</h2>
+        <p>Browse our archive of previously summarized bills and see how others voted.</p>
+        <a href="{{ url_for('archive') }}" class="btn btn-primary">View Bill Archive</a>
+    </div>
+
+    <div class="features-section">
+        <h2>Why TeenCivics?</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <h3>👑 Made for Teens</h3>
+                <p>Complex bills explained in language you can actually understand.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🤖 AI-Powered</h3>
+                <p>Advanced AI summarizes lengthy legislation into key points.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🗳️ Your Voice Matters</h3>
+                <p>Vote on bills, see what other teens think, and start conversations beyond the classroom.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🚀 Lead the Future</h3>
+                <p>Learn how government works and gain tools to shape what comes next.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
