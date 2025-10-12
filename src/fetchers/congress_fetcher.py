@@ -77,6 +77,80 @@ def fetch_bill_details_from_api(congress: str, bill_type: str, bill_number: str,
         logger.error(f"Error fetching bill details from API: {e}")
         return {}
 
+def fetch_bill_text_from_api(congress: str, bill_type: str, bill_number: str, api_key: str, timeout: int = 30) -> tuple[str, Optional[str]]:
+    """
+    Fetch the latest bill text via the Congress.gov API text endpoint.
+
+    Args:
+        congress: Congress number (e.g., '119')
+        bill_type: Bill type (e.g., 'hr', 's', 'sjres')
+        bill_number: Bill number (e.g., '318')
+        api_key: Congress.gov API key
+        timeout: Request timeout in seconds
+
+    Returns:
+        (text, format_type) where format_type is one of 'pdf', 'txt', 'html', 'xml', or None if unknown.
+    """
+    try:
+        base_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/text"
+        params = {"format": "json"}
+        if api_key:
+            params["api_key"] = api_key
+
+        logger.info(f"📡 Fetching bill text versions from API: {base_url}")
+        response = requests.get(base_url, params=params, timeout=timeout)
+        response.raise_for_status()
+        data = response.json()
+
+        text_versions = data.get("textVersions") or []
+        if not text_versions:
+            logger.debug(f"No textVersions in API response for {bill_type}{bill_number}-{congress}")
+            return "", None
+
+        # Use the most recent version (API typically returns newest first)
+        latest_version = text_versions[0]
+        formats = latest_version.get("formats") or []
+
+        # Prefer PDF, then TXT, then HTML, then XML
+        selected = None
+        for pref in ("PDF", "TXT", "HTML", "XML"):
+            selected = next((fmt for fmt in formats if fmt.get("type") == pref and fmt.get("url")), None)
+            if selected:
+                break
+
+        if not selected:
+            logger.debug(f"No usable formats found for {bill_type}{bill_number}-{congress}")
+            return "", None
+
+        fmt_type = (selected.get("type") or "").lower()
+        url = selected.get("url") or ""
+        if not url:
+            return "", None
+
+        # Update headers with a random UA before download
+        update_session_headers()
+
+        # Download and extract text based on format
+        if fmt_type == "pdf":
+            r = session.get(url, timeout=timeout)
+            r.raise_for_status()
+            text = _extract_text_from_pdf(r.content)
+        else:
+            # Let the helper handle TXT/HTML/XML and other content types
+            text = _download_direct_text(url)
+
+        if text and len(text.strip()) > 100:
+            return text, fmt_type
+
+        logger.debug(f"Downloaded API text for {bill_type}{bill_number}-{congress} was empty/short")
+        return "", fmt_type or None
+
+    except requests.HTTPError as e:
+        logger.error(f"HTTP error fetching bill text from API for {bill_type}{bill_number}-{congress}: {e}")
+        return "", None
+    except Exception as e:
+        logger.debug(f"Error fetching bill text from API for {bill_type}{bill_number}-{congress}: {e}")
+        return "", None
 def derive_tracker_from_actions(actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Derive tracker progression from bill actions.
