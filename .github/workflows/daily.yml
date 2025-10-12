@@ -101,7 +101,7 @@ jobs:
         
     - name: Install Playwright browsers
       run: |
-        playwright install --with-deps
+        playwright install
         
     - name: Verify Playwright installation
       run: |
