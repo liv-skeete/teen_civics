@@ -268,7 +268,7 @@ def scrape_multiple_bill_trackers(source_urls: List[str], force_scrape=False) ->
             for url in source_urls:
                 try:
                     # Reuse the same browser context for all requests
-                    results[url] = scrape_bill_tracker(url, context)
+                    results[url] = scrape_bill_tracker(url, context, force_scrape=force_scrape)
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to scrape tracker from {url}: {e}")
                     results[url] = None
@@ -280,7 +280,7 @@ def scrape_multiple_bill_trackers(source_urls: List[str], force_scrape=False) ->
         # Fallback to individual scraping if context creation fails
         for url in source_urls:
             try:
-                results[url] = scrape_bill_tracker(url)
+                results[url] = scrape_bill_tracker(url, force_scrape=force_scrape)
             except Exception as e2:
                 logger.warning(f"⚠️ Failed to scrape tracker from {url} (fallback): {e2}")
                 results[url] = None

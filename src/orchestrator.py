@@ -22,6 +22,24 @@ logger = logging.getLogger(__name__)
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+
+def snake_case(text: str) -> str:
+    """
+    Convert text to snake_case.
+    
+    Args:
+        text: Input text to convert
+        
+    Returns:
+        Text converted to snake_case
+    """
+    import re
+    # Convert to lowercase and replace spaces/special chars with underscores
+    result = re.sub(r'[^a-zA-Z0-9]+', '_', text.lower())
+    # Remove leading/trailing underscores
+    result = result.strip('_')
+    return result
+
 def main(dry_run: bool = False) -> int:
     """
     Main orchestrator function:
@@ -252,6 +270,18 @@ def main(dry_run: bool = False) -> int:
                     # Set to None if serialization fails
                     tracker_raw_serialized = None
             
+            # Fallback: If tracker is missing/empty or we failed to compute normalized_status,
+            # derive from latest_action text
+            if (not tracker_data or normalized_status == "unknown") and latest_action_text:
+                try:
+                    from src.fetchers.feed_parser import normalize_status
+                    status_hint = normalize_status(latest_action_text, selected_bill.get("source_url"))
+                    if status_hint and status_hint.lower() != "unknown":
+                        normalized_status = snake_case(status_hint)
+                        logger.info(f"🔧 Using fallback status derivation for bill {bill_id}: {normalized_status}")
+                except Exception as e:
+                    logger.warning(f"Failed to derive status from latest action for bill {bill_id}: {e}")
+             
             bill_data = {
                 "bill_id": bill_id,
                 "title": selected_bill.get("title", ""),
