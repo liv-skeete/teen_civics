@@ -49,10 +49,12 @@ def main(dry_run: bool = False) -> int:
         current_et_time = current_time_et.time()
         
         # Morning scan: 8:30 AM to 9:30 AM ET
-        # Evening scan: 2:00 AM to 2:59 AM ET (corresponds to 2:30 AM UTC job with potential 30-minute lag)
+        # Evening scan: 10:00 PM to 11:00 PM ET (corresponds to 2:30 AM UTC job with 30-minute buffer)
+        # During EDT: 2:30 AM UTC = 10:30 PM EDT
+        # During EST: 2:30 AM UTC = 9:30 PM EST
         if time(8, 30) <= current_et_time <= time(9, 30):
             scan_type = "MORNING"
-        elif time(2, 0) <= current_et_time <= time(2, 59):
+        elif time(22, 0) <= current_et_time <= time(23, 0):
             scan_type = "EVENING"
         else:
             scan_type = "MANUAL"
