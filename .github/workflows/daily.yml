@@ -102,7 +102,7 @@ jobs:
     - name: Install Playwright browsers
       if: env.CONGRESS_FETCH_MODE != 'api_only'
       run: |
-        playwright install
+        python -m playwright install
         
     - name: Verify Playwright installation
       if: env.CONGRESS_FETCH_MODE != 'api_only'
