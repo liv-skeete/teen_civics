@@ -260,10 +260,11 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                 
                 # Override tracker with scraped version if available
                 # Collect all source URLs first for batch scraping
+                # Allow scraping even in CI mode to ensure correct status
                 source_urls = [bill.get('source_url') for bill in feed_bills if bill.get('source_url')]
-                if source_urls and not running_in_ci():
+                if source_urls:
                     from .feed_parser import scrape_multiple_bill_trackers
-                    scraped_trackers = scrape_multiple_bill_trackers(source_urls)
+                    scraped_trackers = scrape_multiple_bill_trackers(source_urls, force_scrape=True)
                     
                     # Update each bill with its scraped tracker
                     for bill in feed_bills:

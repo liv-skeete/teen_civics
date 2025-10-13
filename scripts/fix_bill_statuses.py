@@ -12,15 +12,22 @@ import logging
 from typing import List, Dict, Any
 import argparse
 
-# Add the src directory to the path so we can import our modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Ensure project root is on sys.path so the 'src' package can be imported when running from project root
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-from src.database.db import get_all_bills, init_db, update_bill
+from src.database.db import get_all_bills, init_db, normalize_bill_id, db_connect
 from src.fetchers.feed_parser import scrape_bill_tracker
-from src.config import setup_logging
+from src.load_env import load_env
+# No dedicated setup_logging; use basicConfig below
 
 # Configure logging
-setup_logging()
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 def generate_source_url(bill_id: str) -> str:
@@ -41,20 +48,20 @@ def generate_source_url(bill_id: str) -> str:
     bill_info, congress = parts
     congress = str(congress)
     
-    # Map bill types to full names for URL construction
-    bill_type_map = {
-        'hr': 'house-bill',
-        's': 'senate-bill',
-        'hjres': 'house-joint-resolution',
-        'sjres': 'senate-joint-resolution',
-        'hconres': 'house-concurrent-resolution',
-        'sconres': 'senate-concurrent-resolution',
-        'hres': 'house-resolution',
-        'sres': 'senate-resolution'
-    }
+    # Map bill types to full names for URL construction (order matters: longer prefixes first)
+    bill_type_items = [
+        ('sjres', 'senate-joint-resolution'),
+        ('hjres', 'house-joint-resolution'),
+        ('sconres', 'senate-concurrent-resolution'),
+        ('hconres', 'house-concurrent-resolution'),
+        ('sres', 'senate-resolution'),
+        ('hres', 'house-resolution'),
+        ('hr', 'house-bill'),
+        ('s', 'senate-bill'),
+    ]
     
-    # Extract bill type and number
-    for prefix, full_type in bill_type_map.items():
+    # Extract bill type and number (prefer longer prefixes first)
+    for prefix, full_type in bill_type_items:
         if bill_info.startswith(prefix):
             bill_type_full = full_type
             bill_number = bill_info[len(prefix):]
@@ -93,6 +100,45 @@ def derive_normalized_status_from_tracker(tracker_data: List[Dict[str, Any]]) ->
                     break
     return normalized_status
 
+
+def update_bill_fields(bill_id: str, update_data: Dict[str, Any]) -> bool:
+    """
+    Update bill fields in the database. Only whitelisted fields are updated.
+
+    Args:
+        bill_id: The bill identifier to update
+        update_data: Dict containing fields to update (e.g., 'tracker_raw', 'normalized_status', optional 'status')
+
+    Returns:
+        True if one row was updated; False otherwise
+    """
+    try:
+        normalized_id = normalize_bill_id(bill_id)
+        allowed_fields = {'tracker_raw', 'normalized_status', 'status'}
+        fields = [k for k in update_data.keys() if k in allowed_fields]
+        if not fields:
+            logger.warning(f"No valid fields to update for {bill_id}; allowed: {sorted(allowed_fields)}")
+            return False
+
+        set_clause = ', '.join(f"{field} = %s" for field in fields)
+        values = [update_data[field] for field in fields]
+
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(f"""
+                    UPDATE bills
+                    SET {set_clause}
+                    WHERE bill_id = %s
+                """, (*values, normalized_id))
+                if cursor.rowcount == 1:
+                    return True
+                else:
+                    logger.error(f"Bill {normalized_id} not found; no rows updated")
+                    return False
+    except Exception as e:
+        logger.error(f"Error updating bill {bill_id}: {e}")
+        return False
+
 def fix_bill_statuses(dry_run: bool = True, limit: int = None) -> None:
     """
     Fix bill statuses by re-scraping tracker information.
@@ -102,6 +148,9 @@ def fix_bill_statuses(dry_run: bool = True, limit: int = None) -> None:
         limit: Maximum number of bills to process (for testing)
     """
     logger.info(f"🔧 Starting bill status correction script (dry_run: {dry_run})")
+    
+    # Load environment variables from .env to ensure DATABASE_URL is available
+    load_env()
     
     # Initialize database
     init_db()
@@ -157,12 +206,14 @@ def fix_bill_statuses(dry_run: bool = True, limit: int = None) -> None:
                 logger.info(f"📝 [DRY-RUN] Tracker data: {tracker_data}")
             else:
                 try:
-                    # Note: This assumes there's an update_bill function that can update specific fields
-                    # You might need to implement this function or modify the existing database functions
                     logger.info(f"💾 Updating database for {bill_id} with status '{normalized_status}'")
-                    # This is a placeholder - you'll need to implement the actual database update logic
-                    logger.info(f"✅ Successfully updated {bill_id}")
-                    updated_count += 1
+                    success = update_bill_fields(bill_id, update_data)
+                    if success:
+                        logger.info(f"✅ Successfully updated {bill_id}")
+                        updated_count += 1
+                    else:
+                        logger.error(f"❌ Update returned False for {bill_id}")
+                        error_count += 1
                 except Exception as e:
                     logger.error(f"❌ Failed to update {bill_id}: {e}")
                     error_count += 1

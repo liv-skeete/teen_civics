@@ -124,7 +124,7 @@ def fetch_feed_with_browser(url: str, timeout: int = 30000) -> Optional[str]:
         return None
 
 
-def scrape_bill_tracker(source_url: str, browser_context=None) -> Optional[List[Dict[str, any]]]:
+def scrape_bill_tracker(source_url: str, browser_context=None, force_scrape=False) -> Optional[List[Dict[str, any]]]:
     """
     Scrape the full bill progress tracker from a Congress.gov bill page using Playwright.
     Returns list of {"name": str, "selected": bool}
@@ -133,9 +133,10 @@ def scrape_bill_tracker(source_url: str, browser_context=None) -> Optional[List[
     Args:
         source_url: The URL of the bill page
         browser_context: An existing Playwright browser context to reuse (optional)
+        force_scrape: If True, scrape even in CI mode (default: False)
     """
-    # Check if running in CI and skip HTML tracker scraping
-    if running_in_ci():
+    # Check if running in CI and skip HTML tracker scraping (unless force_scrape is True)
+    if running_in_ci() and not force_scrape:
         logger.debug("Skipping HTML tracker scraping in CI mode")
         return None
     if not PLAYWRIGHT_AVAILABLE:
@@ -218,18 +219,19 @@ def scrape_bill_tracker(source_url: str, browser_context=None) -> Optional[List[
                 p.stop()
         return None
 
-def scrape_multiple_bill_trackers(source_urls: List[str]) -> Dict[str, Optional[List[Dict[str, any]]]]:
+def scrape_multiple_bill_trackers(source_urls: List[str], force_scrape=False) -> Dict[str, Optional[List[Dict[str, any]]]]:
     """
     Scrape multiple bill progress trackers from Congress.gov bill pages using a single browser session.
     
     Args:
         source_urls: List of URLs to bill pages
+        force_scrape: If True, scrape even in CI mode (default: False)
         
     Returns:
         Dictionary mapping source_url to tracker data (list of steps)
     """
-    # Check if running in CI and skip HTML tracker scraping
-    if running_in_ci():
+    # Check if running in CI and skip HTML tracker scraping (unless force_scrape is True)
+    if running_in_ci() and not force_scrape:
         logger.debug("Skipping HTML tracker scraping in CI mode")
         return {url: None for url in source_urls}
     if not PLAYWRIGHT_AVAILABLE:
@@ -325,23 +327,28 @@ def normalize_status(action_text: str, source_url: Optional[str] = None) -> str:
         A standardized status string.
     """
     # First, try to scrape the tracker status if we have a source URL
+    # Force scraping even in CI mode to ensure correct status is obtained
     if source_url:
         try:
-            # Inline tracker scraping to avoid NameError on scrape_tracker_status
-            steps = scrape_bill_tracker(source_url)
+            # Use the existing scrape_bill_tracker function which correctly uses the selector
+            # Force scraping even in CI mode to get the correct status
+            steps = scrape_bill_tracker(source_url, force_scrape=True)
             if steps:
-                status = None
+                # Find the step that is currently selected (the current status)
                 for step in steps:
                     if step.get("selected", False):
                         status = step.get("name")
-                if status:
-                    return status
+                        if status:
+                            # Clean up the status text to remove any extra whitespace or newlines
+                            status = status.strip()
+                            logger.info(f"✅ Extracted bill status from tracker: '{status}' for {source_url}")
+                            return status
         except Exception as e:
             logger.debug(f"normalize_status: tracker scrape failed for {source_url}: {e}")
     
     # Fallback to keyword matching on action text
     if not action_text:
-        return None
+        return "Unknown"
         
     action_text_lower = action_text.lower()
     
@@ -358,7 +365,7 @@ def normalize_status(action_text: str, source_url: Optional[str] = None) -> str:
     if "introduced" in action_text_lower:
         return "Introduced"
         
-    return action_text
+    return "Unknown"
 
 
 def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:

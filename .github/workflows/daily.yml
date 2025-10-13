@@ -73,7 +73,6 @@ jobs:
     needs: ping-database
     timeout-minutes: 30
     env:
-      CONGRESS_FETCH_MODE: api_only
     
     steps:
     - name: Checkout code

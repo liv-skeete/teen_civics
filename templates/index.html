@@ -123,7 +123,7 @@
             </div>
             <div class="meta-item">
                 <span class="meta-label">Status:</span>
-                <span class="meta-value bill-status {{ (bill.normalized_status or 'unknown')|lower|replace(' ', '-') }}">{{ bill.normalized_status|format_status or 'Unknown' }}</span>
+                <span class="meta-value bill-status {{ (bill.normalized_status or 'unknown')|lower|replace('_', '-')|replace(' ', '-') }}">{{ bill.normalized_status|format_status or 'Unknown' }}</span>
             </div>
         </div>
     </article>
