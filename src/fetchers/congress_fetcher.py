@@ -246,6 +246,14 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
         bills_with_text = 0
         bills_without_text = 0
         
+        # --- Pre-fetch scraped trackers for all bills for efficiency ---
+        source_urls = [b.get('source_url') for b in feed_bills if b.get('source_url')]
+        scraped_trackers = {}
+        if source_urls:
+            from .feed_parser import scrape_multiple_bill_trackers
+            scraped_trackers = scrape_multiple_bill_trackers(source_urls, force_scrape=True)
+        # --- End pre-fetch ---
+
         for bill in feed_bills:
             try:
                 # Fetch additional details from API
@@ -256,20 +264,11 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                     details = fetch_bill_details_from_api(congress, bill_type, bill_number, CONGRESS_API_KEY)
                     bill['latest_action'] = details.get('latestAction', {})
                     actions = details.get('actions', [])
-                    bill['tracker'] = derive_tracker_from_actions(actions)
+                    bill['tracker'] = derive_tracker_from_actions(actions) # Default tracker
                 
-                # Override tracker with scraped version if available
-                # Collect all source URLs first for batch scraping
-                # Allow scraping even in CI mode to ensure correct status
-                source_urls = [bill.get('source_url') for bill in feed_bills if bill.get('source_url')]
-                if source_urls:
-                    from .feed_parser import scrape_multiple_bill_trackers
-                    scraped_trackers = scrape_multiple_bill_trackers(source_urls, force_scrape=True)
-                    
-                    # Update each bill with its scraped tracker
-                    for bill in feed_bills:
-                        if bill.get('source_url') and scraped_trackers.get(bill['source_url']):
-                            bill['tracker'] = scraped_trackers[bill['source_url']]
+                # Override with more accurate scraped tracker if available
+                if bill.get('source_url') and scraped_trackers.get(bill['source_url']):
+                    bill['tracker'] = scraped_trackers[bill['source_url']]
                 
                 if include_text:
                     full_text = ""
