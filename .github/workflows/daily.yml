@@ -72,6 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: ping-database
     timeout-minutes: 30
+    env:
+      CONGRESS_FETCH_MODE: html
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -89,6 +91,8 @@ jobs:
         pip install psycopg2-binary
         # Install timezone support
         pip install pytz
+        # Install Playwright Python package
+        pip install playwright
         
     - name: Install Playwright system dependencies (Ubuntu 24.04)
       if: env.CONGRESS_FETCH_MODE != 'api_only'
