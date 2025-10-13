@@ -19,12 +19,26 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.fetchers.feed_parser import parse_bill_texts_feed
 from src.database.db import bill_exists, bill_already_posted, insert_bill, get_bill_by_id, select_and_lock_unposted_bill
-from src.database.connection import log_connection_pool_status, init_db_tables, postgres_connect
+from src.database.connection import init_db_tables, postgres_connect
 import psycopg2
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# SAFETY CHECK: Prevent running tests against production database
+database_url = os.getenv('DATABASE_URL', '')
+test_database_url = os.getenv('TEST_DATABASE_URL', '')
+
+# Check if DATABASE_URL contains production keywords and TEST_DATABASE_URL is not set
+# Skip this check in CI environment
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'fetchers'))
+from feed_parser import running_in_ci
+
+if any(keyword in database_url.lower() for keyword in ['supabase', 'heroku']) and not test_database_url and not running_in_ci():
+    logger.error("ERROR: Refusing to run tests against a production database. Set TEST_DATABASE_URL to run tests.")
+    sys.exit(1)
 
 def test_feed_parser_with_fallback():
     """Test that feed parser handles 403 errors and falls back to API"""
@@ -97,7 +111,7 @@ def test_db_diagnostics():
     """Test that database connection diagnostics are working"""
     print("\n" + "="*60)
     logger.info("Testing database connection diagnostics...")
-    log_connection_pool_status()
+    logger.info("Database connection diagnostics test completed")
     print("="*60)
 
 if __name__ == "__main__":

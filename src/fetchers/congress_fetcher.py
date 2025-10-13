@@ -15,7 +15,7 @@ import fitz  # PyMuPDF
 from datetime import datetime
 
 # Import headers from feed_parser to avoid 403 errors
-from .feed_parser import HEADERS, USER_AGENTS, get_random_user_agent, scrape_bill_tracker
+from .feed_parser import HEADERS, USER_AGENTS, get_random_user_agent, scrape_bill_tracker, running_in_ci
 import time
 import random
 
@@ -261,7 +261,7 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                 # Override tracker with scraped version if available
                 # Collect all source URLs first for batch scraping
                 source_urls = [bill.get('source_url') for bill in feed_bills if bill.get('source_url')]
-                if source_urls:
+                if source_urls and not running_in_ci():
                     from .feed_parser import scrape_multiple_bill_trackers
                     scraped_trackers = scrape_multiple_bill_trackers(source_urls)
                     
@@ -301,7 +301,7 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                             logger.warning(f"⚠️ Invalid or missing text_url for {bill['bill_id']}: {text_url}")
                     
                     # If both API and direct URL failed, fall back to scraping (last resort)
-                    if (not full_text or len(full_text.strip()) <= 100) and bill.get('source_url'):
+                    if (not full_text or len(full_text.strip()) <= 100) and bill.get('source_url') and not running_in_ci():
                         source_url = bill.get('source_url')
                         logger.info(f"📥 Falling back to scraping text for {bill['bill_id']} from {source_url}")
                         full_text, status = download_bill_text(source_url, bill['bill_id'])

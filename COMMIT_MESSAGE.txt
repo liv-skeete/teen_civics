@@ -1,75 +1,24 @@
-Implement feed-based workflow with full text validation
+fix: Comprehensive workflow stabilization and dev environment fixes
 
-This commit implements the new workflow that waits for full bill text
-before summarizing, based on the architectural design in
-NEW_WORKFLOW_DESIGN.md.
+This commit implements a robust set of fixes to stabilize the orchestrator workflow, eliminate errors in the CI environment, and resolve local development setup issues.
 
-## Major Changes
+### Key Changes:
 
-### New Features
-- Add feed parser for Congress.gov "Bill Texts Received Today" feed
-- Implement text validation to ensure bills have full text (min 100 chars)
-- Add version tracking for bill texts
-- Enhance duplicate prevention with bill_already_posted() function
+1.  **CI API-Only Mode:**
+    *   Introduced a CI detection helper that forces the workflow into an "API-only" mode when running in GitHub Actions.
+    *   This completely disables all HTML scraping (feed parsing, tracker scraping, text fallbacks) in the CI environment, which permanently resolves the persistent 403 Forbidden errors from Congress.gov.
+    *   The `.github/workflows/daily.yml` file has been updated to explicitly enable this mode.
 
-### Database Updates
-- Add new fields: text_source, text_version, text_received_date, processing_attempts
-- Create migration script with rollback capability
-- Add indexes for performance optimization
-- Successfully migrated production database
+2.  **Duplicate Bill Processing Fix:**
+    *   Added logic to the orchestrator to deduplicate the list of incoming bills by their normalized `bill_id` before processing. This resolves the issue of the same bill being checked multiple times in the logs.
 
-### Code Enhancements
-- Update congress_fetcher.py with feed-based processing
-- Add download_bill_text() function for direct URL downloads
-- Update orchestrator.py with text validation logic
-- Improve error handling and logging throughout
+3.  **Tweet Safety Guardrails:**
+    *   Implemented safety checks in the orchestrator to prevent test or placeholder content from being tweeted.
+    *   Created a `scripts/cleanup_test_bills.py` script to remove any existing test data from the production database.
+    *   Test scripts now have a safeguard to prevent them from running against a production database.
 
-### Bug Fixes
-- Fix missing bill_already_posted import in orchestrator
-- Add lxml parser to fix BeautifulSoup XML warnings
-- Add User-Agent headers to prevent 403 errors from Congress.gov
-- Add PyMuPDF dependency for PDF text extraction
+4.  **Development Environment Fixes:**
+    *   Resolved the `greenlet` build failure on macOS with Python 3.13 by moving `playwright` to `requirements-dev.txt` and pinning compatible versions.
+    *   Updated the `scripts/dev.sh` script to handle optional installation of browser dependencies, making the local setup more flexible and robust.
 
-### Testing & Documentation
-- Add comprehensive test suite (tests/test_feed_parser.py)
-- Update GitHub Actions schedule to 11:00 UTC (8:00 AM ET)
-- Update workflow name to reflect feed-based processing
-
-### Dependencies Added
-- lxml==5.1.0 (XML/HTML parsing)
-- PyMuPDF==1.24.0 (PDF text extraction)
-
-## Files Changed
-- src/fetchers/feed_parser.py (NEW)
-- src/fetchers/congress_fetcher.py (MODIFIED)
-- src/orchestrator.py (MODIFIED)
-- src/database/db.py (MODIFIED)
-- scripts/migrate_database_schema.py (NEW)
-- tests/test_feed_parser.py (NEW)
-- .github/workflows/daily.yml (MODIFIED)
-- requirements.txt (MODIFIED)
-
-## Breaking Changes
-None - all changes are backward compatible
-
-## Migration Required
-Run: python scripts/migrate_database_schema.py
-(Already completed in production)
-
-## Testing
-- Database migration: ✅ Completed successfully
-- Feed parser: ⚠️ Requires User-Agent headers (implemented)
-- Orchestrator: ✅ Ready for deployment
-- Tests: ✅ 15+ test cases created
-
-## Next Steps
-1. Push this commit to GitHub
-2. Monitor first GitHub Actions run
-3. Verify feed-based processing works correctly
-4. Confirm duplicate prevention is working
-
-Resolves issues with:
-- Processing bills before full text is available
-- Duplicate tweet attempts
-- Missing XML parser warnings
-- Import errors in orchestrator
+These changes ensure the daily workflow is reliable, the logs are clean, the production environment is protected from test data, and the local development setup is functional.

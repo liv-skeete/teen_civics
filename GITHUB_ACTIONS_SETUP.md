@@ -233,6 +233,11 @@ After adding all secrets:
 - ⚠️ Update DATABASE_URL format
 - ℹ️ Twitter duplicate errors are expected/handled
 
+**CI Environment Notes:**
+- The CI environment automatically runs in API-only mode to avoid 403 errors
+- This is controlled by the `CONGRESS_FETCH_MODE=api_only` environment variable
+- No additional configuration is needed for this behavior
+
 **Next Steps:**
 1. Add all secrets to GitHub Actions
 2. Ensure DATABASE_URL has `?sslmode=require`

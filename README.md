@@ -146,6 +146,7 @@ This repo follows a strict "No secrets in source" policy. See [SECURITY.md](SECU
 - Orchestrator (fetch → summarize → store → tweet): python [orchestrator.py](src/orchestrator.py:1)
 - Secret scan: python [secret_scan.py](scripts/secret_scan.py:1)
 - Optional: install pre-commit and add a hook to run secret_scan before each commit
+- For development with browser automation: set `DEV_BROWSER=1` when installing dependencies to include Playwright and its dependencies (optional)
 
 ## Future Improvements (TODO)
 

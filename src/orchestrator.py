@@ -71,11 +71,16 @@ def main(dry_run: bool = False) -> int:
             insert_bill, update_tweet_info, generate_website_slug, init_db,
             normalize_bill_id, select_and_lock_unposted_bill, has_posted_today
         )
+        from src.fetchers.feed_parser import running_in_ci
         
         # Ensure database exists and schema is up to date
         logger.info("🗄️ Initializing database (ensure tables exist)...")
         init_db()
         logger.info("✅ Database initialization complete")
+        
+        # Log CI mode if applicable
+        if running_in_ci():
+            logger.info("⚙️ CI environment detected. Running in API-only mode.")
         
         # DUPLICATE PREVENTION: Check if we already posted today
         # Only apply duplicate prevention for evening scans
@@ -133,6 +138,19 @@ def main(dry_run: bool = False) -> int:
         # Step 2: Find first unprocessed bill
         selected_bill = None
         selected_bill_data = None
+        
+        # Deduplicate bills to prevent processing the same bill multiple times
+        unique_bills = []
+        seen_bill_ids = set()
+        for bill in bills:
+            raw_bill_id = bill.get("bill_id", "unknown")
+            bill_id = normalize_bill_id(raw_bill_id)
+            if bill_id not in seen_bill_ids:
+                unique_bills.append(bill)
+                seen_bill_ids.add(bill_id)
+        bills = unique_bills
+        logger.info(f"📊 Deduplicated bills: {len(bills)} unique bills from {len(unique_bills)} total")
+        
         logger.info("🔍 Scanning bills for unprocessed content...")
 
         for bill in bills:
@@ -291,6 +309,23 @@ def main(dry_run: bool = False) -> int:
         else:
             logger.info("🚀 Posting tweet to Twitter...")
             logger.info(f"📝 Tweet content: {formatted_tweet[:100]}...")
+            
+            # SAFETY CHECK: Skip tweeting test bills in production
+            if os.getenv('TESTING') != 'true':
+                test_bill_id = bill_data.get("bill_id", "")
+                test_title = bill_data.get("title", "")
+                test_summary = bill_data.get("summary_tweet", "")
+                
+                is_test_bill = (
+                    test_bill_id == 'hr9999-119' or
+                    'test' in test_title.lower() or
+                    'this is a test bill' in test_summary.lower() or
+                    'link coming soon' in test_summary.lower()
+                )
+                
+                if is_test_bill:
+                    logger.warning(f"⚠️ Skipping tweet for test bill {test_bill_id}.")
+                    return 0
             
             success, tweet_url = post_tweet(formatted_tweet)
             

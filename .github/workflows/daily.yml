@@ -143,6 +143,7 @@ jobs:
         TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
         TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        CONGRESS_FETCH_MODE: api_only
     
     - name: Notify on failure
       if: failure()

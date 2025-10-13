@@ -70,6 +70,16 @@ def update_session_headers():
         'User-Agent': get_random_user_agent()
     })
 
+def running_in_ci() -> bool:
+    """
+    Check if the code is running in a CI environment.
+    
+    Returns:
+        True if running in CI, False otherwise
+    """
+    import os
+    return bool(os.getenv('CI')) or bool(os.getenv('GITHUB_ACTIONS')) or os.getenv('CONGRESS_FETCH_MODE') == 'api_only'
+
 def fetch_feed_with_browser(url: str, timeout: int = 30000) -> Optional[str]:
     """
     Fetch feed using Playwright browser to bypass 403 errors.
@@ -124,6 +134,10 @@ def scrape_bill_tracker(source_url: str, browser_context=None) -> Optional[List[
         source_url: The URL of the bill page
         browser_context: An existing Playwright browser context to reuse (optional)
     """
+    # Check if running in CI and skip HTML tracker scraping
+    if running_in_ci():
+        logger.debug("Skipping HTML tracker scraping in CI mode")
+        return None
     if not PLAYWRIGHT_AVAILABLE:
         logger.warning("Playwright not available, cannot scrape tracker")
         return None
@@ -214,6 +228,10 @@ def scrape_multiple_bill_trackers(source_urls: List[str]) -> Dict[str, Optional[
     Returns:
         Dictionary mapping source_url to tracker data (list of steps)
     """
+    # Check if running in CI and skip HTML tracker scraping
+    if running_in_ci():
+        logger.debug("Skipping HTML tracker scraping in CI mode")
+        return {url: None for url in source_urls}
     if not PLAYWRIGHT_AVAILABLE:
         logger.warning("Playwright not available, cannot scrape trackers")
         return {url: None for url in source_urls}
@@ -364,6 +382,11 @@ def parse_bill_texts_feed(limit: int = 50) -> List[Dict[str, Any]]:
             'text_received_date': str # ISO format date
         }
     """
+    # Check if running in CI and force API-only mode
+    if running_in_ci():
+        logger.info("⚙️ CI environment detected. Running in API-only mode.")
+        return _fetch_bills_from_api(limit)
+    
     logger.info(f"Fetching bill texts feed from: {BILL_TEXTS_FEED_URL}")
     
     html_content = None
