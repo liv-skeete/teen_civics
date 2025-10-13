@@ -154,19 +154,19 @@ jobs:
         TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
         TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-     
-     - name: Fix tracker statuses (safeguard)
-       uses: nick-fields/retry@v2
-       with:
-         timeout_minutes: 5
-         max_attempts: 2
-         retry_wait_seconds: 30
-         command: |
-           python3 scripts/fix_bill_statuses.py --live --limit 5
-       env:
-         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-     
-     - name: Notify on failure
+
+    - name: Fix tracker statuses (safeguard)
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 5
+        max_attempts: 2
+        retry_wait_seconds: 30
+        command: |
+          python3 scripts/fix_bill_statuses.py --live --limit 5
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: Notify on failure
       if: failure()
       run: |
         echo "❌ Daily bill posting failed after retries"
