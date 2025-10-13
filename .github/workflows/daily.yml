@@ -129,10 +129,13 @@ jobs:
           
           # Determine which scan this is
           HOUR_ET=$(TZ='America/New_York' date '+%H')
+          MINUTE_ET=$(TZ='America/New_York' date '+%M')
+          # Check if time is between 2:00 AM ET and 3:00 AM ET (evening scan window)
+          # This corresponds to the 2:30 AM UTC job with potential 30-minute lag
           if [ "$HOUR_ET" -ge 8 ] && [ "$HOUR_ET" -lt 12 ]; then
             echo "☀️ Running MORNING scan (9 AM ET)"
-          elif [ "$HOUR_ET" -ge 21 ] || [ "$HOUR_ET" -lt 2 ]; then
-            echo "🌙 Running EVENING scan (10:30 PM ET)"
+          elif [ "$HOUR_ET" -eq 2 ] && [ "$MINUTE_ET" -ge 0 ] && [ "$MINUTE_ET" -le 59 ]; then
+            echo "🌙 Running EVENING scan (2:30 AM UTC job window)"
           else
             echo "🔧 Running MANUAL scan"
           fi
