@@ -77,15 +77,17 @@
                 <label for="status-filter">Filter by status:</label>
                 <select name="status" id="status-filter">
                     <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
-                    <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
-                    <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+                    <option value="agreed_to_in_house" {% if status_filter == 'agreed_to_in_house' %}selected{% endif %}>Agreed to in House</option>
+                    <option value="agreed_to_in_senate" {% if status_filter == 'agreed_to_in_senate' %}selected{% endif %}>Agreed to in Senate</option>
+                    <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
                     <option value="committee_consideration" {% if status_filter == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
-                    <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
-                    <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
-                    <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
                     <option value="failed_house" {% if status_filter == 'failed_house' %}selected{% endif %}>Failed House</option>
                     <option value="failed_senate" {% if status_filter == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
-                    <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
+                    <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
+                    <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
+                    <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
+                    <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+                    <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
                     <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
                 </select>
             </div>

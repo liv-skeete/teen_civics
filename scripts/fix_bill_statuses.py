@@ -87,14 +87,16 @@ def derive_normalized_status_from_tracker(tracker_data: List[Dict[str, Any]]) ->
     if tracker_data:
         if isinstance(tracker_data, list):
             # List of steps with selected flag
-            for step in tracker_data:
+            # Find the LAST step that is selected (most recent status)
+            for step in reversed(tracker_data):
                 if step.get("selected", False):
                     normalized_status = step["name"].lower().replace(" ", "_")
                     break
         elif isinstance(tracker_data, dict):
             # Dict with steps in 'steps' key
             steps = tracker_data.get("steps", [])
-            for step in steps:
+            # Find the LAST step that is selected (most recent status)
+            for step in reversed(steps):
                 if step.get("selected", False):
                     normalized_status = step["name"].lower().replace(" ", "_")
                     break
