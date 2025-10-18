@@ -481,8 +481,8 @@ def build_status_filter(status: Optional[str]) -> Tuple[str, Dict[str, Any]]:
     """
     if status and status != 'all':
         normalized_status = status.lower().replace(' ', '_')
-        # Use normalized_status column with fallback to normalized status column
-        return "AND (normalized_status = %(status)s OR REPLACE(LOWER(COALESCE(status, '')), ' ', '_') = %(status)s)", {'status': normalized_status}
+        # Prioritize normalized_status when it exists, only fall back to legacy status when normalized_status is NULL
+        return "AND (normalized_status::text = %(status)s OR (normalized_status IS NULL AND REPLACE(LOWER(COALESCE(status, '')), ' ', '_') = %(status)s))", {'status': normalized_status}
     return "", {}
 
 def parse_date_range_from_query(q: str) -> Tuple[str, Optional[str], Optional[str]]:
@@ -622,9 +622,11 @@ def _search_tweeted_bills_like(
                 full_like_clause = " AND ".join(like_clauses)
                 params.update({'limit': page_size, 'offset': offset})
 
+                # Check if status is 'introduced' to adjust the tweet_posted condition
+                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                 query = f"""
                     SELECT * FROM bills
-                    WHERE tweet_posted = TRUE
+                    WHERE {tweet_posted_condition}
                     AND ({full_like_clause})
                     {status_clause}
                     {date_clause}
@@ -657,9 +659,11 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                     status_clause, params = build_status_filter(status)
                     params.update({'limit': page_size, 'offset': offset})
+                    # Check if status is 'introduced' to adjust the tweet_posted condition
+                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                     query = f"""
                         SELECT * FROM bills
-                        WHERE tweet_posted = TRUE
+                        WHERE {tweet_posted_condition}
                         {status_clause}
                         ORDER BY date_processed DESC
                         LIMIT %(limit)s OFFSET %(offset)s
@@ -682,9 +686,11 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update({'exact_id': cleaned_q.lower(), 'limit': page_size, 'offset': offset})
                     params.update(date_params)
+                    # Check if status is 'introduced' to adjust the tweet_posted condition
+                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                     cursor.execute(f"""
                         SELECT * FROM bills
-                        WHERE tweet_posted = TRUE
+                        WHERE {tweet_posted_condition}
                         AND LOWER(bill_id) = %(exact_id)s
                         {status_clause}
                         {date_clause}
@@ -707,9 +713,11 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update({'limit': page_size, 'offset': offset})
                     params.update(date_params)
+                    # Check if status is 'introduced' to adjust the tweet_posted condition
+                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                     cursor.execute(f"""
                         SELECT * FROM bills
-                        WHERE tweet_posted = TRUE
+                        WHERE {tweet_posted_condition}
                         {status_clause}
                         {date_clause}
                         ORDER BY date_processed DESC
@@ -734,10 +742,12 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                 params.update(date_params)
                 
                 # The tsvector column 'fts_vector' should be created via migration script
+                # Check if status is 'introduced' to adjust the tweet_posted condition
+                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                 query = f"""
                     SELECT *, ts_rank_cd(fts_vector, websearch_to_tsquery('english', %(fts_query)s)) as rank
                     FROM bills
-                    WHERE tweet_posted = TRUE
+                    WHERE {tweet_posted_condition}
                     AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
                     {status_clause}
                     {date_clause}
@@ -773,9 +783,11 @@ def _count_search_tweeted_bills_like(phrases: List[str], tokens: List[str], stat
                          LOWER(COALESCE(summary_long, '')) LIKE %({param_name})s)
                     """)
                 full_like_clause = " AND ".join(like_clauses)
+                # Check if status is 'introduced' to adjust the tweet_posted condition
+                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                 query = f"""
                     SELECT COUNT(*) FROM bills
-                    WHERE tweet_posted = TRUE AND ({full_like_clause}) {status_clause} {date_clause}
+                    WHERE {tweet_posted_condition} AND ({full_like_clause}) {status_clause} {date_clause}
                 """
                 cursor.execute(query, params)
                 return (cursor.fetchone() or [0])[0]
@@ -796,9 +808,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
             with db_connect() as conn:
                 with conn.cursor() as cursor:
                     status_clause, params = build_status_filter(status)
+                    # Check if status is 'introduced' to adjust the tweet_posted condition
+                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                     query = f"""
                         SELECT COUNT(*) FROM bills
-                        WHERE tweet_posted = TRUE
+                        WHERE {tweet_posted_condition}
                         {status_clause}
                     """
                     cursor.execute(query, params)
@@ -818,9 +832,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update({'exact_id': cleaned_q.lower()})
                     params.update(date_params)
+                    # Check if status is 'introduced' to adjust the tweet_posted condition
+                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                     cursor.execute(f"""
                         SELECT COUNT(*) FROM bills
-                        WHERE tweet_posted = TRUE
+                        WHERE {tweet_posted_condition}
                         AND LOWER(bill_id) = %(exact_id)s
                         {status_clause}
                         {date_clause}
@@ -840,9 +856,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                     status_clause, params = build_status_filter(status)
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update(date_params)
+                    # Check if status is 'introduced' to adjust the tweet_posted condition
+                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                     cursor.execute(f"""
                         SELECT COUNT(*) FROM bills
-                        WHERE tweet_posted = TRUE
+                        WHERE {tweet_posted_condition}
                         {status_clause}
                         {date_clause}
                     """, params)
@@ -863,9 +881,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                 date_clause, date_params = build_date_filter(start_date, end_date)
                 params.update({'fts_query': fts_query_str})
                 params.update(date_params)
+                # Check if status is 'introduced' to adjust the tweet_posted condition
+                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
                 query = f"""
                     SELECT COUNT(*) FROM bills
-                    WHERE tweet_posted = TRUE
+                    WHERE {tweet_posted_condition}
                     AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
                     {status_clause}
                     {date_clause}
@@ -939,3 +959,5 @@ def generate_website_slug(title: str, bill_id: str) -> str:
     slug_id = normalized_id.replace('-', '')
     
     return f"{s}-{slug_id}"
+
+
