@@ -339,7 +339,7 @@ def score_teen_impact(bill: Dict[str, Any], extra_text: Optional[str] = None) ->
         or bool(re.search(r"\b(apprentice(ship)?|STEM\s+education)\b", text, re.IGNORECASE))
     )
     if has_action and (teen_terms_present or in_school_context):
-        D = 1.2
+        D = 2.4  # Increased from 1.2 to reflect direct impact on teen daily life (school environments)
     elif not teen_path:
         # Broad general/public impact with no clear teen path
         D = 0.6
@@ -361,7 +361,7 @@ def score_teen_impact(bill: Dict[str, Any], extra_text: Optional[str] = None) ->
     if is_symbolic and not has_action:
         reason = "awareness/symbolic resolution with no programmatic actions"
     elif has_action and (teen_terms_present or in_school_context):
-        reason = "direct teen-targeted policy with mandates/programs"
+        reason = "direct teen-targeted policy with mandates/programs affecting daily life"
     elif has_action and not (teen_terms_present or in_school_context):
         reason = "general program with indirect teen impact"
     else:
