@@ -8,6 +8,7 @@ import os
 import sys
 import logging
 import requests
+import time
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -54,8 +55,8 @@ def update_bill_summary(bill_id: str, summaries: dict, status: str = None):
     try:
         with postgres_connect() as conn:
             with conn.cursor() as cursor:
-                # Verify all required fields are present
-                required_fields = ['tweet', 'overview', 'detailed', 'long', 'term_dictionary']
+                # Verify all required fields are present (excluding 'long' which no longer exists)
+                required_fields = ['tweet', 'overview', 'detailed', 'term_dictionary']
                 for field in required_fields:
                     if field not in summaries:
                         logger.error(f"Missing required field: {field}")
@@ -67,7 +68,6 @@ def update_bill_summary(bill_id: str, summaries: dict, status: str = None):
                         SET summary_tweet = %s,
                             summary_overview = %s,
                             summary_detailed = %s,
-                            summary_long = %s,
                             term_dictionary = %s,
                             status = %s,
                             updated_at = CURRENT_TIMESTAMP
@@ -76,7 +76,6 @@ def update_bill_summary(bill_id: str, summaries: dict, status: str = None):
                         summaries['tweet'],
                         summaries['overview'],
                         summaries['detailed'],
-                        summaries['long'],
                         summaries['term_dictionary'],
                         status,
                         bill_id
@@ -87,7 +86,6 @@ def update_bill_summary(bill_id: str, summaries: dict, status: str = None):
                         SET summary_tweet = %s,
                             summary_overview = %s,
                             summary_detailed = %s,
-                            summary_long = %s,
                             term_dictionary = %s,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE bill_id = %s
@@ -95,7 +93,6 @@ def update_bill_summary(bill_id: str, summaries: dict, status: str = None):
                         summaries['tweet'],
                         summaries['overview'],
                         summaries['detailed'],
-                        summaries['long'],
                         summaries['term_dictionary'],
                         bill_id
                     ))
@@ -109,7 +106,6 @@ def update_bill_summary(bill_id: str, summaries: dict, status: str = None):
                     logger.info(f"  - summary_tweet: {len(summaries['tweet'])} chars")
                     logger.info(f"  - summary_overview: {len(summaries['overview'])} chars")
                     logger.info(f"  - summary_detailed: {len(summaries['detailed'])} chars")
-                    logger.info(f"  - summary_long: {len(summaries['long'])} chars")
                     logger.info(f"  - term_dictionary: {len(summaries['term_dictionary'])} chars")
                     return True
                 else:
@@ -121,7 +117,7 @@ def update_bill_summary(bill_id: str, summaries: dict, status: str = None):
         return False
 
 def fetch_bill_from_api(congress: str, bill_type: str, bill_number: str):
-    """Fetch bill details from Congress.gov API."""
+    """Fetch bill details from Congress.gov API with proper rate limiting."""
     api_key = os.getenv('CONGRESS_API_KEY')
     if not api_key:
         logger.error("CONGRESS_API_KEY not found in environment")
@@ -133,9 +129,23 @@ def fetch_bill_from_api(congress: str, bill_type: str, bill_number: str):
     headers = {"X-API-Key": api_key}
     params = {"format": "json"}
     
+    # Add rate limiting delay
+    time.sleep(0.2)  # 200ms delay between API calls
+    
     try:
         logger.info(f"Fetching bill from: {bill_endpoint}")
         response = requests.get(bill_endpoint, headers=headers, params=params, timeout=30)
+        
+        # Handle rate limiting
+        if response.status_code == 429:
+            logger.warning("Rate limit exceeded. Waiting 60 seconds before retry...")
+            time.sleep(60)
+            # Retry once after waiting
+            response = requests.get(bill_endpoint, headers=headers, params=params, timeout=30)
+            if response.status_code == 429:
+                logger.error("Rate limit still exceeded after waiting")
+                return None
+        
         response.raise_for_status()
         
         data = response.json()
@@ -156,6 +166,9 @@ def fetch_bill_from_api(congress: str, bill_type: str, bill_number: str):
         
         return bill_data
         
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error fetching bill from API: {e}")
+        return None
     except Exception as e:
         logger.error(f"Error fetching bill from API: {e}")
         return None
@@ -208,8 +221,8 @@ def reprocess_bill(bill_id: str):
         logger.info("Generating new summaries with Claude 3.5 Sonnet...")
         summaries = summarize_bill_enhanced(fresh_bill)
         
-        # Verify all required fields are present
-        required_fields = ['tweet', 'overview', 'detailed', 'long', 'term_dictionary']
+        # Verify all required fields are present (excluding 'long' which no longer exists)
+        required_fields = ['tweet', 'overview', 'detailed', 'term_dictionary']
         for field in required_fields:
             if field not in summaries:
                 logger.error(f"Missing required field in summaries: {field}")
@@ -220,7 +233,6 @@ def reprocess_bill(bill_id: str):
         logger.info(f"  - tweet: {len(summaries['tweet'])} chars")
         logger.info(f"  - overview: {len(summaries['overview'])} chars")
         logger.info(f"  - detailed: {len(summaries['detailed'])} chars")
-        logger.info(f"  - long: {len(summaries['long'])} chars")
         logger.info(f"  - term_dictionary: {len(summaries['term_dictionary'])} chars")
         
         # Check if summaries have proper formatting (emojis)
@@ -235,8 +247,6 @@ def reprocess_bill(bill_id: str):
             logger.warning(f"⚠️  Overview is too short ({len(summaries['overview'])} chars)")
         if len(summaries['detailed']) < 300:
             logger.warning(f"⚠️  Detailed summary is too short ({len(summaries['detailed'])} chars)")
-        if len(summaries['long']) < 400:
-            logger.warning(f"⚠️  Long summary is too short ({len(summaries['long'])} chars)")
         
         if not has_emojis:
             logger.warning("⚠️  Detailed summary missing emoji headers")
