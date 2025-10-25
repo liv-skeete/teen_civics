@@ -3,20 +3,23 @@ Gunicorn configuration file for TeenCivics production deployment.
 
 This configuration optimizes Gunicorn for production use with appropriate
 worker counts, timeouts, and logging settings.
+
+Configured for Railway.app deployment with 512MB memory constraints.
 """
 
-import multiprocessing
 import os
 
 # Server socket
 bind = "0.0.0.0:" + str(os.environ.get("PORT", 8000))
 backlog = 2048
 
-# Worker processes
-workers = multiprocessing.cpu_count() * 2 + 1
+# Worker processes - optimized for Railway's memory limits
+# Railway free tier: 512MB RAM, 1 vCPU
+# 2 workers keeps memory usage under limit while handling concurrent requests
+workers = 2
 worker_class = "sync"
 worker_connections = 1000
-timeout = 30
+timeout = 120  # Increased for Anthropic API summarization calls
 keepalive = 2
 
 # Restart workers after this many requests to prevent memory leaks
