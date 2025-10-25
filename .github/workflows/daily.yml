@@ -131,14 +131,15 @@ jobs:
           # Determine which scan this is
           HOUR_ET=$(TZ='America/New_York' date '+%H')
           MINUTE_ET=$(TZ='America/New_York' date '+%M')
-          # Check if time is between 10:00 PM ET and 11:00 PM ET (evening scan window)
-          # This corresponds to the 2:30 AM UTC job with 30-minute buffer before and after
+          # Check if time is between 8:00 AM ET and 10:00 AM ET (morning scan window)
+          if [ "$HOUR_ET" -ge 8 ] && [ "$HOUR_ET" -lt 10 ]; then
+            echo "☀️ Running MORNING scan (9:00 AM ET scheduled time)"
+          # Check if time is between 9:30 PM ET and 11:00 PM ET (evening scan window)
+          # This corresponds to the 2:30 AM UTC job with buffer
           # During EDT: 2:30 AM UTC = 10:30 PM EDT
           # During EST: 2:30 AM UTC = 9:30 PM EST
-          if [ "$HOUR_ET" -ge 8 ] && [ "$HOUR_ET" -lt 12 ]; then
-            echo "☀️ Running MORNING scan (9 AM ET)"
-          elif [ "$HOUR_ET" -eq 22 ] && [ "$MINUTE_ET" -ge 0 ] && [ "$MINUTE_ET" -le 59 ]; then
-            echo "🌙 Running EVENING scan (2:30 AM UTC job window)"
+          elif [ "$HOUR_ET" -ge 21 ] && [ "$HOUR_ET" -lt 23 ]; then
+            echo "🌙 Running EVENING scan (10:30 PM ET scheduled time)"
           else
             echo "🔧 Running MANUAL scan"
           fi
@@ -153,17 +154,6 @@ jobs:
         TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
         TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
         TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
-    - name: Fix tracker statuses (safeguard)
-      uses: nick-fields/retry@v2
-      with:
-        timeout_minutes: 5
-        max_attempts: 2
-        retry_wait_seconds: 30
-        command: |
-          python3 scripts/fix_bill_statuses.py --live --limit 5
-      env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     - name: Notify on failure
