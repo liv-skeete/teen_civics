@@ -133,6 +133,7 @@ def has_posted_today() -> bool:
 def insert_bill(bill_data: Dict[str, Any]) -> bool:
     """
     Insert a new bill record into the database.
+    Pre-calculates and stores short_title if not provided (deterministic, no external calls).
     """
     try:
         with db_connect() as conn:
@@ -141,6 +142,15 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                 tweet_posted = bool(bill_data.get('tweet_posted', False))
                 website_slug = bill_data.get('website_slug')
                 logger.info(f"Inserting bill with slug: {website_slug}")
+
+                # Pre-calc short_title if missing
+                short_title = bill_data.get('short_title')
+                if not short_title:
+                    title_val = bill_data.get('title') or ""
+                    if title_val:
+                        short_title = deterministic_shorten_title(title_val, 80)
+                    else:
+                        short_title = None
 
                 cursor.execute('''
                 INSERT INTO bills (
@@ -154,7 +164,7 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                 ''', (
                     bill_data.get('bill_id'),
                     bill_data.get('title'),
-                    bill_data.get('short_title'),
+                    short_title,
                     bill_data.get('status'),
                     bill_data.get('summary_tweet'),
                     bill_data.get('summary_long'),
@@ -280,6 +290,25 @@ def normalize_bill_id(bill_id: str) -> str:
             pass
     
     return normalized
+
+def deterministic_shorten_title(title: str, max_length: int = 80) -> str:
+    """
+    Deterministic, word-boundary title shortener for pre-calculated storage.
+    Never calls external services.
+    """
+    if not title:
+        return ""
+    if max_length is None:
+        max_length = 80
+    if max_length <= 0:
+        return title
+    if len(title) <= max_length:
+        return title
+    truncated = title[:max_length]
+    last_space = truncated.rfind(" ")
+    if last_space != -1 and last_space >= int(max_length * 0.6):
+        truncated = truncated[:last_space]
+    return truncated.rstrip() + "…"
 
 
 def get_all_bills(limit: int = 100) -> List[Dict[str, Any]]:

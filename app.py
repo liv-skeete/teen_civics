@@ -103,7 +103,7 @@ def add_security_headers(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.googletagmanager.com; "
+        "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.googletagmanager.com https://static.cloudflareinsights.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "connect-src 'self' https://www.google-analytics.com; "
         "font-src 'self' https://fonts.gstatic.com; "
@@ -289,27 +289,20 @@ def _truncate_title_at_word_boundary(text: str, max_length: int) -> str:
 @app.template_filter("shorten_title")
 def shorten_title_filter(title: str, max_length: int = 150) -> str:
     """
-    Ensure title shown is concise and does not exceed max_length.
+    Deterministic title shortener: never calls external services.
     - If title length <= max_length: return original.
-    - Else: try AI summarization; if still too long, truncate cleanly at a word boundary with an ellipsis.
-    - If max_length <= 0: default to 80 for sensible UX.
+    - If max_length <= 0: return full title (no truncation).
+    - Else: truncate cleanly at a word boundary with an ellipsis.
     """
     if not title:
         return ""
-    if max_length is None or max_length <= 0:
-        max_length = 80
+    if max_length is None:
+        max_length = 150
+    if max_length <= 0:
+        return title
     if len(title) <= max_length:
         return title
-    try:
-        summarized = summarize_title(title)
-    except Exception:
-        summarized = None
-    summarized = (summarized or "").strip()
-    if not summarized:
-        summarized = title
-    if len(summarized) > max_length:
-        return _truncate_title_at_word_boundary(summarized, max_length)
-    return summarized
+    return _truncate_title_at_word_boundary(title, max_length)
 
 def extract_teen_impact_score(summary: str) -> Optional[int]:
     if not summary:
@@ -376,9 +369,6 @@ def archive():
         total_pages = math.ceil(total_results / page_size) if total_results > 0 else 1
         if page > total_pages:
             page = total_pages
-        for bill in bills:
-            summary = bill.get("summary_detailed", "")
-            bill["teen_impact_score"] = extract_teen_impact_score(summary)
         render_start = time.time()
         response = render_template(
             "archive.html",
