@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fetches recent bills from the Congress.gov API.
+Fetches recent bills from the Congress.gov API and enriches them with tracker data.
 """
 
 import logging
@@ -100,16 +100,15 @@ def normalize_status(action_text: str, source_url: Optional[str] = None) -> str:
         return "Introduced"
     return "Introduced" # Default to Introduced
 
-def fetch_recent_bills(limit: int = 5, include_text: bool = True) -> List[Dict[str, Any]]:
+def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
     """
-    Fetches recent bills from the Congress.gov API, sorted by update date.
+    Fetches recent bills from the API and enriches them with tracker data.
     """
-    logger.info(f"🎯 Fetching bills from API (limit={limit}, include_text={include_text})")
+    logger.info(f"🎯 Fetching and enriching bills from API (limit={limit})")
     api_key = os.getenv('CONGRESS_API_KEY')
     if not api_key:
         raise ValueError("CONGRESS_API_KEY environment variable not set")
 
-    # Fetch legislation from the last 7 days, sorted by update date
     seven_days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%SZ')
     url = f"https://api.congress.gov/v3/bill?fromDateTime={seven_days_ago}&sort=updateDate-desc&limit={limit * 3}"
     
@@ -118,9 +117,9 @@ def fetch_recent_bills(limit: int = 5, include_text: bool = True) -> List[Dict[s
         response.raise_for_status()
         data = response.json()
         bills_from_api = data.get('bills', [])
-        logger.info(f"📋 API returned {len(bills_from_api)} bills, checking for text availability...")
+        logger.info(f"📋 API returned {len(bills_from_api)} bills, checking for text and enriching with tracker data...")
 
-        bills_with_text = []
+        enriched_bills = []
         checked_bills = 0
         for bill_data in bills_from_api:
             checked_bills += 1
@@ -137,21 +136,34 @@ def fetch_recent_bills(limit: int = 5, include_text: bool = True) -> List[Dict[s
                     text_response = requests.get(text_versions_url, headers={"X-Api-Key": api_key, "Accept": "application/json"})
                     if text_response.status_code == 200 and text_response.json().get('textVersions'):
                         logger.info(f"✅ {bill_type}{bill_number}-{congress} has text available")
-                        bills_with_text.append({
+                        
+                        source_url = bill_data.get('url')
+                        tracker_data = None
+                        if source_url:
+                            tracker_data = scrape_bill_tracker(source_url, force_scrape=True)
+
+                        enriched_bills.append({
                             'bill_id': f"{bill_type}{bill_number}-{congress}",
                             'title': bill_data.get('title'),
                             'text_url': text_versions_url,
-                            'source_url': bill_data.get('url'),
-                            'date_introduced': bill_data.get('introducedDate')
+                            'source_url': source_url,
+                            'date_introduced': bill_data.get('introducedDate'),
+                            'tracker': tracker_data
                         })
-                        if len(bills_with_text) >= limit:
+                        if len(enriched_bills) >= limit:
                             break
                 except requests.RequestException:
                     continue
         
-        logger.info(f"📊 API Filtering Results:\n   - Bills checked: {checked_bills}\n   - Bills WITH text: {len(bills_with_text)}\n   - Bills returned: {len(bills_with_text)}")
-        return bills_with_text
+        logger.info(f"📊 Enrichment Results:\n   - Bills checked: {checked_bills}\n   - Bills enriched: {len(enriched_bills)}\n   - Bills returned: {len(enriched_bills)}")
+        return enriched_bills
 
     except requests.RequestException as e:
         logger.error(f"❌ API request failed: {e}")
         return []
+
+def fetch_recent_bills(limit: int = 5, include_text: bool = True) -> List[Dict[str, Any]]:
+    """
+    Wrapper function to fetch and enrich bills.
+    """
+    return fetch_and_enrich_bills(limit=limit)

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.fetchers.feed_parser import fetch_recent_bills, normalize_status
+from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status
 from src.processors.summarizer import summarize_bill_enhanced
 from src.publishers.twitter_publisher import post_tweet, format_bill_tweet
 from src.database.db import (
@@ -61,9 +61,9 @@ def main(dry_run: bool = False) -> int:
             logger.info("🛑 DUPLICATE PREVENTION: A bill was already posted today. Skipping evening scan.")
             return 0
 
-        logger.info("📥 Fetching recent bills from Congress.gov API...")
-        bills = fetch_recent_bills(limit=25)
-        logger.info(f"📊 Retrieved {len(bills)} bills with text from API")
+        logger.info("📥 Fetching and enriching recent bills from Congress.gov...")
+        bills = fetch_and_enrich_bills(limit=25)
+        logger.info(f"📊 Retrieved and enriched {len(bills)} bills")
 
         selected_bill = None
         selected_bill_data = None
@@ -112,6 +112,14 @@ def main(dry_run: bool = False) -> int:
             
             term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
             
+            tracker_data = selected_bill.get("tracker")
+            tracker_raw_serialized = None
+            if tracker_data:
+                try:
+                    tracker_raw_serialized = json.dumps(tracker_data)
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"Failed to serialize tracker_data for bill {bill_id}: {e}")
+
             bill_data = {
                 "bill_id": bill_id,
                 "title": selected_bill.get("title", ""),
@@ -125,6 +133,7 @@ def main(dry_run: bool = False) -> int:
                 "source_url": selected_bill.get("source_url", ""),
                 "website_slug": generate_website_slug(selected_bill.get("title", ""), bill_id),
                 "tweet_posted": False,
+                "tracker_raw": tracker_raw_serialized,
             }
             
             logger.info("💾 Inserting new bill into database...")
