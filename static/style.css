@@ -1226,10 +1226,10 @@ textarea:focus-visible {
 
 /* Ensure checkboxes meet 44px tap target on touch/tablet widths without template changes */
 @media (max-width: 1200px) and (pointer: coarse) {
-    input[type="checkbox"] {
-        min-width: 44px;
+    .sort-control label {
         min-height: 44px;
-        vertical-align: middle; /* keep label text aligned */
+        display: inline-flex;
+        align-items: center;
     }
 }
 @media (max-width: 768px) {
@@ -1301,6 +1301,7 @@ textarea:focus-visible {
     .filter-section {
         flex-direction: column;
         align-items: stretch;
+        gap: var(--spacing-md);
     }
     .filter-form, .sort-control {
         width: 100%;
