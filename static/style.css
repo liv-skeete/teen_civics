@@ -66,7 +66,7 @@
 /* Skip to content link for accessibility */
 .skip-to-content {
     position: absolute;
-    top: -40px;
+    top: -9999px; /* keep fully offscreen to avoid tiny visible sliver on some browsers */
     left: 0;
     background: var(--color-navy);
     color: var(--color-white);
@@ -933,6 +933,9 @@ textarea:focus-visible {
     cursor: pointer;
     width: 18px;
     height: 18px;
+    -webkit-appearance: checkbox; /* normalize iOS Safari */
+    appearance: auto;
+    margin: 0; /* keep label text aligned */
 }
 
 .filter-form label {
@@ -1306,6 +1309,28 @@ textarea:focus-visible {
     .filter-form, .sort-control {
         width: 100%;
     }
+    /* Mobile stacking and alignment for status filter */
+    .filter-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-sm);
+    }
+    .filter-form label {
+        white-space: normal; /* allow wrap on small screens */
+        margin: 0 0 var(--spacing-xs) 0;
+    }
+    .filter-form select {
+        width: 100%;
+        max-width: 100%;
+        min-height: 44px; /* consistent tap target */
+        line-height: 1.2;
+    }
+    .sort-control label {
+        display: flex;
+        align-items: center;
+        min-height: 44px; /* make the whole label the tap target */
+        gap: var(--spacing-sm);
+    }
 }
 
 @media (max-width: 480px) {
@@ -1570,12 +1595,15 @@ textarea:focus-visible {
 }
 
 .creator-card .creator-img {
+  display: block;
   width: 100%;
   max-width: 320px;
-  aspect-ratio: 1 / 1;
+  height: auto; /* Brave fix: use natural aspect ratio */
+  aspect-ratio: auto; /* avoid Chromium/Brave rendering bug with aspect-ratio on img */
   object-fit: cover;
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-md);
+  background-color: var(--color-white); /* seamless while lazy-loading */
 }
 
 /* Responsive adjustments for Creator section */

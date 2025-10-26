@@ -57,6 +57,39 @@
             padding: var(--spacing-md) 0 !important;
             font-size: var(--font-size-md);
         }
+
+        /* Force status filter to stack on small screens */
+        .filter-form {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: var(--spacing-sm);
+        }
+        .filter-form label {
+            white-space: normal !important;
+            margin: 0 0 var(--spacing-xs) 0;
+        }
+        .filter-form select {
+            width: 100% !important;
+            min-height: 44px;
+            line-height: 1.2;
+        }
+
+        /* Make the entire label the tap target for the checkbox */
+        .sort-control label {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+    }
+
+    /* Normalize checkbox rendering on iOS Safari/Brave */
+    .sort-control input[type="checkbox"] {
+        -webkit-appearance: checkbox !important;
+        appearance: auto !important;
+        width: 18px;
+        height: 18px;
+        margin: 0;
     }
 </style>
 <div class="container">
