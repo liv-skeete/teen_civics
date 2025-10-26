@@ -520,20 +520,10 @@ textarea:focus-visible {
     margin-bottom: var(--spacing-xs);
 }
 
-/* Ensure bill title on detail page matches homepage title sizing */
-.bill-detail .bill-title {
-  font-size: var(--font-size-xl);
-  line-height: 1.2;
-}
 /* Reduce section heading sizes on bill detail page and homepage */
 .bill-detail h3,
 .container > article h3 {
   font-size: var(--font-size-lg);
-}
-/* Ensure homepage bill title matches detail page title sizing */
-.container > article .bill-title {
-  font-size: var(--font-size-xl);
-  line-height: 1.2;
 }
 
 .bill-short-title {

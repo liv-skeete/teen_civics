@@ -17,13 +17,7 @@
 <div class="container bill-detail">
     <article class="bill-card">
         <div class="bill-header">
-            <h3 class="bill-title">{{ bill.title|shorten_title }}</h3>
-            {% if bill.title|shorten_title != bill.title %}
-            <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
-            {% endif %}
-            {% if bill.short_title %}
-            <h4 class="bill-short-title">{{ bill.short_title }}</h4>
-            {% endif %}
+            <h4 class="bill-title">{{ bill.title }}</h4>
         </div>
 
         <div class="bill-content">

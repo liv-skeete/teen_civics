@@ -164,9 +164,6 @@
                 <h2 class="bill-title h3-style">
                     <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.short_title or (bill.title|shorten_title(80)) }}</a>
                 </h2>
-                {% if bill.short_title %}
-                <h3 class="bill-short-title">{{ bill.short_title }}</h3>
-                {% endif %}
                 
                 <!-- Bill metadata moved here -->
                 <div class="bill-meta">
