@@ -100,6 +100,25 @@ def normalize_status(action_text: str, source_url: Optional[str] = None) -> str:
         return "Introduced"
     return "Introduced" # Default to Introduced
 
+def construct_bill_url(congress: str, bill_type: str, bill_number: str) -> str:
+    """
+    Constructs the user-facing URL for a bill on Congress.gov.
+    """
+    bill_type_map = {
+        "hr": "house-bill",
+        "s": "senate-bill",
+        "hres": "house-resolution",
+        "sres": "senate-resolution",
+        "hjres": "house-joint-resolution",
+        "sjres": "senate-joint-resolution",
+        "hconres": "house-concurrent-resolution",
+        "sconres": "senate-concurrent-resolution",
+    }
+    bill_type_slug = bill_type_map.get(bill_type.lower())
+    if not bill_type_slug:
+        return f"https://www.congress.gov/search?q={bill_type}{bill_number}"
+    return f"https://www.congress.gov/bill/{congress}th-congress/{bill_type_slug}/{bill_number}"
+
 def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
     """
     Fetches recent bills from the API and enriches them with tracker data.
@@ -137,7 +156,7 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
                     if text_response.status_code == 200 and text_response.json().get('textVersions'):
                         logger.info(f"✅ {bill_type}{bill_number}-{congress} has text available")
                         
-                        source_url = bill_data.get('url')
+                        source_url = construct_bill_url(congress, bill_type, bill_number)
                         tracker_data = None
                         if source_url:
                             tracker_data = scrape_bill_tracker(source_url, force_scrape=True)
