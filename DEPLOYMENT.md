@@ -1,4 +1,6 @@
-# Deployment Guide
+# AWS Lightsail Deployment Guide (Legacy)
+
+> **NOTE**: This guide covers the legacy deployment method to AWS Lightsail. The project is now deployed to Railway.app. For current deployment instructions, see [DEPLOYMENT_RAILWAY.md](DEPLOYMENT_RAILWAY.md).
 
 This guide covers deploying TeenCivics to AWS Lightsail with Gunicorn and Nginx.
 

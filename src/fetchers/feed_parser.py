@@ -26,10 +26,11 @@ def running_in_ci() -> bool:
     """Check if the code is running in a CI environment."""
     return bool(os.getenv('CI')) or bool(os.getenv('GITHUB_ACTIONS'))
 
-def scrape_bill_tracker(source_url: str, force_scrape=False) -> Optional[List[Dict[str, any]]]:
+def scrape_bill_tracker(source_url: str, force_scrape=False, max_retries: int = 3, base_timeout: int = 30000) -> Optional[List[Dict[str, any]]]:
     """
     Scrapes the bill progress tracker from a Congress.gov bill page.
     Tries multiple selector variants and an accessibility fallback.
+    Includes retry logic and increased timeout to prevent failures.
     """
     if running_in_ci() and not force_scrape:
         logger.debug("Skipping HTML tracker scraping in CI mode")
@@ -38,80 +39,103 @@ def scrape_bill_tracker(source_url: str, force_scrape=False) -> Optional[List[Di
         logger.warning("Playwright not available, cannot scrape tracker")
         return None
 
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                           'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
-            )
-            page = context.new_page()
-            time.sleep(1)  # Small delay
-            response = page.goto(source_url, timeout=20000, wait_until='networkidle')
+    for attempt in range(max_retries):
+        try:
+            # Increase timeout with each retry (exponential backoff)
+            timeout = base_timeout * (2 ** attempt)
+            logger.info(f"Attempt {attempt + 1}/{max_retries} with timeout {timeout}ms for {source_url}")
+            
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+                )
+                page = context.new_page()
+                time.sleep(1)  # Small delay
+                response = page.goto(source_url, timeout=timeout, wait_until='networkidle')
 
-            if not response or response.status != 200:
-                logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
-                return None
+                if not response or response.status != 200:
+                    logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying in 2 seconds...")
+                        time.sleep(2)
+                        continue
+                    return None
 
-            # Best-effort wait for either tracker list or the hidden status paragraph
-            try:
-                page.wait_for_selector("ol.bill_progress, ol.bill-progress, p.hide_fromsighted", timeout=5000)
-            except Exception:
-                pass
+                # Best-effort wait for either tracker list or the hidden status paragraph
+                try:
+                    page.wait_for_selector("ol.bill_progress, ol.bill-progress, p.hide_fromsighted", timeout=min(timeout, 10000))
+                except Exception:
+                    pass
 
-            content = page.content()
-            soup = BeautifulSoup(content, 'html.parser')
+                content = page.content()
+                soup = BeautifulSoup(content, 'html.parser')
 
-            # 1) Primary: ordered list tracker (support old/new class names)
-            tracker = soup.find('ol', class_=['bill_progress', 'bill-progress'])
-            steps: List[Dict[str, Any]] = []
+                # 1) Primary: ordered list tracker (support old/new class names)
+                tracker = soup.find('ol', class_=['bill_progress', 'bill-progress'])
+                steps: List[Dict[str, Any]] = []
 
-            if tracker:
-                for li in tracker.find_all('li'):
-                    # Get only the direct text from the li element, excluding hidden div content
-                    text_parts = []
-                    for content in li.contents:
-                        # Skip hidden divs with class 'sol-step-info'
-                        if hasattr(content, 'name') and content.name == 'div' and 'sol-step-info' in (content.get('class', [])):
-                            continue
-                        # Extract text from text nodes and direct strings
-                        elif hasattr(content, 'string') and content.string:
-                            text_parts.append(content.string)
-                        elif isinstance(content, str):
-                            text_parts.append(content)
-                    
-                    name = ''.join(text_parts).strip()
-                    classes = (li.get('class') or [])
-                    selected = ('selected' in classes) or ('current' in classes)
-                    if name:
-                        steps.append({"name": name, "selected": selected})
+                if tracker:
+                    for li in tracker.find_all('li'):
+                        # Get only the direct text from the li element, excluding hidden div content
+                        text_parts = []
+                        for content in li.contents:
+                            # Skip hidden divs with class 'sol-step-info'
+                            if hasattr(content, 'name') and content.name == 'div' and 'sol-step-info' in (content.get('class', [])):
+                                continue
+                            # Extract text from text nodes and direct strings
+                            elif hasattr(content, 'string') and content.string:
+                                text_parts.append(content.string)
+                            elif isinstance(content, str):
+                                text_parts.append(content)
+                        
+                        name = ''.join(text_parts).strip()
+                        classes = (li.get('class') or [])
+                        selected = ('selected' in classes) or ('current' in classes)
+                        if name:
+                            steps.append({"name": name, "selected": selected})
 
-                if steps:
-                    logger.info(f"✅ Scraped {len(steps)} tracker steps from {source_url}")
-                    return steps
+                    if steps:
+                        logger.info(f"✅ Scraped {len(steps)} tracker steps from {source_url}")
+                        return steps
 
-            # 2) Fallback: A11y paragraph explicitly states status
-            status_text = None
-            try:
-                for p_tag in soup.find_all('p', class_='hide_fromsighted'):
-                    text = p_tag.get_text(" ", strip=True)
-                    m = re.search(r'This bill has the status\s*(.+)$', text, re.IGNORECASE)
-                    if m:
-                        status_text = m.group(1).strip()
-                        break
-            except Exception:
+                # 2) Fallback: A11y paragraph explicitly states status
                 status_text = None
+                try:
+                    for p_tag in soup.find_all('p', class_='hide_fromsighted'):
+                        text = p_tag.get_text(" ", strip=True)
+                        m = re.search(r'This bill has the status\s*(.+)$', text, re.IGNORECASE)
+                        if m:
+                            status_text = m.group(1).strip()
+                            break
+                except Exception:
+                    status_text = None
 
-            if status_text:
-                logger.info(f"✅ Parsed status from hidden paragraph for {source_url}: {status_text}")
-                # Return a minimal steps list with the current status selected
-                return [{"name": status_text, "selected": True}]
+                if status_text:
+                    logger.info(f"✅ Parsed status from hidden paragraph for {source_url}: {status_text}")
+                    # Return a minimal steps list with the current status selected
+                    return [{"name": status_text, "selected": True}]
 
-            logger.warning(f"⚠️ Could not find bill tracker or status on page: {source_url}")
+                logger.warning(f"⚠️ Could not find bill tracker or status on page: {source_url}")
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying in 2 seconds...")
+                    time.sleep(2)
+                    continue
+                return None
+        except Exception as e:
+            logger.warning(f"⚠️ Attempt {attempt + 1} failed to scrape tracker from {source_url}: {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in 2 seconds...")
+                time.sleep(2)
+                continue
             return None
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to scrape tracker from {source_url}: {e}")
-        return None
+        finally:
+            try:
+                if 'browser' in locals():
+                    browser.close()
+            except Exception as e:
+                logger.warning(f"Error closing browser: {e}")
 
 def normalize_status(action_text: str, source_url: Optional[str] = None) -> str:
     """

@@ -92,7 +92,22 @@ Please see [`CONTRIBUTING.md`](CONTRIBUTING.md:1) for detailed guidelines on how
 
 ## Deployment
 
-TeenCivics is deployed on AWS Lightsail using Gunicorn as the WSGI server and Nginx as a reverse proxy. For detailed deployment instructions, see [`DEPLOYMENT.md`](DEPLOYMENT.md:1).
+TeenCivics is deployed on Railway.app using Gunicorn as the WSGI server with a production-optimized configuration. The application is served with automatic SSL through Railway's built-in reverse proxy and load balancing.
+
+## Custom Domain
+
+The application is accessible at [teencivics.org](https://teencivics.org) with SSL provided by Cloudflare.
+
+## Production Architecture
+
+- **Platform**: Railway.app with 512MB RAM, 1 vCPU instance
+- **Web Server**: Gunicorn with 2 workers optimized for memory constraints
+- **Process Management**: Managed by Railway's process orchestration
+- **Database**: PostgreSQL with SSL connections and connection pooling
+- **SSL**: Automatic HTTPS with Cloudflare integration
+- **Monitoring**: Built-in Railway logging and metrics
+
+For deployment instructions, see [DEPLOYMENT_RAILWAY.md](DEPLOYMENT_RAILWAY.md). Legacy AWS deployment instructions are in [`DEPLOYMENT.md`](DEPLOYMENT.md:1).
 
 ## License
 
