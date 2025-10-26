@@ -30,8 +30,15 @@
   <meta name="theme-color" content="#1A237E">
 
   <!-- CSS -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2025-10-09-2') }}">
-
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2025-10-26-5') }}">
+  <style>
+    /* Cross-browser hardening for wrapping and Safari spacing */
+    .navbar .nav-menu .nav-link { white-space: nowrap !important; }
+    .search-form .btn-search { white-space: nowrap !important; }
+    .sort-control label { display: inline-flex; align-items: center; gap: var(--spacing-sm); }
+    .sort-control input[type="checkbox"] { margin: 0 !important; vertical-align: middle; }
+  </style>
+  
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

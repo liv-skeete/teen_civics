@@ -267,12 +267,24 @@ textarea:focus-visible {
     gap: var(--spacing-lg);
 }
 
+@media (min-width: 769px) and (max-width: 992px) {
+    .nav-menu {
+        gap: var(--spacing-sm); /* Reduce gap on medium screens */
+    }
+}
+
+/* Prevent wrapping in the top nav across browsers (including Safari) */
+.nav-menu .nav-link {
+    white-space: nowrap;
+}
+
 .nav-link {
     color: var(--color-brown-black);
     font-weight: 500;
     padding: calc(var(--spacing-sm) + 2px) var(--spacing-md);
     border-radius: var(--border-radius);
     transition: background-color var(--transition-fast);
+    white-space: nowrap; /* Prevent nav links from wrapping */
 }
 
 .nav-link:hover {
@@ -803,6 +815,15 @@ textarea:focus-visible {
     display: flex;
     gap: var(--spacing-md);
     width: 100%;
+    align-items: center; /* align buttons/input vertically */
+}
+
+/* Normalize heights across search controls to prevent misalignment */
+.search-form .search-input,
+.search-form .btn-search,
+.search-form .btn-clear {
+    min-height: 44px; /* WCAG touch target */
+    line-height: 1.2;
 }
 
 .search-form .btn-search {
@@ -813,6 +834,7 @@ textarea:focus-visible {
     -webkit-appearance: none;
     appearance: none;
     box-shadow: none;
+    white-space: nowrap; /* Prevent text wrapping */
 }
 
 /* Make Clear button match Search styling inside the search header */
@@ -845,6 +867,7 @@ textarea:focus-visible {
 }
 
 @media (max-width: 768px) {
+    .search-form .search-input,
     .search-form .btn-search,
     .search-form .btn-clear {
         width: 100%;
@@ -852,14 +875,23 @@ textarea:focus-visible {
         font-size: var(--font-size-md);
         display: inline-block;
     }
+
+    .search-form .search-input {
+        padding: 1rem 1.5rem; /* Restore horizontal padding on mobile */
+    }
 }
 
 .search-input {
     flex: 1;
-    padding: 0.75rem var(--spacing-md);
+    padding: 0.75rem 1.5rem; /* Increased horizontal padding */
     border: var(--border-width) solid var(--border-color);
     border-radius: var(--border-radius);
     font-size: var(--font-size-md);
+}
+
+.search-input::placeholder {
+    color: var(--color-dark-gray);
+    opacity: 0.7; /* Lighten placeholder text */
 }
 
 .btn-clear {
@@ -905,6 +937,7 @@ textarea:focus-visible {
 
 .filter-form label {
     font-weight: 500;
+    white-space: nowrap; /* Prevent label from wrapping */
 }
 
 .filter-form select {
@@ -1192,7 +1225,7 @@ textarea:focus-visible {
 }
 
 /* Ensure checkboxes meet 44px tap target on touch/tablet widths without template changes */
-@media (max-width: 1200px) {
+@media (max-width: 1200px) and (pointer: coarse) {
     input[type="checkbox"] {
         min-width: 44px;
         min-height: 44px;
@@ -1585,4 +1618,10 @@ h1, h2, h3, h4, h5, h6 {
   overflow-wrap: break-word;
   white-space: normal;
   text-wrap: balance;
+}
+/* Fix for checkbox alignment in Safari */
+.sort-control label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm); /* Add space between checkbox and text */
 }
