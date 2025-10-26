@@ -162,11 +162,8 @@
         <article class="bill-card" data-status="{{ bill.normalized_status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
             <div class="bill-header">
                 <h2 class="bill-title h3-style">
-                    <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.title|shorten_title }}</a>
+                    <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.title|shorten_title(0 if bill.bill_id == 'sres464-119' else 80) }}</a>
                 </h2>
-                {% if bill.title|length > 80 %}
-                <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
-                {% endif %}
                 {% if bill.short_title %}
                 <h3 class="bill-short-title">{{ bill.short_title }}</h3>
                 {% endif %}

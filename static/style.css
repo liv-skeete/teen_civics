@@ -520,9 +520,19 @@ textarea:focus-visible {
     margin-bottom: var(--spacing-xs);
 }
 
-/* Ensure bill title on detail page is larger than subheadings */
+/* Ensure bill title on detail page matches homepage title sizing */
 .bill-detail .bill-title {
-  font-size: clamp(1.5rem, 6vw, 2.5rem);
+  font-size: var(--font-size-xl);
+  line-height: 1.2;
+}
+/* Reduce section heading sizes on bill detail page and homepage */
+.bill-detail h3,
+.container > article h3 {
+  font-size: var(--font-size-lg);
+}
+/* Ensure homepage bill title matches detail page title sizing */
+.container > article .bill-title {
+  font-size: var(--font-size-xl);
   line-height: 1.2;
 }
 
@@ -1025,6 +1035,9 @@ textarea:focus-visible {
 .resource-card h2 {
     color: var(--color-navy);
     margin-bottom: var(--spacing-md);
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: none;
 }
 
 .resource-links {
@@ -1096,6 +1109,7 @@ textarea:focus-visible {
   border-radius: var(--border-radius-lg);
   text-align: center;
   box-shadow: var(--shadow-sm);
+  border: 2px solid var(--color-navy);
 
   display: flex;
   flex-direction: column;

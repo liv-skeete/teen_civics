@@ -16,10 +16,7 @@
     {% if bill %}
     <article class="bill-card featured-bill">
         <div class="bill-header">
-            <h3 class="bill-title">{{ bill.title|shorten_title }}</h3>
-            {% if bill.title|length > 80 %}
-            <p class="full-bill-title"><strong>Full Bill Title:</strong> {{ bill.title }}</p>
-            {% endif %}
+            <h3 class="bill-title">{{ bill.title }}</h3>
             {% if bill.short_title %}
             <h4 class="bill-short-title">{{ bill.short_title }}</h4>
             {% endif %}

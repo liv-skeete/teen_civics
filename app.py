@@ -8,7 +8,7 @@ import re
 import json
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import logging
@@ -90,6 +90,7 @@ from src.database.db import (
     search_tweeted_bills,
     count_search_tweeted_bills,
 )
+from src.processors.summarizer import summarize_title
 
 # --- Request ID + security headers ---
 @app.before_request
@@ -126,7 +127,7 @@ def inject_ga_measurement_id():
 
 @app.context_processor
 def inject_current_year():
-    return {"current_year": datetime.utcnow().year}
+    return {"current_year": datetime.now(timezone.utc).year}
 
 # --- Jinja filters (unchanged) ---
 @app.template_filter("format_date")
@@ -274,13 +275,41 @@ def format_detailed_html_filter(text: str) -> Markup:
         html_parts.append("</ul>")
     return Markup("\n".join(html_parts))
 
+def _truncate_title_at_word_boundary(text: str, max_length: int) -> str:
+    if not text:
+        return ""
+    if len(text) <= max_length:
+        return text
+    truncated = text[:max_length]
+    last_space = truncated.rfind(" ")
+    if last_space != -1 and last_space >= int(max_length * 0.6):
+        truncated = truncated[:last_space]
+    return truncated.rstrip() + "…"
+
 @app.template_filter("shorten_title")
-def shorten_title_filter(title: str, max_length: int = 60) -> str:
+def shorten_title_filter(title: str, max_length: int = 150) -> str:
+    """
+    Ensure title shown is concise and does not exceed max_length.
+    - If title length <= max_length: return original.
+    - Else: try AI summarization; if still too long, truncate cleanly at a word boundary with an ellipsis.
+    - If max_length <= 0: default to 80 for sensible UX.
+    """
     if not title:
         return ""
+    if max_length is None or max_length <= 0:
+        max_length = 80
     if len(title) <= max_length:
         return title
-    return title[:max_length].rsplit(" ", 1)[0] + "..."
+    try:
+        summarized = summarize_title(title)
+    except Exception:
+        summarized = None
+    summarized = (summarized or "").strip()
+    if not summarized:
+        summarized = title
+    if len(summarized) > max_length:
+        return _truncate_title_at_word_boundary(summarized, max_length)
+    return summarized
 
 def extract_teen_impact_score(summary: str) -> Optional[int]:
     if not summary:

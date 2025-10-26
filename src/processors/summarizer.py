@@ -1007,3 +1007,36 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         "term_dictionary": term_dictionary,
         "tweet": tweet
     }
+def summarize_title(bill_title: str) -> str:
+    """
+    Summarizes a long bill title to be more informative than simple truncation.
+    """
+    try:
+        api_key = _ensure_api_key()
+        client = Anthropic(api_key=api_key)
+        
+        system_prompt = (
+            "You are an expert at summarizing long, complex legislative titles into short, informative phrases for a general audience. "
+            "Your response must be a single, concise sentence. Do not include any introductory phrases like 'This bill...' or 'A resolution...'. "
+            "Directly summarize the title's content."
+        )
+        
+        user_prompt = f"Summarize the following bill title: \"{bill_title}\""
+        
+        response = client.messages.create(
+            model=PREFERRED_MODEL,
+            max_tokens=100,
+            temperature=0.5,
+            system=system_prompt,
+            messages=[
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        
+        summarized_title = _extract_text_from_response(response)
+        return summarized_title.strip()
+        
+    except Exception as e:
+        logger.error(f"Error summarizing title: {e}")
+        # Fallback to simple truncation if summarization fails
+        return bill_title[:250] + '...' if len(bill_title) > 250 else bill_title
