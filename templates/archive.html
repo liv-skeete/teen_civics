@@ -94,7 +94,7 @@
 </style>
 <div class="container">
     <div class="archive-header">
-        <h1>Bill Archive</h1>
+        <h1 class="h3-style">Bill Archive</h1>
         <p>Browse all congressional bills summarized by TeenCivics</p>
     </div>
 
@@ -161,7 +161,7 @@
         {% for bill in bills %}
         <article class="bill-card" data-status="{{ bill.normalized_status }}" data-teen-impact="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}" data-original-index="{{ loop.index0 }}">
             <div class="bill-header">
-                <h2 class="bill-title">
+                <h2 class="bill-title h3-style">
                     <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.title|shorten_title }}</a>
                 </h2>
                 {% if bill.title|length > 80 %}

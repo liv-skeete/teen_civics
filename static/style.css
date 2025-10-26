@@ -416,6 +416,7 @@ textarea:focus-visible {
     padding: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
     transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+    border: 2px solid var(--color-navy);
 }
 
 .bill-card:hover {
@@ -809,6 +810,7 @@ textarea:focus-visible {
     background-color: var(--color-white);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-sm);
+    border: 2px solid var(--color-navy);
 }
 
 .search-form {
@@ -1017,6 +1019,7 @@ textarea:focus-visible {
     padding: var(--spacing-lg);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-md);
+    border: 2px solid var(--color-navy);
 }
 
 .resource-card h2 {
@@ -1049,6 +1052,7 @@ textarea:focus-visible {
     padding: var(--spacing-lg);
     border-radius: var(--border-radius-lg);
     margin-bottom: var(--spacing-xl);
+    border: 2px solid var(--color-navy);
 }
 
 .info-content ul {
@@ -1207,6 +1211,10 @@ textarea:focus-visible {
 /* Utility Classes */
 .text-center {
     text-align: center;
+}
+
+.h3-style {
+    font-size: var(--font-size-xl);
 }
 
 .mb-0 {
@@ -1448,12 +1456,12 @@ textarea:focus-visible {
 /* Statistics Section */
 .stats-section {
   padding: var(--spacing-xl) 0;
-  background-color: var(--color-white);
+  background-color: var(--color-beige);
 }
 .stats-section h2 {
   text-align: center;
   margin-bottom: var(--spacing-xl);
-  color: var(--color-navy);
+  color: var(--color-brown-black);
 }
 .stats-grid {
   display: grid;
@@ -1464,21 +1472,22 @@ textarea:focus-visible {
   padding: 0 var(--spacing-md);
 }
 .stat-card {
-  background-color: var(--color-beige);
+  background-color: var(--color-white);
   padding: var(--spacing-lg);
   border-radius: var(--border-radius-lg);
-  text-align: center;
+  text-align: left;
   box-shadow: var(--shadow-sm);
+  border: 2px solid var(--color-navy);
 }
 .stat-headline {
   font-size: var(--font-size-lg);
-  color: var(--color-brown-black);
+  color: var(--color-navy);
   margin-bottom: var(--spacing-sm);
 }
 .stat-text {
   font-size: var(--font-size-md);
   line-height: 1.6;
-  color: var(--color-dark-gray);
+  color: var(--color-brown-black);
   margin-bottom: var(--spacing-md);
 }
 .stat-source {
@@ -1517,6 +1526,7 @@ textarea:focus-visible {
     padding: var(--spacing-xl);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-md);
+    border: 2px solid var(--color-navy);
 }
 
 .about-card h2 {
@@ -1641,12 +1651,15 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Contact page heading specificity: resource cards and header */
 .resources-header h1,
-.resource-card h2 {
+.resource-card h2,
+.archive-header h1,
+.contact-header h1 {
   hyphens: none;
   word-break: normal;
   overflow-wrap: break-word;
   white-space: normal;
   text-wrap: balance;
+  font-size: var(--font-size-xl); /* Match the "Misinformation Hits Gen Z" size */
 }
 /* Fix for checkbox alignment in Safari */
 .sort-control label {
