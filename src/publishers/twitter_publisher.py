@@ -235,7 +235,7 @@ def format_bill_tweet(bill: Dict) -> str:
 
     # Build the formatted tweet with header and footer
     header = "🏛️ Today in Congress\n\n"
-    footer = "\n\n👉 Want to learn more? Link coming soon..."
+    footer = "\n\n👉 See how this affects you: teencivics.org"
     
     # Calculate available space for summary (280 total - header - footer)
     header_length = len(header)

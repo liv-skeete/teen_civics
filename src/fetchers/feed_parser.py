@@ -68,7 +68,19 @@ def scrape_bill_tracker(source_url: str, force_scrape=False) -> Optional[List[Di
 
             if tracker:
                 for li in tracker.find_all('li'):
-                    name = li.get_text(strip=True)
+                    # Get only the direct text from the li element, excluding hidden div content
+                    text_parts = []
+                    for content in li.contents:
+                        # Skip hidden divs with class 'sol-step-info'
+                        if hasattr(content, 'name') and content.name == 'div' and 'sol-step-info' in (content.get('class', [])):
+                            continue
+                        # Extract text from text nodes and direct strings
+                        elif hasattr(content, 'string') and content.string:
+                            text_parts.append(content.string)
+                        elif isinstance(content, str):
+                            text_parts.append(content)
+                    
+                    name = ''.join(text_parts).strip()
                     classes = (li.get('class') or [])
                     selected = ('selected' in classes) or ('current' in classes)
                     if name:
@@ -236,6 +248,28 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
     except requests.RequestException as e:
         logger.error(f"❌ API request failed: {e}")
         return []
+
+# HTTP headers to avoid 403 errors
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+}
+
+# User agents for rotation
+USER_AGENTS = [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+]
+
+def get_random_user_agent():
+    """Get a random user agent from the list."""
+    import random
+    return random.choice(USER_AGENTS)
 
 def fetch_recent_bills(limit: int = 5, include_text: bool = True) -> List[Dict[str, Any]]:
     """

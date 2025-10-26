@@ -9,55 +9,76 @@ import json
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-# Import configuration system
-from src.config import get_config
-
-# Initialize configuration
-config = get_config()
-
-# Configure logging
 import logging
 from logging.handlers import RotatingFileHandler
 import os
-
-# Base logging configuration
-logging.basicConfig(
-    level=getattr(logging, config.logging.level),
-    format=config.logging.format,
-    handlers=[logging.StreamHandler()]  # Log to console by default
-)
-
-logger = logging.getLogger(__name__)
-
-# Add file handler if specified in config
-if config.logging.file_path:
-    # Create log directory if it doesn't exist
-    log_dir = os.path.dirname(config.logging.file_path)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    # Use a rotating file handler
-    file_handler = RotatingFileHandler(
-        config.logging.file_path,
-        maxBytes=1024 * 1024 * 5,  # 5 MB
-        backupCount=2
-    )
-    file_handler.setFormatter(logging.Formatter(config.logging.format))
-
-    # Add the handler to the root logger
-    logging.getLogger().addHandler(file_handler)
-    logger.info(f"Logging configured to file: {config.logging.file_path}")
+import secrets
 
 from flask import Flask, render_template, request, jsonify, abort, g
 from markupsafe import Markup, escape
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
-import secrets
 
-# Import database functions
+# Import configuration system
+from src.config import get_config
+config = get_config()
+
+# ---- Logging (handlers set once; Gunicorn will fork workers after import) ----
+root_logger = logging.getLogger()
+if not root_logger.handlers:
+    logging.basicConfig(
+        level=getattr(logging, config.logging.level),
+        format=config.logging.format,
+        handlers=[logging.StreamHandler()],
+    )
+logger = logging.getLogger(__name__)
+
+# Add file handler if specified in config
+if config.logging.file_path:
+    log_dir = os.path.dirname(config.logging.file_path)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    file_handler = RotatingFileHandler(
+        config.logging.file_path, maxBytes=5 * 1024 * 1024, backupCount=2
+    )
+    file_handler.setFormatter(logging.Formatter(config.logging.format))
+    logging.getLogger().addHandler(file_handler)
+    logger.info(f"Logging configured to file: {config.logging.file_path}")
+
+# ---- Flask app ----
+app = Flask(__name__)
+app.config["DEBUG"] = config.flask.debug
+
+# SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY, otherwise generate (dev)
+app.config["SECRET_KEY"] = (
+    os.getenv("FLASK_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or secrets.token_hex(32)
+)
+if not (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY")):
+    logger.warning("SECRET_KEY not set in environment, using generated key (not suitable for production)")
+
+# Session security
+app.config["SESSION_COOKIE_SECURE"] = not config.flask.debug
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# CSRF + rate limiting
+csrf = CSRFProtect(app)
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
+
+# --- Constants ---
+DEFAULT_ARCHIVE_PAGE_SIZE = 24
+
+# --- Import database functions (after app initialized) ---
 from src.database.db import (
     get_all_bills,
     get_bill_by_id,
@@ -70,50 +91,16 @@ from src.database.db import (
     count_search_tweeted_bills,
 )
 
-# Configure Flask app
-app = Flask(__name__)
-app.config['DEBUG'] = config.flask.debug
-
-# Security: Generate a secret key if not set
-if not app.config.get('SECRET_KEY'):
-    app.config['SECRET_KEY'] = secrets.token_hex(32)
-    logger.warning("SECRET_KEY not set in environment, using generated key (not suitable for production)")
-
-# Security: Secure session configuration
-app.config['SESSION_COOKIE_SECURE'] = not config.flask.debug  # True in production
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
-# Security: Initialize CSRF protection
-csrf = CSRFProtect(app)
-
-# Security: Initialize rate limiter
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://"
-)
-
-# --- Constants ---
-DEFAULT_ARCHIVE_PAGE_SIZE = 24
-
-# --- Request ID + API cache control ---
-
+# --- Request ID + security headers ---
 @app.before_request
 def _reqid_start():
-    """Attach a request ID and start time to each request for logging and tracing."""
     g._start = time.time()
     g.req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
 
 @app.after_request
 def add_security_headers(response):
-    """Add security headers to all responses."""
-    # Prevent clickjacking
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-
-    # Content Security Policy
-    response.headers['Content-Security-Policy'] = (
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.googletagmanager.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
@@ -122,114 +109,96 @@ def add_security_headers(response):
         "img-src 'self' data: https:; "
         "frame-ancestors 'self';"
     )
-
-    # Prevent MIME type sniffing
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-
-    # XSS Protection (legacy but still useful)
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-
-    # HSTS (HTTP Strict Transport Security) - only in production
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
     if not config.flask.debug:
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-
-    # Echo request ID for client/server correlation
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if hasattr(g, "req_id"):
         response.headers["X-Request-ID"] = g.req_id
-
-    # Prevent caching on API endpoints
     if request.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
-
     return response
 
-# --- Context Processors ---
-
+# --- Context processors ---
 @app.context_processor
 def inject_ga_measurement_id():
-    """Inject GA_MEASUREMENT_ID into all templates."""
-    ga_id = config.flask.ga_measurement_id
-    return dict(ga_measurement_id=ga_id)
+    return dict(ga_measurement_id=config.flask.ga_measurement_id)
 
 @app.context_processor
 def inject_current_year():
-    """Inject the current year into all templates for the footer."""
-    return {'current_year': datetime.utcnow().year}
+    return {"current_year": datetime.utcnow().year}
 
-# --- Jinja filters ---
-
-@app.template_filter('format_date')
+# --- Jinja filters (unchanged) ---
+@app.template_filter("format_date")
 def format_date_filter(date_str: Optional[str]) -> str:
-    """Format ISO date string into a more readable format."""
     if not date_str:
         return "Not available"
     try:
-        if 'T' in date_str:
-            date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        if "T" in date_str:
+            date_obj = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
         else:
-            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-        return date_obj.strftime('%B %d, %Y')
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+        return date_obj.strftime("%B %d, %Y")
     except (ValueError, TypeError):
         return date_str
 
-@app.template_filter('format_datetime_simple')
+@app.template_filter("format_datetime_simple")
 def format_datetime_simple_filter(date_str: Optional[str]) -> str:
-    """Format ISO datetime string into a simple format: YYYY-MM-DD HH:MM:SS"""
     if not date_str:
         return "Not available"
     try:
         if isinstance(date_str, str):
-            if 'T' in date_str:
-                date_part = date_str.split('.')[0] if '.' in date_str else date_str
-                if '+' in date_part:
-                    date_part = date_part.split('+')[0]
-                if date_part.endswith('Z'):
+            if "T" in date_str:
+                date_part = date_str.split(".")[0] if "." in date_str else date_str
+                if "+" in date_part:
+                    date_part = date_part.split("+")[0]
+                if date_part.endswith("Z"):
                     date_part = date_part[:-1]
                 date_obj = datetime.fromisoformat(date_part)
-            elif '+' in date_str:
-                date_part = date_str.split('+')[0]
+            elif "+" in date_str:
+                date_part = date_str.split("+")[0]
                 date_obj = datetime.fromisoformat(date_part)
-            elif len(date_str) == 19 and date_str[4] == '-' and date_str[7] == '-' and date_str[10] == ' ' and date_str[13] == ':' and date_str[16] == ':':
+            elif (
+                len(date_str) == 19
+                and date_str[4] == "-"
+                and date_str[7] == "-"
+                and date_str[10] == " "
+                and date_str[13] == ":"
+                and date_str[16] == ":"
+            ):
                 return date_str
             else:
                 try:
                     date_obj = datetime.fromisoformat(date_str)
                 except ValueError:
-                    if 'T' in date_str:
-                        fixed_str = date_str.replace('T', ' ')
-                        if '+' in fixed_str:
-                            fixed_str = fixed_str.split('+')[0]
+                    if "T" in date_str:
+                        fixed_str = date_str.replace("T", " ")
+                        if "+" in fixed_str:
+                            fixed_str = fixed_str.split("+")[0]
                         date_obj = datetime.fromisoformat(fixed_str)
                     else:
-                        if '+' in date_str:
-                            date_part = date_str.split('+')[0]
+                        if "+" in date_str:
+                            date_part = date_str.split("+")[0]
                             date_obj = datetime.fromisoformat(date_part)
                         else:
                             raise
-            return date_obj.strftime('%Y-%m-%d %H:%M:%S')
+            return date_obj.strftime("%Y-%m-%d %H:%M:%S")
         else:
-            return date_str.strftime('%Y-%m-%d %H:%M:%S')
+            return date_str.strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError) as e:
         logger.debug(f"Date formatting error for '{date_str}': {e}")
         return str(date_str) if date_str else "Not available"
 
-@app.template_filter('format_status')
+@app.template_filter("format_status")
 def format_status_filter(status: str) -> str:
-    """Format bill status string into a more readable format."""
     return (status or "").replace("_", " ").title()
 
-@app.template_filter('generate_congress_url')
+@app.template_filter("generate_congress_url")
 def generate_congress_url(bill_id: str, congress_session: str = "") -> str:
-    """
-    Construct a direct link to the bill on Congress.gov.
-    Example: https://www.congress.gov/bill/118th-congress/house-bill/5376
-    """
     if not bill_id:
         return "https://www.congress.gov/"
-
     if not congress_session:
         return f"https://www.congress.gov/search?q={bill_id}"
-
     try:
         patterns = {
             "hr": "house-bill",
@@ -241,36 +210,31 @@ def generate_congress_url(bill_id: str, congress_session: str = "") -> str:
             "hconres": "house-concurrent-resolution",
             "sconres": "senate-concurrent-resolution",
         }
-
         bid = bill_id.lower()
         bill_type = bill_number = full_type = None
-
         for prefix, congress_type in patterns.items():
             if bid.startswith(prefix):
                 remainder = bid[len(prefix):]
-                number_match = re.match(r'^(\d+)', remainder)
+                import re as _re
+                number_match = _re.match(r"^(\d+)", remainder)
                 if number_match:
                     bill_type = prefix
                     bill_number = number_match.group(1)
                     full_type = congress_type
                     break
-
         if not bill_type or not bill_number or not full_type:
             return f"https://www.congress.gov/search?q={bill_id}"
-
         try:
             congress_int = int(str(congress_session).strip())
             bill_num_int = int(bill_number)
         except Exception:
             return f"https://www.congress.gov/search?q={bill_id}"
-
         return f"https://www.congress.gov/bill/{congress_int}th-congress/{full_type}/{bill_num_int}"
     except Exception:
         return f"https://www.congress.gov/search?q={bill_id}"
 
-@app.template_filter('from_json')
+@app.template_filter("from_json")
 def from_json_filter(json_str):
-    """Parse JSON string into Python object"""
     if not json_str:
         return None
     try:
@@ -278,67 +242,51 @@ def from_json_filter(json_str):
     except (ValueError, TypeError, json.JSONDecodeError):
         return None
 
-@app.template_filter('format_detailed_html')
+@app.template_filter("format_detailed_html")
 def format_detailed_html_filter(text: str) -> Markup:
-    """Single source of truth for formatting bill summaries."""
     if not text:
         return Markup("")
-
     text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
-
-    lines = text.split('\n')
+    lines = text.split("\n")
     html_parts = []
     in_list = False
-
     for line in lines:
         line = line.strip()
         if not line:
             continue
-
-        if any(line.startswith(emoji) for emoji in ['🏠', '💰', '🛠️', '⚖️', '🚀', '📌', '👉', '🔎', '📝', '🔑', '📜', '👥', '💡']):
+        if any(line.startswith(emoji) for emoji in ['🏠','💰','🛠️','⚖️','🚀','📌','👉','🔎','📝','🔑','📜','👥','💡']):
             if in_list:
                 html_parts.append("</ul>")
                 in_list = False
-            html_parts.append(f'<h4>{escape(line)}</h4>')
-
+            html_parts.append(f"<h4>{escape(line)}</h4>")
         elif line.startswith('•') or line.startswith('-'):
             if not in_list:
                 html_parts.append("<ul>")
                 in_list = True
             text_content = line[1:].strip()
-            html_parts.append(f'<li>{escape(text_content)}</li>')
-
+            html_parts.append(f"<li>{escape(text_content)}</li>")
         else:
             if in_list:
                 html_parts.append("</ul>")
                 in_list = False
-            html_parts.append(f'<p>{escape(line)}</p>')
-
+            html_parts.append(f"<p>{escape(line)}</p>")
     if in_list:
         html_parts.append("</ul>")
+    return Markup("\n".join(html_parts))
 
-    return Markup('\n'.join(html_parts))
-
-@app.template_filter('shorten_title')
+@app.template_filter("shorten_title")
 def shorten_title_filter(title: str, max_length: int = 60) -> str:
-    """Shorten a title to a maximum length, adding ellipsis if truncated."""
     if not title:
         return ""
     if len(title) <= max_length:
         return title
-    return title[:max_length].rsplit(' ', 1)[0] + "..."
+    return title[:max_length].rsplit(" ", 1)[0] + "..."
 
 def extract_teen_impact_score(summary: str) -> Optional[int]:
-    """
-    Extract teen impact score from bill summary text.
-    Looks for pattern like "Teen impact score: X/10" or "Teen Impact Score: X/10"
-    """
     if not summary:
         return None
-
-    pattern = r'teen\s+impact\s+score:\s*(\d+)/10'
-    match = re.search(pattern, summary, re.IGNORECASE)
-
+    import re as _re
+    match = _re.search(r"teen\s+impact\s+score:\s*(\d+)/10", summary, _re.IGNORECASE)
     if match:
         try:
             score = int(match.group(1))
@@ -346,213 +294,181 @@ def extract_teen_impact_score(summary: str) -> Optional[int]:
                 return score
         except (ValueError, IndexError):
             pass
-
     return None
 
-# --- Routes ---
-
-@app.route('/')
+# --- Routes (unchanged) ---
+@app.route("/")
 def index():
-    """Homepage: Displays the most recent tweeted bill, falls back to latest bill if none tweeted."""
     start_time = time.time()
     logger.info("=== Homepage request started ===")
-
     try:
         db_start = time.time()
-        latest_bill = get_latest_tweeted_bill()
-        if not latest_bill:
-            logger.info("No tweeted bills found, falling back to most recent bill")
-            latest_bill = get_latest_bill()
-
+        latest_bill = get_latest_tweeted_bill() or get_latest_bill()
         db_time = time.time() - db_start
         logger.info(f"Database query completed in {db_time:.3f}s")
-
         if not latest_bill:
             logger.warning("No bills found in database")
-            return render_template('index.html', bill=None)
-
+            return render_template("index.html", bill=None)
         render_start = time.time()
-        response = render_template('index.html', bill=latest_bill)
+        response = render_template("index.html", bill=latest_bill)
         render_time = time.time() - render_start
         total_time = time.time() - start_time
-
         logger.info(f"Template rendered in {render_time:.3f}s")
         logger.info(f"=== Homepage request completed in {total_time:.3f}s ===")
         return response
     except Exception as e:
         logger.error(f"Error loading homepage: {e}", exc_info=True)
-        return render_template('index.html', bill=None, error="Unable to load the latest bill. Please try again later.")
+        return render_template("index.html", bill=None, error="Unable to load the latest bill. Please try again later.")
 
-@app.route('/archive')
+@app.route("/archive")
 def archive():
-    """Archive page: Displays all tweeted bills with search, filtering, and pagination."""
     import math
     from src.database.connection import get_connection_string
-
     start_time = time.time()
     logger.info("=== Archive request started ===")
-
     try:
         if not get_connection_string():
             error_msg = "Database connection not configured."
             logger.error(error_msg)
-            return render_template('archive.html', bills=[], error_message=error_msg), 500
-
-        q = request.args.get('q', '').strip()
-        status = request.args.get('status', 'all')
+            return render_template("archive.html", bills=[], error_message=error_msg), 500
+        q = request.args.get("q", "").strip()
+        status = request.args.get("status", "all")
         try:
-            page = int(request.args.get('page', 1))
-            if page < 1:
-                page = 1
+            page = max(1, int(request.args.get("page", 1)))
         except ValueError:
             page = 1
-
         page_size = DEFAULT_ARCHIVE_PAGE_SIZE
-
         db_start = time.time()
         logger.info(f"Searching for query='{q}', status='{status}', page={page}")
         bills = search_tweeted_bills(q, status, page, page_size)
         total_results = count_search_tweeted_bills(q, status)
         db_time = time.time() - db_start
         logger.info(f"Database query completed in {db_time:.3f}s, found {total_results} total results.")
-
         total_pages = math.ceil(total_results / page_size) if total_results > 0 else 1
         if page > total_pages:
             page = total_pages
-
         for bill in bills:
-            summary = bill.get('summary_detailed', '')
-            bill['teen_impact_score'] = extract_teen_impact_score(summary)
-
+            summary = bill.get("summary_detailed", "")
+            bill["teen_impact_score"] = extract_teen_impact_score(summary)
         render_start = time.time()
         response = render_template(
-            'archive.html',
+            "archive.html",
             bills=bills,
             q=q,
             status_filter=status,
             current_page=page,
             total_pages=total_pages,
             total_results=total_results,
-            page_size=page_size
+            page_size=page_size,
         )
         render_time = time.time() - render_start
         total_time = time.time() - start_time
-
         logger.info(f"Template rendered in {render_time:.3f}s")
         logger.info(f"=== Archive request completed in {total_time:.3f}s ===")
         return response
-
     except Exception as e:
         error_msg = f"Failed to load archive: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return render_template('archive.html', bills=[], error_message=error_msg), 500
+        return render_template("archive.html", bills=[], error_message=error_msg), 500
 
-@app.route('/debug/env')
+@app.route("/debug/env")
 def debug_env():
-    """Debug endpoint to verify environment configuration (only in debug mode)."""
     from src.database.connection import get_connection_string
-
-    # Only allow in debug mode
-    if not app.config.get('DEBUG'):
+    if not app.config.get("DEBUG"):
         abort(404)
-
     try:
         conn_string = get_connection_string()
-
         masked_conn = None
         if conn_string:
-            if len(conn_string) > 50:
-                masked_conn = conn_string[:30] + '...[MASKED]...' + conn_string[-20:]
-            else:
-                masked_conn = conn_string[:10] + '...[MASKED]'
-
+            masked_conn = (
+                conn_string[:30] + "...[MASKED]..." + conn_string[-20:]
+                if len(conn_string) > 50
+                else conn_string[:10] + "...[MASKED]"
+            )
         env_status = {
-            'database_configured': conn_string is not None,
-            'connection_string_preview': masked_conn,
-            'environment_variables': {
-                'DATABASE_URL': 'SET' if os.environ.get('DATABASE_URL') else 'NOT SET',
+            "database_configured": conn_string is not None,
+            "connection_string_preview": masked_conn,
+            "environment_variables": {
+                "DATABASE_URL": "SET" if os.environ.get("DATABASE_URL") else "NOT SET",
             },
-            'working_directory': os.getcwd(),
-            'python_path': os.environ.get('PYTHONPATH', 'NOT SET'),
+            "working_directory": os.getcwd(),
+            "python_path": os.environ.get("PYTHONPATH", "NOT SET"),
         }
         return jsonify(env_status)
-
     except Exception as e:
-        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
+        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
 
-@app.route('/bill/<string:slug>')
+@app.route("/bill/<string:slug>")
 def bill_detail(slug: str):
-    """Bill detail page: Displays a single bill by slug."""
     try:
         bill = get_bill_by_slug(slug)
         if not bill:
             abort(404)
-        return render_template('bill.html', bill=bill)
+        return render_template("bill.html", bill=bill)
     except Exception as e:
         logger.error(f"Error loading bill with slug '{slug}': {e}", exc_info=True)
         abort(500)
 
-@app.route('/about')
+@app.route("/about")
 def about():
-    return render_template('about.html')
+    return render_template("about.html")
 
-@app.route('/contact')
+@app.route("/contact")
 def contact():
-    return render_template('contact.html')
+    return render_template("contact.html")
 
-@app.route('/resources')
+@app.route("/resources")
 def resources():
-    return render_template('resources.html')
+    return render_template("resources.html")
 
 @app.errorhandler(404)
 def page_not_found(e):
-    return render_template('404.html'), 404
+    return render_template("404.html"), 404
 
 @app.errorhandler(500)
 def internal_server_error(e):
-    return render_template('500.html'), 500
+    return render_template("500.html"), 500
 
-@app.route('/api/vote', methods=['POST'])
+@app.route("/api/vote", methods=["POST"])
 @limiter.limit("10 per minute")
 def record_vote():
-    """API endpoint to record a user's poll vote."""
     try:
         data = request.get_json()
-        bill_id = data.get('bill_id')
-        vote_type = data.get('vote_type')
-
-        if not bill_id or vote_type not in ['yes', 'no', 'unsure']:
+        bill_id = data.get("bill_id")
+        vote_type = data.get("vote_type")
+        if not bill_id or vote_type not in ["yes", "no", "unsure"]:
             abort(400, description="Invalid request data")
-
         update_poll_results(bill_id, vote_type)
-        return jsonify({'status': 'success'})
+        return jsonify({"status": "success"})
     except Exception as e:
         logger.error(f"Error recording vote: {e}", exc_info=True)
         abort(500, description="Internal server error")
 
-@app.route('/api/poll-results/<string:bill_id>')
+@app.route("/api/poll-results/<string:bill_id>")
 def get_poll_results(bill_id: str):
-    """API endpoint to get poll results for a specific bill."""
     try:
         bill = get_bill_by_id(bill_id)
         if not bill:
             abort(404, description="Bill not found")
-        
         results = {
-            'yes': bill.get('poll_results_yes', 0),
-            'no': bill.get('poll_results_no', 0),
-            'unsure': bill.get('poll_results_unsure', 0)
+            "yes": bill.get("poll_results_yes", 0),
+            "no": bill.get("poll_results_no", 0),
+            "unsure": bill.get("poll_results_unsure", 0),
         }
         return jsonify(results)
     except Exception as e:
         logger.error(f"Error getting poll results for bill '{bill_id}': {e}", exc_info=True)
         abort(500, description="Internal server error")
 
-if __name__ == '__main__':
-    try:
-        from src.load_env import load_env
-        load_env()
-        app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
-    except ImportError:
-        logger.warning("Could not import load_env, running without it.")
-        app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
+if __name__ == "__main__":
+    # On Railway, env vars are injected—skip .env
+    if os.environ.get("RAILWAY_ENVIRONMENT"):
+        logger.info("Running on Railway — skipping .env load.")
+    else:
+        try:
+            from src.load_env import load_env
+            load_env()
+            logger.info(".env loaded for local development.")
+        except ImportError:
+            logger.info("No load_env module found, continuing.")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
