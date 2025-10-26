@@ -20,7 +20,7 @@ from flask import Flask, render_template, request, jsonify, abort, g
 from markupsafe import Markup, escape
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 
 # Import configuration system
 from src.config import get_config
@@ -182,9 +182,9 @@ def format_datetime_simple_filter(date_str: Optional[str]) -> str:
                             date_obj = datetime.fromisoformat(date_part)
                         else:
                             raise
-            return date_obj.strftime("%Y-%m-%d %H:%M:%S")
+            return date_obj.strftime("%Y-%m-%d %H:%M:%S (UTC)")
         else:
-            return date_str.strftime("%Y-%m-%d %H:%M:%S")
+            return date_str.strftime("%Y-%m-%d %H:%M:%S (UTC)")
     except (ValueError, TypeError) as e:
         logger.debug(f"Date formatting error for '{date_str}': {e}")
         return str(date_str) if date_str else "Not available"
@@ -429,17 +429,43 @@ def page_not_found(e):
 def internal_server_error(e):
     return render_template("500.html"), 500
 
+# CSRF error handler: log and return JSON for API requests
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    logger.warning(f"CSRF error on {request.path}: {e.description}")
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "CSRF validation failed", "details": e.description}), 400
+    return render_template("500.html"), 400
+
 @app.route("/api/vote", methods=["POST"])
 @limiter.limit("10 per minute")
+@csrf.exempt
 def record_vote():
     try:
         data = request.get_json()
         bill_id = data.get("bill_id")
         vote_type = data.get("vote_type")
+        previous_vote = data.get("previous_vote")
+
+        # Log minimal request context for debugging vote issues (safe, no PII)
+        logger.info(
+            "Vote attempt req_id=%s bill_id=%s vote_type=%s previous_vote=%s content_type=%s origin=%s",
+            getattr(g, "req_id", "-"),
+            bill_id,
+            vote_type,
+            previous_vote,
+            request.headers.get("Content-Type"),
+            request.headers.get("Origin"),
+        )
+
         if not bill_id or vote_type not in ["yes", "no", "unsure"]:
             abort(400, description="Invalid request data")
-        update_poll_results(bill_id, vote_type)
-        return jsonify({"status": "success"})
+
+        updated = update_poll_results(bill_id, vote_type, previous_vote)
+        if not updated:
+            abort(404, description="Bill not found or vote update failed")
+
+        return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error recording vote: {e}", exc_info=True)
         abort(500, description="Internal server error")
@@ -450,10 +476,18 @@ def get_poll_results(bill_id: str):
         bill = get_bill_by_id(bill_id)
         if not bill:
             abort(404, description="Bill not found")
+        yes = int(bill.get("poll_results_yes", 0) or 0)
+        no = int(bill.get("poll_results_no", 0) or 0)
+        unsure = int(bill.get("poll_results_unsure", 0) or 0)
+        total = yes + no + unsure
         results = {
-            "yes": bill.get("poll_results_yes", 0),
-            "no": bill.get("poll_results_no", 0),
-            "unsure": bill.get("poll_results_unsure", 0),
+            "yes": yes,
+            "no": no,
+            "unsure": unsure,
+            "yes_votes": yes,
+            "no_votes": no,
+            "unsure_votes": unsure,
+            "total": total,
         }
         return jsonify(results)
     except Exception as e:

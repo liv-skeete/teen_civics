@@ -372,8 +372,8 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[st
     
     Args:
         bill_id: The bill identifier
-        vote_type: Either 'yes' or 'no'
-        previous_vote: The user's previous vote if changing their vote (either 'yes' or 'no')
+        vote_type: Either 'yes', 'no', or 'unsure'
+        previous_vote: The user's previous vote if changing their vote (either 'yes', 'no', or 'unsure')
     
     Returns:
         bool: True if update was successful, False otherwise
@@ -384,30 +384,44 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[st
             with conn.cursor() as cursor:
                 # If user is changing their vote, decrement the previous vote count
                 if previous_vote:
-                    if previous_vote.lower() == 'yes':
+                    previous_vote_lower = previous_vote.lower()
+                    if previous_vote_lower == 'yes':
                         cursor.execute('''
                         UPDATE bills
                         SET poll_results_yes = GREATEST(0, COALESCE(poll_results_yes, 0) - 1)
                         WHERE bill_id = %s
                         ''', (normalized_id,))
-                    elif previous_vote.lower() == 'no':
+                    elif previous_vote_lower == 'no':
                         cursor.execute('''
                         UPDATE bills
                         SET poll_results_no = GREATEST(0, COALESCE(poll_results_no, 0) - 1)
                         WHERE bill_id = %s
                         ''', (normalized_id,))
+                    elif previous_vote_lower == 'unsure':
+                        cursor.execute('''
+                        UPDATE bills
+                        SET poll_results_unsure = GREATEST(0, COALESCE(poll_results_unsure, 0) - 1)
+                        WHERE bill_id = %s
+                        ''', (normalized_id,))
                 
                 # Increment the new vote count
-                if vote_type.lower() == 'yes':
+                vote_type_lower = vote_type.lower()
+                if vote_type_lower == 'yes':
                     cursor.execute('''
                     UPDATE bills
                     SET poll_results_yes = COALESCE(poll_results_yes, 0) + 1
                     WHERE bill_id = %s
                     ''', (normalized_id,))
-                elif vote_type.lower() == 'no':
+                elif vote_type_lower == 'no':
                     cursor.execute('''
                     UPDATE bills
                     SET poll_results_no = COALESCE(poll_results_no, 0) + 1
+                    WHERE bill_id = %s
+                    ''', (normalized_id,))
+                elif vote_type_lower == 'unsure':
+                    cursor.execute('''
+                    UPDATE bills
+                    SET poll_results_unsure = COALESCE(poll_results_unsure, 0) + 1
                     WHERE bill_id = %s
                     ''', (normalized_id,))
                 else:
@@ -424,8 +438,6 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[st
     except Exception as e:
         logger.error(f"Error updating poll results for {normalized_id}: {e}")
         return False
-
-        return None
 
 def get_all_tweeted_bills(limit: int = 100) -> List[Dict[str, Any]]:
     """
@@ -517,9 +529,46 @@ def parse_date_range_from_query(q: str) -> Tuple[str, Optional[str], Optional[st
     month_year_re = re.compile(fr'\b({month_keys})\s+(\d{{4}})\b', re.IGNORECASE)
     month_day_re = re.compile(fr'\b({month_keys})\s+(\d{{1,2}})\b', re.IGNORECASE)
     month_only_re = re.compile(fr'\b({month_keys})\b', re.IGNORECASE)
+    # Numerical date patterns
+    numerical_full_date_re = re.compile(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b')
+    numerical_month_day_re = re.compile(r'\b(\d{1,2})/(\d{1,2})\b')
     year_re = re.compile(r'\b(19|20)\d{2}\b')
 
     # Prefer most specific first
+    # Check numerical date patterns first
+    m = numerical_full_date_re.search(q)
+    if m:
+        month_str, day_str, year_str = m.groups()
+        year, month, day = int(year_str), int(month_str), int(day_str)
+        # Validate date
+        try:
+            import calendar as _cal
+            last_day = _cal.monthrange(year, month)[1]
+            day = max(1, min(day, last_day))
+            start = f"{year:04d}-{month:02d}-{day:02d}"
+            end = start
+            cleaned_q = (q[:m.start()] + q[m.end():]).strip()
+            return re.sub(r'\s{2,}', ' ', cleaned_q), start, end
+        except ValueError:
+            pass  # Invalid date, continue to other patterns
+
+    m = numerical_month_day_re.search(q)
+    if m:
+        month_str, day_str = m.groups()
+        year, month, day = current_year, int(month_str), int(day_str)
+        # Validate date
+        try:
+            import calendar as _cal
+            last_day = _cal.monthrange(year, month)[1]
+            day = max(1, min(day, last_day))
+            start = f"{year:04d}-{month:02d}-{day:02d}"
+            end = start
+            cleaned_q = (q[:m.start()] + q[m.end():]).strip()
+            return re.sub(r'\s{2,}', ' ', cleaned_q), start, end
+        except ValueError:
+            pass  # Invalid date, continue to other patterns
+
+    # Then check text-based patterns
     m = full_date_re.search(q)
     if m:
         month_name, day_str, year_str = m.groups()
@@ -583,10 +632,18 @@ def build_date_filter(start_date: Optional[str], end_date: Optional[str]) -> Tup
     date_introduced is stored as TEXT; we convert it to DATE by parsing the ISO date
     portion (YYYY-MM-DD) before any 'T' using split_part.
     """
-    if not start_date or not end_date:
+    if not start_date and not end_date:
         return "", {}
-    clause = "AND to_date(split_part(date_introduced, 'T', 1), 'YYYY-MM-DD') BETWEEN %(start_date)s AND %(end_date)s"
-    return clause, {'start_date': start_date, 'end_date': end_date}
+    elif start_date and end_date:
+        clause = "AND to_date(split_part(date_introduced, 'T', 1), 'YYYY-MM-DD') BETWEEN %(start_date)s AND %(end_date)s"
+        return clause, {'start_date': start_date, 'end_date': end_date}
+    elif start_date:
+        clause = "AND to_date(split_part(date_introduced, 'T', 1), 'YYYY-MM-DD') >= %(start_date)s"
+        return clause, {'start_date': start_date}
+    elif end_date:
+        clause = "AND to_date(split_part(date_introduced, 'T', 1), 'YYYY-MM-DD') <= %(end_date)s"
+        return clause, {'end_date': end_date}
+    return "", {}
 
 def _search_tweeted_bills_like(
     phrases: List[str], tokens: List[str], status: Optional[str], page: int, page_size: int,

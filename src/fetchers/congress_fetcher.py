@@ -330,7 +330,9 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                         bills_without_text += 1
                 else:
                     bill['full_text'] = ""
-                    bill['text_source'] = 'not-requested'
+                    # Preserve feed-provided source if present; otherwise mark as not-requested
+                    if not bill.get('text_source'):
+                        bill['text_source'] = 'not-requested'
                 
                 # Add default status if not present
                 if 'status' not in bill:
@@ -339,8 +341,16 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                 # Ensure all required fields are present
                 bill.setdefault('short_title', '')
                 bill.setdefault('source_url', bill.get('text_url', ''))
-                bill.setdefault('introduced_date', bill.get('text_received_date', ''))
-                
+
+                # Introduced date source logging and fallback behavior
+                if bill.get('introduced_date'):
+                    logger.info(f"Introduced date for {bill.get('bill_id')} set from HTML: {bill.get('introduced_date')}")
+                elif bill.get('text_received_date'):
+                    bill['introduced_date'] = bill['text_received_date']
+                    logger.info(f"Introduced date for {bill.get('bill_id')} fell back to text_received_date: {bill['introduced_date']}")
+                else:
+                    logger.info(f"No introduced date available for {bill.get('bill_id')}")
+
                 enriched_bills.append(bill)
                 
             except Exception as e:

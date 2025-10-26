@@ -276,3 +276,241 @@ def fetch_recent_bills(limit: int = 5, include_text: bool = True) -> List[Dict[s
     Wrapper function to fetch and enrich bills.
     """
     return fetch_and_enrich_bills(limit=limit)
+
+# ---- Feed parsing and HTML introduced-date extraction (added) ----
+
+def _extract_introduced_date_from_bill_page(url: str, timeout: int = 30) -> Optional[str]:
+    """
+    Fetch a Congress.gov bill page and extract the 'Introduced' date from the Overview section.
+    Returns an ISO date string (YYYY-MM-DD) or None if not found.
+
+    Implementation notes:
+    - Tries a real browser via Playwright first to bypass Cloudflare, when available and not in CI.
+    - Falls back to requests-based fetch using HEADERS if Playwright is unavailable or fails.
+    """
+    try:
+        html: Optional[str] = None
+
+        # 1) Try browser-based fetch to avoid anti-bot challenges
+        if PLAYWRIGHT_AVAILABLE and not running_in_ci():
+            try:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    context = browser.new_context(
+                        user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                                   'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+                    )
+                    page = context.new_page()
+                    time.sleep(0.5)
+                    response = page.goto(url, timeout=20000, wait_until='networkidle')
+                    if response and response.status == 200:
+                        html = page.content()
+                    context.close()
+                    browser.close()
+            except Exception as e:
+                logger.debug(f"Playwright introduced-date fetch failed for {url}: {e}")
+
+        # 2) Fallback to simple HTTP GET
+        if html is None:
+            resp = requests.get(url, headers=HEADERS, timeout=timeout)
+            resp.raise_for_status()
+            html = resp.content
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Strategy 1: Look for a label 'Introduced' in tables or definition lists
+        candidates = []
+        for tag_name in ("th", "dt", "span", "div"):
+            for tag in soup.find_all(tag_name):
+                text = tag.get_text(strip=True).lower()
+                if text == "introduced":
+                    # Try cell/sibling next to the label
+                    val = None
+                    if tag_name in ("th", "dt") and tag.find_next_sibling():
+                        val = tag.find_next_sibling().get_text(" ", strip=True)
+                    elif tag.parent and tag.parent.find("td"):
+                        val = tag.parent.find("td").get_text(" ", strip=True)
+                    elif tag.next_sibling:
+                        val = getattr(tag.next_sibling, "get_text", lambda *a, **k: str(tag.next_sibling))(" ", strip=True)
+                    if val:
+                        candidates.append(val)
+
+        # Strategy 2: Fallback to global text search "Introduced: MM/DD/YYYY"
+        if not candidates:
+            text = soup.get_text(" ", strip=True)
+            m = re.search(r"\bIntroduced\b[:\s]+(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
+            if m:
+                candidates.append(m.group(1))
+
+        # Parse the first candidate that looks like a date
+        for c in candidates:
+            m = re.search(r"(\d{2}/\d{2}/\d{4})", c)
+            if m:
+                try:
+                    dt = datetime.strptime(m.group(1), "%m/%d/%Y").date()
+                    return dt.isoformat()
+                except Exception:
+                    continue
+
+        logger.debug(f"Introduced date not found on page: {url}")
+        return None
+    except Exception as e:
+        logger.debug(f"Failed to extract introduced date from {url}: {e}")
+        return None
+
+
+def _normalize_bill_type_slug(slug: str) -> Optional[str]:
+    """
+    Map Congress.gov URL slug to short bill type code used internally.
+    """
+    mapping = {
+        "house-bill": "hr",
+        "senate-bill": "s",
+        "house-joint-resolution": "hjres",
+        "senate-joint-resolution": "sjres",
+        "house-resolution": "hres",
+        "senate-resolution": "sres",
+        "house-concurrent-resolution": "hconres",
+        "senate-concurrent-resolution": "sconres",
+    }
+    return mapping.get((slug or "").lower().strip())
+
+
+def _extract_bill_data(item) -> Optional[Dict[str, Any]]:
+    """
+    Extract basic bill metadata from a feed list item element.
+    Expected structure resembles:
+      <li class="expanded">
+        <a href="/bill/119th-congress/house-bill/1234">H.R. 1234</a>
+        <span>Title text...</span>
+        <a href="/119/bills/hr1234/BILLS-119hr1234ih.pdf">PDF</a>
+      </li>
+    Returns:
+      dict with keys: bill_id, title, source_url, text_url, text_version,
+                      congress, bill_type, bill_number, text_received_date, text_source
+      or None if parsing fails.
+    """
+    try:
+        link = item.find("a", href=True)
+        if not link:
+            return None
+
+        href = link["href"]
+        # Parse /bill/{congress}th-congress/{slug}/{number}
+        m = re.search(r"/bill/(\d+)th-congress/([a-z-]+)/(\d+)", href, re.IGNORECASE)
+        if not m:
+            return None
+
+        congress, slug, number = m.groups()
+        bill_type = _normalize_bill_type_slug(slug)
+        if not bill_type:
+            return None
+
+        # Compose IDs/URLs
+        source_url = f"https://www.congress.gov{href}" if href.startswith("/") else href
+        bill_id = f"{bill_type}{number}-{congress}"
+
+        # Title: prefer explicit text near the anchor if available
+        title_text = link.get_text(" ", strip=True) or ""
+        # If there is another span with title, append it
+        extra_span = item.find("span")
+        if extra_span:
+            extra_title = extra_span.get_text(" ", strip=True)
+            # Avoid duplicating if same text
+            if extra_title and extra_title not in title_text:
+                title_text = f"{title_text} - {extra_title}" if title_text else extra_title
+
+        # Text PDF link if present; otherwise default to bill page URL so consumers have a valid HTTP URL
+        pdf_link = item.find("a", href=re.compile(r"\.pdf$", re.IGNORECASE))
+        text_url = source_url
+        text_version = None
+        if pdf_link and pdf_link.get("href"):
+            tu = pdf_link["href"]
+            text_url = f"https://www.congress.gov{tu}" if tu.startswith("/") else tu
+            mv = re.search(r"BILLS-\d+[a-z]+\d+([a-z]+)\.pdf", text_url, re.IGNORECASE)
+            if mv:
+                text_version = mv.group(1)
+
+        # Approximate text_received_date as 'today' in ISO date (acceptable for tests; feed doesn't carry date per item)
+        text_received_date = datetime.utcnow().date().isoformat()
+
+        return {
+            "bill_id": bill_id,
+            "title": title_text,
+            "source_url": source_url,
+            "text_url": text_url,
+            "text_version": text_version,
+            "congress": congress,
+            "bill_type": bill_type,
+            "bill_number": number,
+            "text_received_date": text_received_date,
+            "text_source": "feed",
+        }
+    except Exception as e:
+        logger.debug(f"Failed to extract bill data from feed item: {e}")
+        return None
+
+
+def parse_bill_texts_feed(limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Parse the Congress.gov 'Bill Texts Received Today' page and return up to 'limit' bills.
+    For each bill, also fetch the bill page to extract the true 'Introduced' date from HTML.
+    Raises exceptions from requests on network failures/timeouts (tests rely on this behavior).
+    """
+    FEED_URL = "https://www.congress.gov/bill-texts-received-today"
+    logger.info(f"Fetching bill texts feed: {FEED_URL}")
+    response = requests.get(FEED_URL, headers=HEADERS, timeout=30)  # Allow exceptions to propagate
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    # Primary pattern used by tests and current site layout
+    items = soup.select("li.expanded")
+    bills: List[Dict[str, Any]] = []
+    if not items:
+        # Gracefully handle empty feed page variants
+        logger.info("No bill items found in feed HTML")
+        return bills
+
+    for item in items[: max(0, int(limit))]:
+        data = _extract_bill_data(item)
+        if not data:
+            continue
+
+        # Extract introduced date from the bill's main page HTML
+        introduced_iso = _extract_introduced_date_from_bill_page(data.get("source_url", ""))
+        if introduced_iso:
+            data["introduced_date"] = introduced_iso  # Use true introduced date from HTML
+        else:
+            # Do not silently substitute text_received_date without logging
+            fallback = data.get("text_received_date")
+            if fallback:
+                logger.debug(
+                    f"Introduced date not found for {data.get('bill_id')}, "
+                    f"falling back to text_received_date={fallback}"
+                )
+                # We don't set introduced_date here; fetch_bills_from_feed will setdefault as a last resort
+
+        bills.append(data)
+
+    logger.info(f"Parsed {len(bills)} bills from feed")
+    return bills
+
+
+def scrape_multiple_bill_trackers(urls: List[str], force_scrape: bool = False) -> Dict[str, Optional[List[Dict[str, Any]]]]:
+    """
+    Convenience helper to scrape multiple bill trackers. Returns {url: steps or None}.
+    Skips entirely in CI unless force_scrape=True.
+    """
+    results: Dict[str, Optional[List[Dict[str, Any]]]] = {}
+    if running_in_ci() and not force_scrape:
+        logger.debug("Skipping scrape_multiple_bill_trackers in CI mode")
+        return {u: None for u in urls or []}
+
+    for u in (urls or []):
+        try:
+            results[u] = scrape_bill_tracker(u, force_scrape=force_scrape)
+        except Exception as e:
+            logger.debug(f"Tracker scrape failed for {u}: {e}")
+            results[u] = None
+    return results
