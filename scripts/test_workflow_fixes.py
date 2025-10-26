@@ -36,7 +36,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'fetchers'))
 from feed_parser import running_in_ci
 
-if any(keyword in database_url.lower() for keyword in ['supabase', 'heroku']) and not test_database_url and not running_in_ci():
+if any(keyword in database_url.lower() for keyword in ['heroku', 'railway']) and not test_database_url and not running_in_ci():
     logger.error("ERROR: Refusing to run tests against a production database. Set TEST_DATABASE_URL to run tests.")
     sys.exit(1)
 

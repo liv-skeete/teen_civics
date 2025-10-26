@@ -961,3 +961,53 @@ def generate_website_slug(title: str, bill_id: str) -> str:
     return f"{s}-{slug_id}"
 
 
+
+
+def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
+    """
+    Mark a bill as problematic to prevent it from being processed again.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                UPDATE bills
+                SET problematic = TRUE,
+                    problem_reason = %s
+                WHERE bill_id = %s
+                ''', (reason, normalized_id))
+                if cursor.rowcount == 1:
+                    logger.info(f"Successfully marked bill {normalized_id} as problematic.")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to mark as problematic.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error marking bill {normalized_id} as problematic: {e}")
+        return False
+
+
+def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
+    """
+    Mark a bill as problematic to prevent it from being processed again.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                UPDATE bills
+                SET problematic = TRUE,
+                    problem_reason = %s
+                WHERE bill_id = %s
+                ''', (reason, normalized_id))
+                if cursor.rowcount == 1:
+                    logger.info(f"Successfully marked bill {normalized_id} as problematic.")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to mark as problematic.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error marking bill {normalized_id} as problematic: {e}")
+        return False

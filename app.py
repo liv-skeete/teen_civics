@@ -113,7 +113,6 @@ def add_security_headers(response):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
 
     # Content Security Policy
-    # NOTE: merged duplicate connect-src and kept GA; adjust if you add other 3P origins.
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.googletagmanager.com; "
@@ -472,150 +471,88 @@ def debug_env():
             'connection_string_preview': masked_conn,
             'environment_variables': {
                 'DATABASE_URL': 'SET' if os.environ.get('DATABASE_URL') else 'NOT SET',
-                'SUPABASE_DB_HOST': 'SET' if os.environ.get('SUPABASE_DB_HOST') else 'NOT SET',
-                'SUPABASE_DB_USER': 'SET' if os.environ.get('SUPABASE_DB_USER') else 'NOT SET',
-                'SUPABASE_DB_PASSWORD': 'SET' if os.environ.get('SUPABASE_DB_PASSWORD') else 'NOT SET',
-                'SUPABASE_DB_NAME': 'SET' if os.environ.get('SUPABASE_DB_NAME') else 'NOT SET',
-                'SUPABASE_DB_PORT': os.environ.get('SUPABASE_DB_PORT', 'NOT SET'),
             },
             'working_directory': os.getcwd(),
             'python_path': os.environ.get('PYTHONPATH', 'NOT SET'),
         }
-
-        try:
-            from src.database.connection import get_db_connection
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT COUNT(*) FROM bills WHERE tweeted = TRUE")
-                    count = cur.fetchone()[0]
-                    env_status['database_test'] = {
-                        'status': 'SUCCESS',
-                        'tweeted_bills_count': count
-                    }
-        except Exception as db_error:
-            env_status['database_test'] = {
-                'status': 'FAILED',
-                'error': str(db_error),
-                'error_type': type(db_error).__name__
-            }
-
         return jsonify(env_status)
+
     except Exception as e:
-        logger.error(f"Error in debug endpoint: {e}", exc_info=True)
-        return jsonify({
-            'error': str(e),
-            'error_type': type(e).__name__
-        }), 500
+        return jsonify({'error': str(e), 'error_type': type(e).__name__}), 500
 
 @app.route('/bill/<string:slug>')
 def bill_detail(slug: str):
     """Bill detail page: Displays a single bill by slug."""
-    start_time = time.time()
-    logger.info(f"=== Bill detail request started for slug: {slug} ===")
-
     try:
-        db_start = time.time()
         bill = get_bill_by_slug(slug)
-        db_time = time.time() - db_start
-        logger.info(f"Database query completed in {db_time:.3f}s")
-
         if not bill:
-            logger.warning(f"Bill not found for slug: {slug}")
             abort(404)
-
-        render_start = time.time()
-        response = render_template('bill.html', bill=bill)
-        render_time = time.time() - render_start
-        total_time = time.time() - start_time
-
-        logger.info(f"Template rendered in {render_time:.3f}s")
-        logger.info(f"=== Bill detail request completed in {total_time:.3f}s ===")
-        return response
+        return render_template('bill.html', bill=bill)
     except Exception as e:
-        logger.error(f"Error loading bill detail for slug '{slug}': {e}", exc_info=True)
-        abort(404)
+        logger.error(f"Error loading bill with slug '{slug}': {e}", exc_info=True)
+        abort(500)
 
 @app.route('/about')
 def about():
-    """About page."""
     return render_template('about.html')
 
 @app.route('/contact')
 def contact():
-    """Contact page."""
     return render_template('contact.html')
 
 @app.route('/resources')
 def resources():
-    """Resources page."""
     return render_template('resources.html')
 
 @app.errorhandler(404)
 def page_not_found(e):
-    """404 error handler."""
     return render_template('404.html'), 404
 
-# --- API Routes ---
+@app.errorhandler(500)
+def internal_server_error(e):
+    return render_template('500.html'), 500
 
 @app.route('/api/vote', methods=['POST'])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def record_vote():
     """API endpoint to record a user's poll vote."""
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "error": "Invalid JSON data"}), 400
-
         bill_id = data.get('bill_id')
         vote_type = data.get('vote_type')
-        previous_vote = data.get('previous_vote')
 
-        if not bill_id or not vote_type:
-            return jsonify({"success": False, "error": "Missing bill_id or vote_type"}), 400
+        if not bill_id or vote_type not in ['yes', 'no', 'unsure']:
+            abort(400, description="Invalid request data")
 
-        success = update_poll_results(bill_id, vote_type, previous_vote)
-
-        if success:
-            return jsonify({"success": True})
-        else:
-            logger.warning(f"Failed to update poll results for bill_id={bill_id}, vote_type={vote_type}")
-            return jsonify({"success": False, "error": "Failed to update poll results"}), 500
-
+        update_poll_results(bill_id, vote_type)
+        return jsonify({'status': 'success'})
     except Exception as e:
         logger.error(f"Error recording vote: {e}", exc_info=True)
-        return jsonify({"success": False, "error": "An error occurred while recording your vote"}), 500
+        abort(500, description="Internal server error")
 
 @app.route('/api/poll-results/<string:bill_id>')
-@csrf.exempt
 def get_poll_results(bill_id: str):
     """API endpoint to get poll results for a specific bill."""
     try:
         bill = get_bill_by_id(bill_id)
         if not bill:
-            return jsonify({"success": False, "error": "Bill not found"}), 404
-
-        return jsonify({
-            "success": True,
-            "bill_id": bill_id,
-            "yes_votes": bill.get('poll_results_yes', 0),
-            "no_votes": bill.get('poll_results_no', 0)
-        })
+            abort(404, description="Bill not found")
+        
+        results = {
+            'yes': bill.get('poll_results_yes', 0),
+            'no': bill.get('poll_results_no', 0),
+            'unsure': bill.get('poll_results_unsure', 0)
+        }
+        return jsonify(results)
     except Exception as e:
-        logger.error(f"Error fetching poll results for bill_id '{bill_id}': {e}", exc_info=True)
-        return jsonify({"success": False, "error": "An error occurred while fetching poll results"}), 500
+        logger.error(f"Error getting poll results for bill '{bill_id}': {e}", exc_info=True)
+        abort(500, description="Internal server error")
 
 if __name__ == '__main__':
-    from src.load_env import load_env
-    load_env()  # Manually load .env using custom function
-    os.environ['FLASK_SKIP_DOTENV'] = '1'  # Skip Flask's auto dotenv loading to avoid timeout
     try:
-        logger.info(f"Starting Flask app on {config.flask.host}:{config.flask.port}")
-        logger.info(f"Debug mode: {config.flask.debug}")
-        app.run(
-            debug=config.flask.debug,
-            host=config.flask.host,
-            port=config.flask.port
-        )
-    except Exception as e:
-        logger.error(f"Failed to start Flask app: {e}", exc_info=True)
+        from src.load_env import load_env
+        load_env()
+        app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
+    except ImportError:
+        logger.warning("Could not import load_env, running without it.")
+        app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)))
