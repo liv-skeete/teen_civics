@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """
 Script to check the schema of the bills table in Supabase database.
+
+Usage:
+  SUPABASE_DB_URL="postgresql://..." python3 scripts/check_supabase_schema.py
+
+Note: Set this environment variable with your actual Supabase database connection string.
 """
 
+import sys
+import os
 import psycopg2
 import psycopg2.extras
 import logging
@@ -11,8 +18,12 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Original Supabase connection string (provided by user)
-SUPABASE_DB_URL = "postgresql://postgres.ogsonggpqnmwivimnpqu:kusnav-wyxdop-8qUfwo@aws-1-us-west-1.pooler.supabase.com:6543/postgres"
+# Get database URL from environment variable for security
+SUPABASE_DB_URL = os.environ.get('SUPABASE_DB_URL')
+
+# Ensure environment variable is set
+if not SUPABASE_DB_URL:
+    raise ValueError("SUPABASE_DB_URL environment variable is not set")
 
 def connect_to_database(db_url: str) -> psycopg2.extensions.connection:
     """Connect to a PostgreSQL database."""
