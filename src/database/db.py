@@ -159,8 +159,8 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     congress_session, date_introduced, date_processed, source_url,
                     website_slug, tags, tweet_url, tweet_posted,
                     text_source, text_version, text_received_date, processing_attempts, full_text,
-                    raw_latest_action, tracker_raw, normalized_status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    raw_latest_action, tracker_raw, normalized_status, teen_impact_score
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     bill_data.get('bill_id'),
                     bill_data.get('title'),
@@ -186,7 +186,8 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     bill_data.get('full_text', ''),
                     bill_data.get('raw_latest_action'),
                     bill_data.get('tracker_raw'),
-                    bill_data.get('normalized_status')
+                    bill_data.get('normalized_status'),
+                    bill_data.get('teen_impact_score')
                 ))
         logger.info(f"Successfully inserted bill {bill_data.get('bill_id')}")
         return True

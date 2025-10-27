@@ -8,7 +8,7 @@ import os
 import sys
 import logging
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime, time
 import pytz
 
@@ -33,6 +33,21 @@ def snake_case(text: str) -> str:
     import re
     result = re.sub(r'[^a-zA-Z0-9]+', '_', text.lower())
     return result.strip('_')
+
+def extract_teen_impact_score(summary_detailed: str) -> Optional[int]:
+    """
+    Extract Teen Impact Score from the detailed summary text.
+    """
+    if not summary_detailed:
+        return None
+    import re
+    match = re.search(r"Teen impact score:\s*(\d+)/10", summary_detailed, re.IGNORECASE)
+    if match:
+        try:
+            return int(match.group(1))
+        except (ValueError, IndexError):
+            return None
+    return None
 
 def derive_status_from_tracker(tracker: Any) -> (str, str):
     """
@@ -185,6 +200,9 @@ def main(dry_run: bool = False) -> int:
             logger.info("✅ Summaries generated successfully")
             
             term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+
+            teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+            logger.info(f"⭐️ Extracted Teen Impact Score: {teen_impact_score}")
             
             tracker_raw_serialized = None
             if tracker_data:
@@ -211,6 +229,7 @@ def main(dry_run: bool = False) -> int:
                 "tweet_posted": False,
                 "tracker_raw": tracker_raw_serialized,
                 "normalized_status": derived_normalized_status,
+                "teen_impact_score": teen_impact_score,
             }
             
             logger.info("💾 Inserting new bill into database...")
