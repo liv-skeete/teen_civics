@@ -16,7 +16,7 @@ from logging.handlers import RotatingFileHandler
 import os
 import secrets
 
-from flask import Flask, render_template, request, jsonify, abort, g
+from flask import Flask, render_template, request, jsonify, abort, g, send_from_directory
 from markupsafe import Markup, escape
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -439,6 +439,11 @@ def contact():
 @app.route("/resources")
 def resources():
     return render_template("resources.html")
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.errorhandler(404)
 def page_not_found(e):
