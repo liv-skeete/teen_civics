@@ -445,6 +445,14 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
+@app.route('/robots.txt')
+def robots_txt():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'robots.txt')
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'sitemap.xml')
+
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template("404.html"), 404
