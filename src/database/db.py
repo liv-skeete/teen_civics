@@ -329,6 +329,24 @@ def get_all_bills(limit: int = 100) -> List[Dict[str, Any]]:
         logger.error(f"Error retrieving bills: {e}")
         return []
 
+def search_bills_by_title(title_query: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """
+    Search all bills by title using LIKE query, sorted by most recent first.
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute('''
+                SELECT * FROM bills
+                WHERE LOWER(COALESCE(title, '')) LIKE %s
+                ORDER BY date_processed DESC
+                LIMIT %s
+                ''', (f'%{title_query.lower()}%', limit,))
+                return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error searching bills by title: {e}")
+        return []
+
 def get_bill_by_id(bill_id: str) -> Optional[Dict[str, Any]]:
     """
     Retrieve a specific bill by its bill_id.
