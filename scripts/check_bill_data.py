@@ -1,61 +1,79 @@
 #!/usr/bin/env python3
 """
-Script to check the data for a specific bill in the database.
+Script to check if bill HR3872-119 exists in the database and retrieve its current data.
 """
 
 import sys
 import os
-import json
+from pathlib import Path
 
-# Add project root to path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, project_root)
+# Add the project root to the Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 # Load environment variables
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(project_root / '.env')
 
-from src.database.db import get_bill_by_id
+from src.database.db_utils import get_bill_by_id
 
-def main(bill_id):
-    print(f"Checking data for bill {bill_id}...")
+def main():
+    bill_id = 'hr3872-119'
+    print(f"Checking if bill {bill_id} exists in the database...")
     
-    try:
-        bill = get_bill_by_id(bill_id)
-        if not bill:
-            print(f"Bill {bill_id} not found in database")
-            return
-            
-        print("Bill data:")
-        print(f"  Bill ID: {bill.get('bill_id')}")
-        print(f"  Title: {bill.get('title')}")
-        print(f"  Source URL: {bill.get('source_url')}")
-        print(f"  Congress Session: {bill.get('congress_session')}")
-        print(f"  Date Introduced: {bill.get('date_introduced')}")
-        print(f"  Raw Latest Action: {bill.get('raw_latest_action')}")
-        print(f"  Normalized Status: {bill.get('normalized_status')}")
-        print(f"  Status: {bill.get('status')}")
+    # Check if DATABASE_URL is set
+    if not os.environ.get('DATABASE_URL'):
+        print("❌ DATABASE_URL environment variable not set.")
+        print("Please check your .env file or environment configuration.")
+        return
+    
+    # Use the get_bill_by_id function from src.database.db_utils
+    bill_data = get_bill_by_id(bill_id)
+    
+    if bill_data:
+        print("✅ Bill found in database!")
+        print("\n=== BILL DATA ===")
+        for key, value in bill_data.items():
+            # Skip printing very long fields to keep output readable
+            if key in ['summary_long', 'full_text', 'term_dictionary']:
+                if value:
+                    print(f"{key}: {str(value)[:200]}{'...' if len(str(value)) > 200 else ''}")
+                else:
+                    print(f"{key}: (empty)")
+            elif key == 'tags':
+                if value:
+                    tags_list = value.split(',') if isinstance(value, str) else value
+                    print(f"{key}: {tags_list}")
+                else:
+                    print(f"{key}: (empty)")
+            else:
+                print(f"{key}: {value}")
         
-        # Pretty print tracker data if it exists
-        tracker_raw = bill.get('tracker_raw')
-        if tracker_raw and tracker_raw != 'null':
-            try:
-                tracker_data = json.loads(tracker_raw)
-                print("  Tracker Data:")
-                for i, step in enumerate(tracker_data):
-                    print(f"    {i+1}. {step.get('name')} {'(selected)' if step.get('selected') else ''}")
-            except json.JSONDecodeError:
-                print(f"  Tracker Raw: {tracker_raw}")
-        else:
-            print("  Tracker Data: None")
-            
-    except Exception as e:
-        print(f"Error checking data for {bill_id}: {e}")
-        sys.exit(1)
+        print("\n=== SUMMARY FIELDS CHECK ===")
+        summary_fields = ['summary_overview', 'summary_detailed', 'summary_tweet', 'summary_long']
+        for field in summary_fields:
+            if field in bill_data:
+                value = bill_data[field]
+                if value:
+                    print(f"✅ {field}: Present ({len(str(value))} characters)")
+                else:
+                    print(f"❌ {field}: (empty)")
+            else:
+                print(f"❓ {field}: (field not present)")
+                
+        print("\n=== BILL TEXT CHECK ===")
+        text_fields = ['full_text', 'text_source', 'text_version']
+        for field in text_fields:
+            if field in bill_data:
+                value = bill_data[field]
+                if value:
+                    print(f"✅ {field}: Present ({len(str(value))} characters)")
+                else:
+                    print(f"❌ {field}: (empty)")
+            else:
+                print(f"❓ {field}: (field not present)")
+    else:
+        print(f"❌ Bill {bill_id} not found in database.")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python3 check_bill_data.py <bill_id>")
-        sys.exit(1)
-        
-    main(sys.argv[1])
+    main()

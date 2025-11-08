@@ -66,7 +66,7 @@
 /* Skip to content link for accessibility */
 .skip-to-content {
     position: absolute;
-    top: -9999px; /* keep fully offscreen to avoid tiny visible sliver on some browsers */
+    top: -9999px;
     left: 0;
     background: var(--color-navy);
     color: var(--color-white);
@@ -101,9 +101,9 @@ body {
     line-height: 1.6;
     color: var(--color-brown-black);
     background-color: var(--color-beige);
-    min-height: 100vh;              /* legacy fallback */
-    min-height: 100svh;             /* stable viewport unit */
-    min-height: -webkit-fill-available; /* iOS Safari fallback */
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: -webkit-fill-available;
     display: flex;
     flex-direction: column;
 }
@@ -213,7 +213,6 @@ textarea:focus-visible {
     background-color: var(--color-white);
     box-shadow: var(--shadow-sm);
     padding: var(--spacing-md) 0;
-    /* Ensure no horizontal inset from viewport edges */
     padding-left: 0;
     padding-right: 0;
     position: sticky;
@@ -225,7 +224,6 @@ textarea:focus-visible {
     width: 100%;
     max-width: none;
     margin: 0;
-    /* Add slight horizontal inset for aesthetics (~32px each side) */
     padding: 0 var(--spacing-xl);
     display: flex;
     justify-content: space-between;
@@ -236,7 +234,6 @@ textarea:focus-visible {
     display: flex;
     align-items: center;
     margin-right: auto;
-    /* Explicitly remove any left offset on the logo link */
     margin-left: 0;
     padding-left: 0;
 }
@@ -269,11 +266,10 @@ textarea:focus-visible {
 
 @media (min-width: 769px) and (max-width: 992px) {
     .nav-menu {
-        gap: var(--spacing-sm); /* Reduce gap on medium screens */
+        gap: var(--spacing-sm);
     }
 }
 
-/* Prevent wrapping in the top nav across browsers (including Safari) */
 .nav-menu .nav-link {
     white-space: nowrap;
 }
@@ -284,13 +280,14 @@ textarea:focus-visible {
     padding: calc(var(--spacing-sm) + 2px) var(--spacing-md);
     border-radius: var(--border-radius);
     transition: background-color var(--transition-fast);
-    white-space: nowrap; /* Prevent nav links from wrapping */
+    white-space: nowrap;
 }
 
 .nav-link:hover {
     background-color: var(--color-light-gray);
     color: var(--color-navy);
 }
+
 .nav-link[aria-current="page"] {
     color: var(--color-navy);
     font-weight: 600;
@@ -453,7 +450,7 @@ textarea:focus-visible {
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
     color: var(--color-white) !important;
-    background-color: #666666 !important; /* Darker grey with white text */
+    background-color: #666666 !important;
 }
 
 .bill-status.introduced,
@@ -475,20 +472,19 @@ textarea:focus-visible {
     background-color: var(--color-success) !important;
     color: var(--color-white) !important;
 }
-/* Override: Force white text and green background for "Agreed" statuses */
+
 .bill-status.agreed-to-in-house,
 .bill-status.agreed-to-in-senate {
     background-color: #4CAF50 !important;
     color: #FFFFFF !important;
 }
 
-
-/* Ensure all status badges with spaces in names render properly */
 .bill-status.became-law,
 .bill-status.vetoed {
-    background-color: #666666 !important; /* Darker grey with white text */
+    background-color: #666666 !important;
     color: var(--color-white) !important;
 }
+
 .bill-status.failed-house,
 .bill-status.failed-senate {
     background-color: var(--color-error) !important;
@@ -520,7 +516,6 @@ textarea:focus-visible {
     margin-bottom: var(--spacing-xs);
 }
 
-/* Reduce section heading sizes on bill detail page and homepage */
 .bill-detail h3,
 .container > article h3 {
   font-size: var(--font-size-lg);
@@ -538,32 +533,31 @@ textarea:focus-visible {
 
 .summary-text {
     line-height: 1.8;
-    font-weight: 400; /* ensure body copy is not bold */
+    font-weight: 400;
 }
 
-/* Ensure headings inside summary are distinct but do not bold entire body */
 .summary-text h4 {
     font-weight: 600;
     margin: var(--spacing-md) 0 var(--spacing-xs);
 }
 
-/* Proper list styling for parsed bullets */
 .summary-text ul {
     list-style: disc outside;
     margin: var(--spacing-sm) 0 var(--spacing-md) var(--spacing-lg);
     padding-left: var(--spacing-lg);
 }
+
 .summary-text ul ul {
     list-style: circle outside;
     margin-top: var(--spacing-xs);
     margin-bottom: var(--spacing-xs);
 }
+
 .summary-text li {
     margin: 0 0 var(--spacing-xs) 0;
-    font-weight: 400; /* keep list items regular weight */
+    font-weight: 400;
 }
 
-/* Paragraphs in summary remain regular weight */
 .summary-text p {
     font-weight: 400;
 }
@@ -792,19 +786,15 @@ textarea:focus-visible {
     font-size: var(--font-size-sm);
 }
 
-/* Archive Grid */
-.bills-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-xl);
-}
+/* ========================================
+   ARCHIVE PAGE STYLES - COMPLETE & FIXED
+   ======================================== */
 
-/* Search and Filter Section */
+/* Main container for search and filters */
 .search-and-filter-section {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-lg);
+    gap: var(--spacing-md);
     margin-bottom: var(--spacing-lg);
     padding: var(--spacing-lg);
     background-color: var(--color-white);
@@ -813,146 +803,81 @@ textarea:focus-visible {
     border: 2px solid var(--color-navy);
 }
 
+/* Search form layout */
 .search-form {
     display: flex;
+    flex-direction: column;
     gap: var(--spacing-md);
+}
+
+/* Top row: search input and buttons */
+.search-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: stretch;
     width: 100%;
-    align-items: center; /* align buttons/input vertically */
-}
-
-/* Normalize heights across search controls to prevent misalignment */
-.search-form .search-input,
-.search-form .btn-search,
-.search-form .btn-clear {
-    min-height: 44px; /* WCAG touch target */
-    line-height: 1.2;
-}
-
-.search-form .btn-search {
-    background-color: var(--color-gray) !important;
-    color: var(--color-brown-black) !important;
-    border: 1px solid var(--color-gray);
-    border-radius: var(--border-radius);
-    -webkit-appearance: none;
-    appearance: none;
-    box-shadow: none;
-    white-space: nowrap; /* Prevent text wrapping */
-}
-
-/* Make Clear button match Search styling inside the search header */
-.search-form .btn-clear {
-    background-color: var(--color-gray) !important;
-    color: var(--color-brown-black) !important;
-    border: 1px solid var(--color-gray);
-    border-radius: var(--border-radius);
-    -webkit-appearance: none;
-    appearance: none;
-    box-shadow: none;
-}
-
-.search-form .btn-clear:hover {
-    background-color: var(--color-dark-gray) !important;
-    color: var(--color-white) !important;
-}
-
-/* Make Clear match Search styling in the search header */
-.search-form .btn-clear {
-    background-color: var(--color-gray) !important;
-    color: var(--color-brown-black) !important;
-    border: 1px solid var(--color-gray);
-    border-radius: var(--border-radius);
-}
-
-.search-form .btn-search:hover {
-    background-color: var(--color-dark-gray) !important;
-    color: var(--color-white) !important;
-}
-
-@media (max-width: 768px) {
-    .search-form .search-input,
-    .search-form .btn-search,
-    .search-form .btn-clear {
-        width: 100%;
-        padding: 1rem 0;
-        font-size: var(--font-size-md);
-        display: inline-block;
-    }
-
-    .search-form .search-input {
-        padding: 1rem 1.5rem; /* Restore horizontal padding on mobile */
-    }
 }
 
 .search-input {
     flex: 1;
-    padding: 0.75rem 1.5rem; /* Increased horizontal padding */
-    border: var(--border-width) solid var(--border-color);
+    min-width: 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--color-gray);
     border-radius: var(--border-radius);
     font-size: var(--font-size-md);
+    min-height: 44px;
+    line-height: 1.5;
+    font-family: var(--font-family);
 }
 
 .search-input::placeholder {
     color: var(--color-dark-gray);
-    opacity: 0.7; /* Lighten placeholder text */
+    opacity: 0.7;
 }
 
-.btn-clear {
-    background-color: var(--color-gray);
-    color: var(--color-brown-black);
-}
-.btn-clear:hover {
-    background-color: var(--color-dark-gray);
-    color: var(--color-white);
+.search-input:focus {
+    border-color: var(--color-navy);
+    outline: 2px solid var(--color-navy);
+    outline-offset: 2px;
 }
 
-.filter-section {
+.search-row .btn {
+    min-height: 44px;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Bottom row: filters and sort */
+.controls-row {
     display: flex;
+    gap: var(--spacing-lg);
     align-items: center;
-    gap: var(--spacing-xl);
     flex-wrap: wrap;
 }
 
+/* Filter dropdown container */
 .filter-form {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
-}
-
-.sort-control {
-    display: flex;
-    align-items: center;
-}
-
-.sort-control label {
-    display: flex;
-    align-items: center;
     gap: var(--spacing-sm);
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.sort-control input[type="checkbox"] {
-    cursor: pointer;
-    width: 18px;
-    height: 18px;
-    -webkit-appearance: checkbox; /* normalize iOS Safari */
-    appearance: auto;
-    margin: 0; /* keep label text aligned */
+    flex-shrink: 0;
 }
 
 .filter-form label {
     font-weight: 500;
-    white-space: nowrap; /* Prevent label from wrapping */
+    white-space: nowrap;
+    margin: 0;
 }
 
 .filter-form select {
-    padding: var(--spacing-sm);
-    border: var(--border-width) solid var(--border-color);
+    min-height: 44px;
+    padding: var(--spacing-sm) 2.5rem var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--color-gray);
     border-radius: var(--border-radius);
     background-color: var(--color-white);
-    color: var(--color-brown-black);
-    font-family: var(--font-family);
     font-size: var(--font-size-md);
+    font-family: var(--font-family);
     cursor: pointer;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -961,13 +886,145 @@ textarea:focus-visible {
     background-repeat: no-repeat;
     background-position: right var(--spacing-sm) center;
     background-size: 1.2em;
-    padding-right: 2.5rem;
+    transition: border-color var(--transition-fast);
 }
 
 .filter-form select:focus {
     border-color: var(--color-navy);
-    outline: 3px solid var(--color-navy);
+    outline: 2px solid var(--color-navy);
     outline-offset: 2px;
+}
+
+/* Sort checkbox container */
+.sort-control {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.sort-control label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+    font-weight: 500;
+    margin: 0;
+    min-height: 44px;
+    padding: var(--spacing-xs) 0;
+    user-select: none;
+}
+
+.sort-control input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-appearance: checkbox;
+    -moz-appearance: checkbox;
+    appearance: auto;
+    accent-color: var(--color-navy);
+}
+
+.sort-control input[type="checkbox"] {
+    transition: transform 0.1s ease;
+}
+
+.sort-control input[type="checkbox"]:checked {
+    transform: scale(1.05);
+}
+
+/* Button styling overrides for consistent gray appearance */
+.btn-search,
+.btn-clear {
+    background-color: var(--color-gray) !important;
+    color: var(--color-brown-black) !important;
+    border: 1px solid var(--color-gray) !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    transition: all var(--transition-fast);
+}
+
+.btn-search:hover,
+.btn-clear:hover {
+    background-color: var(--color-dark-gray) !important;
+    color: var(--color-white) !important;
+}
+
+.btn-search:focus,
+.btn-clear:focus {
+    outline: 2px solid var(--color-navy);
+    outline-offset: 2px;
+}
+
+/* Loading state for form submission feedback */
+.search-form.loading {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+}
+
+.search-form.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--color-gray);
+    border-top-color: var(--color-navy);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Results summary */
+.results-summary {
+    margin-bottom: var(--spacing-md);
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-sm);
+}
+
+/* Archive Grid */
+.bills-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+/* No results message */
+.no-bills-message {
+    text-align: center;
+    padding: var(--spacing-xxl) var(--spacing-lg);
+    background-color: var(--color-white);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.no-bills-message h2 {
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-md);
+}
+
+.no-bills-message p {
+    color: var(--color-dark-gray);
+    margin-bottom: var(--spacing-lg);
+}
+
+/* Error message */
+.error-message {
+    padding: var(--spacing-md);
+    background-color: #FFEBEE;
+    color: var(--color-error);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-lg);
+    border-left: 4px solid var(--color-error);
 }
 
 /* Pagination */
@@ -981,24 +1038,36 @@ textarea:focus-visible {
 }
 
 .page-link {
+    min-height: 44px;
     padding: var(--spacing-sm) var(--spacing-md);
-    border: var(--border-width) solid var(--border-color);
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     color: var(--color-navy);
     text-decoration: none;
     transition: all var(--transition-fast);
-    white-space: nowrap; /* keep tokens intact while container wraps */
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
 }
 
 .page-link:hover {
     background-color: var(--color-navy);
     color: var(--color-white);
+    border-color: var(--color-navy);
+}
+
+.page-link:focus {
+    outline: 2px solid var(--color-navy);
+    outline-offset: 2px;
 }
 
 .page-link.current {
     background-color: var(--color-navy);
     color: var(--color-white);
-    font-weight: 500;
+    border-color: var(--color-navy);
+    cursor: default;
 }
 
 /* Resources */
@@ -1100,13 +1169,12 @@ textarea:focus-visible {
   text-align: center;
   box-shadow: var(--shadow-sm);
   border: 2px solid var(--color-navy);
-
   display: flex;
   flex-direction: column;
-  justify-content: center;  /* centers content vertically */
-  align-items: center;      /* centers horizontally */
-  height: 100%;             /* ensures equal height in grid */
-  padding: var(--spacing-xl) var(--spacing-lg); /* slightly more vertical padding for balance */
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: var(--spacing-xl) var(--spacing-lg);
 }
 
 .feature-card h3 {
@@ -1116,20 +1184,20 @@ textarea:focus-visible {
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: center;
-
     display: flex;
     justify-content: center;
     align-items: center;
-
-    margin-bottom: var(--spacing-md); /* 👈 adds consistent spacing to the text below */
-    line-height: 1.3; /* 👈 improves vertical optical alignment */
+    margin-bottom: var(--spacing-md);
+    line-height: 1.3;
 }
+
 .feature-card p {
     margin-top: 0;
     margin-bottom: 0;
     line-height: 1.6;
     max-width: 320px;
 }
+
 /* Error Page */
 .error-container {
     display: flex;
@@ -1166,10 +1234,6 @@ textarea:focus-visible {
 .error-search {
     margin-top: var(--spacing-xl);
 }
-
-/* No need for duplicate .search-form styles here */
-
-/* duplicate .search-input removed (consolidated above) */
 
 /* Footer */
 .footer {
@@ -1229,136 +1293,6 @@ textarea:focus-visible {
     margin-top: 0;
 }
 
-/* Responsive Design */
-
-/* Ensure ≥44px tap targets for buttons and pagination on tablet widths (769–1200px) */
-@media (min-width: 769px) and (max-width: 1200px) {
-    .btn,
-    .page-link {
-        min-height: 44px;
-    }
-}
-
-/* Ensure checkboxes meet 44px tap target on touch/tablet widths without template changes */
-@media (max-width: 1200px) and (pointer: coarse) {
-    .sort-control label {
-        min-height: 44px;
-        display: inline-flex;
-        align-items: center;
-    }
-}
-@media (max-width: 768px) {
-    .nav-menu {
-        display: none;
-        flex-direction: column;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background-color: var(--color-white);
-        box-shadow: var(--shadow-md);
-        padding: var(--spacing-md);
-    }
-
-    .nav-link,
-    .btn,
-    .page-link {
-        min-height: 44px;
-        padding-block: 0.75rem; /* Adjust if tokens exist: var(--spacing-sm) */
-    }
-    .nav-toggle {
-        padding: 0.75rem;
-        min-width: 44px;
-        min-height: 44px;
-    }
-    
-    .nav-menu.active {
-        display: flex;
-    }
-    
-    .nav-toggle {
-        display: flex;
-    }
-    
-    .bill-actions {
-        flex-direction: column;
-    }
-    
-    .poll-options {
-        flex-direction: column;
-    }
-    
-    .bills-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .footer-container {
-        grid-template-columns: 1fr;
-        text-align: center;
-    }
-    
-    .cta-buttons {
-        flex-direction: column;
-        align-items: center;
-    }
-    
-    .search-form {
-        flex-direction: column;
-    }
-    .search-and-filter-section {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .filter-section {
-        flex-direction: column;
-        align-items: stretch;
-        gap: var(--spacing-md);
-    }
-    .filter-form, .sort-control {
-        width: 100%;
-    }
-    /* Mobile stacking and alignment for status filter */
-    .filter-form {
-        flex-direction: column;
-        align-items: stretch;
-        gap: var(--spacing-sm);
-    }
-    .filter-form label {
-        white-space: normal; /* allow wrap on small screens */
-        margin: 0 0 var(--spacing-xs) 0;
-    }
-    .filter-form select {
-        width: 100%;
-        max-width: 100%;
-        min-height: 44px; /* consistent tap target */
-        line-height: 1.2;
-    }
-    .sort-control label {
-        display: flex;
-        align-items: center;
-        min-height: 44px; /* make the whole label the tap target */
-        gap: var(--spacing-sm);
-    }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: var(--spacing-sm);
-    }
-    
-    .hero-section h1 {
-        font-size: var(--font-size-xxl);
-    }
-    
-    .hero-subtitle {
-        font-size: var(--font-size-sm);
-    }
-}
-
 /* New styles for UI fixes */
 .full-bill-title {
     margin-top: var(--spacing-sm);
@@ -1407,14 +1341,6 @@ textarea:focus-visible {
     color: var(--color-brown-black);
 }
 
-/* Responsive adjustments for metadata */
-@media (max-width: 768px) {
-    .meta-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--spacing-xs);
-    }
-}
 /* Term Dictionary */
 .term-dictionary-section {
     margin: var(--spacing-lg) 0;
@@ -1457,16 +1383,19 @@ textarea:focus-visible {
 .term-dictionary-content a:hover {
     text-decoration: underline;
 }
+
 /* Statistics Section */
 .stats-section {
   padding: var(--spacing-xl) 0;
   background-color: var(--color-beige);
 }
+
 .stats-section h2 {
   text-align: center;
   margin-bottom: var(--spacing-xl);
   color: var(--color-brown-black);
 }
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1475,6 +1404,7 @@ textarea:focus-visible {
   margin: 0 auto;
   padding: 0 var(--spacing-md);
 }
+
 .stat-card {
   background-color: var(--color-white);
   padding: var(--spacing-lg);
@@ -1483,33 +1413,24 @@ textarea:focus-visible {
   box-shadow: var(--shadow-sm);
   border: 2px solid var(--color-navy);
 }
+
 .stat-headline {
   font-size: var(--font-size-lg);
   color: var(--color-navy);
   margin-bottom: var(--spacing-sm);
 }
+
 .stat-text {
   font-size: var(--font-size-md);
   line-height: 1.6;
   color: var(--color-brown-black);
   margin-bottom: var(--spacing-md);
 }
+
 .stat-source {
   font-size: var(--font-size-sm);
   color: var(--color-dark-gray);
   font-style: italic;
-}
-
-@media (max-width: 992px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* ========================================
@@ -1583,7 +1504,7 @@ textarea:focus-visible {
     background: #2d333b;
     color: white;
 }
-/* About: Creator profile layout improvements */
+
 .creator-card .creator-profile {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -1600,7 +1521,7 @@ textarea:focus-visible {
 
 .creator-card .creator-bio p {
   margin-bottom: var(--spacing-md);
-  overflow-wrap: anywhere; /* guard against long words/handles */
+  overflow-wrap: anywhere;
 }
 
 .creator-card .creator-photo {
@@ -1612,48 +1533,22 @@ textarea:focus-visible {
   display: block;
   width: 100%;
   max-width: 320px;
-  height: auto; /* Brave fix: use natural aspect ratio */
-  aspect-ratio: auto; /* avoid Chromium/Brave rendering bug with aspect-ratio on img */
+  height: auto;
+  aspect-ratio: auto;
   object-fit: cover;
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-md);
-  background-color: var(--color-white); /* seamless while lazy-loading */
+  background-color: var(--color-white);
 }
 
-/* Responsive adjustments for Creator section */
-@media (max-width: 992px) {
-  .creator-card .creator-profile {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .creator-card .creator-profile {
-    grid-template-columns: 1fr;
-    row-gap: var(--spacing-lg);
-  }
-  .creator-card .creator-photo {
-    order: -1; /* Photo first on mobile for visual emphasis */
-  }
-  .creator-card .creator-img {
-    max-width: 260px;
-  }
-}
-
-/* ========================================================================== */
-/* Component-specific overrides: Heading wrapping safety                       */
-/* Prevent mid-word breaks/hyphenation in headings while allowing natural wrap */
-/* ========================================================================== */
-
-/* Site-wide heading safety: prefer whole-word wrapping, allow long-word breaks if needed */
+/* Component-specific overrides: Heading wrapping safety */
 h1, h2, h3, h4, h5, h6 {
   hyphens: none;
   word-break: normal;
-  overflow-wrap: break-word; /* only break very long words if absolutely necessary */
-  text-wrap: balance;        /* nicer two-line headings where supported */
+  overflow-wrap: break-word;
+  text-wrap: balance;
 }
 
-/* Contact page heading specificity: resource cards and header */
 .resources-header h1,
 .resource-card h2,
 .archive-header h1,
@@ -1663,11 +1558,247 @@ h1, h2, h3, h4, h5, h6 {
   overflow-wrap: break-word;
   white-space: normal;
   text-wrap: balance;
-  font-size: var(--font-size-xl); /* Match the "Misinformation Hits Gen Z" size */
+  font-size: var(--font-size-xl);
 }
-/* Fix for checkbox alignment in Safari */
-.sort-control label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-sm); /* Add space between checkbox and text */
+
+/* Tablet: Stack controls earlier for better UX */
+@media (max-width: 1024px) {
+    .controls-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-md);
+    }
+    
+    .filter-form,
+    .sort-control {
+        width: 100%;
+    }
+    
+    .filter-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-xs);
+    }
+    
+    .filter-form label {
+        white-space: normal;
+    }
+    
+    .filter-form select {
+        width: 100%;
+    }
+    
+    .sort-control label {
+        justify-content: flex-start;
+    }
+    
+    .bills-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+    .btn,
+    .page-link {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 1200px) and (pointer: coarse) {
+    .sort-control label {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+}
+
+/* Responsive Design - Mobile */
+@media (max-width: 768px) {
+    .nav-menu {
+        display: none;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: var(--color-white);
+        box-shadow: var(--shadow-md);
+        padding: var(--spacing-md);
+    }
+
+    .nav-link,
+    .btn,
+    .page-link {
+        min-height: 44px;
+        padding-block: 0.75rem;
+    }
+    
+    .nav-toggle {
+        padding: 0.75rem;
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    .nav-menu.active {
+        display: flex;
+    }
+    
+    .nav-toggle {
+        display: flex;
+    }
+    
+    .bill-actions {
+        flex-direction: column;
+    }
+    
+    .poll-options {
+        flex-direction: column;
+    }
+    
+    .bills-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .footer-container {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .cta-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .search-and-filter-section {
+        padding: var(--spacing-md);
+    }
+    
+    .search-row {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .search-input,
+    .btn-search,
+    .btn-clear {
+        width: 100%;
+    }
+    
+    .controls-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filter-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-xs);
+    }
+    
+    .filter-form label {
+        margin-bottom: var(--spacing-xs);
+    }
+    
+    .filter-form select {
+        width: 100%;
+    }
+    
+    .sort-control label {
+        justify-content: flex-start;
+        padding: var(--spacing-sm);
+        min-height: 44px;
+    }
+    
+    .pagination {
+        gap: var(--spacing-xs);
+    }
+    
+    .page-link {
+        min-width: 44px;
+        padding: var(--spacing-sm);
+    }
+    
+    .meta-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .creator-card .creator-profile {
+        grid-template-columns: 1fr;
+        row-gap: var(--spacing-lg);
+    }
+    
+    .creator-card .creator-photo {
+        order: -1;
+    }
+    
+    .creator-card .creator-img {
+        max-width: 260px;
+    }
+}
+
+@media (max-width: 992px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .creator-card .creator-profile {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: var(--spacing-sm);
+    }
+    
+    .hero-section h1 {
+        font-size: var(--font-size-xxl);
+    }
+    
+    .hero-subtitle {
+        font-size: var(--font-size-sm);
+    }
+    
+    .search-and-filter-section {
+        padding: var(--spacing-sm);
+    }
+    
+    .bills-grid {
+        gap: var(--spacing-md);
+    }
+}
+
+/* Accessibility: Ensure proper focus indicators */
+.search-form input:focus,
+.search-form select:focus,
+.search-form button:focus {
+    outline: 2px solid var(--color-navy);
+    outline-offset: 2px;
+}
+
+/* Print styles for archive */
+@media print {
+    .search-and-filter-section,
+    .pagination,
+    .bill-actions {
+        display: none;
+    }
+    
+    .bills-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .bill-card {
+        page-break-inside: avoid;
+    }
 }

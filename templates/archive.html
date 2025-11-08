@@ -4,94 +4,6 @@
 {% block title %}Bill Archive - TeenCivics{% endblock %}
 
 {% block content %}
-<style>
-    /* Keep existing poll progress widths */
-    .poll-results .yes-fill { width: var(--yes-width, 0%); }
-    .poll-results .no-fill { width: var(--no-width, 0%); }
-
-    /* Force grey Search button on all devices (esp. iOS Safari) */
-    .search-form .btn-search {
-        -webkit-appearance: none !important;
-        appearance: none !important;
-        background: var(--color-gray) !important;
-        background-image: none !important;
-        color: var(--color-brown-black) !important;
-        border: 1px solid var(--color-gray) !important;
-        box-shadow: none !important;
-        border-radius: var(--border-radius);
-    }
-    .search-form .btn-search:hover {
-        background: var(--color-dark-gray) !important;
-        color: var(--color-white) !important;
-    }
-    /* Strong ID-based override to force grey on iOS Safari */
-    #archive-search-button,
-    #archive-search-button:hover,
-    #archive-search-button:active,
-    #archive-search-button:focus {
-        -webkit-appearance: none !important;
-        appearance: none !important;
-        background: var(--color-gray) !important;
-        background-color: var(--color-gray) !important;
-        background-image: none !important;
-        color: var(--color-brown-black) !important;
-        border: 1px solid var(--color-gray) !important;
-        border-radius: var(--border-radius);
-        box-shadow: none !important;
-        text-shadow: none !important;
-    }
-    /* WebKit safeguard */
-    @supports (-webkit-touch-callout: none) {
-        .search-form .btn-search {
-            -webkit-appearance: none !important;
-            appearance: none !important;
-        }
-    }
-    /* Restore stacked layout and full-width button on mobile */
-    @media (max-width: 768px) {
-        .search-form {
-            flex-direction: column;
-        }
-        .search-form .btn-search {
-            width: 100% !important;
-            padding: var(--spacing-md) 0 !important;
-            font-size: var(--font-size-md);
-        }
-
-        /* Force status filter to stack on small screens */
-        .filter-form {
-            flex-direction: column !important;
-            align-items: stretch !important;
-            gap: var(--spacing-sm);
-        }
-        .filter-form label {
-            white-space: normal !important;
-            margin: 0 0 var(--spacing-xs) 0;
-        }
-        .filter-form select {
-            width: 100% !important;
-            min-height: 44px;
-            line-height: 1.2;
-        }
-
-        /* Make the entire label the tap target for the checkbox */
-        .sort-control label {
-            min-height: 44px;
-            display: inline-flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-        }
-    }
-
-    /* Normalize checkbox rendering on iOS Safari/Brave */
-    .sort-control input[type="checkbox"] {
-        -webkit-appearance: checkbox !important;
-        appearance: auto !important;
-        width: 18px;
-        height: 18px;
-        margin: 0;
-    }
-</style>
 <div class="container">
     <div class="resources-header">
         <h1 class="h3-style">Bill Archive</h1>
@@ -100,48 +12,78 @@
 
     <!-- Search and Filter Section -->
     <div class="search-and-filter-section">
-        <form class="search-form" method="get" action="{{ url_for('archive') }}">
-            <input type="search" class="search-input" name="q" value="{{ q or '' }}" placeholder="Search by bill ID, title, or keywords" aria-label="Search bills" enterkeyhint="search">
-            <button id="archive-search-button" type="submit" class="btn btn-search" style="background: var(--color-gray); background-color: var(--color-gray); background-image: none; color: var(--color-brown-black); border: 1px solid var(--color-gray); box-shadow: none; text-shadow: none; -webkit-appearance: none; appearance: none;">Search</button>
-            {% if q %}
-            <a href="{{ url_for('archive', status=status_filter if status_filter != 'all' else None) }}" class="btn btn-clear">Clear</a>
-            {% endif %}
-            <div class="filter-form">
-                <label for="status-filter">Filter by status:</label>
-                <select name="status" id="status-filter">
-                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
-                    <option value="agreed_to_in_house" {% if status_filter == 'agreed_to_in_house' %}selected{% endif %}>Agreed to in House</option>
-                    <option value="agreed_to_in_senate" {% if status_filter == 'agreed_to_in_senate' %}selected{% endif %}>Agreed to in Senate</option>
-                    <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
-                    <option value="committee_consideration" {% if status_filter == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
-                    <option value="failed_house" {% if status_filter == 'failed_house' %}selected{% endif %}>Failed House</option>
-                    <option value="failed_senate" {% if status_filter == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
-                    <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
-                    <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
-                    <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
-                    <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
-                    <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
-                    <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
-                </select>
+        <form class="search-form" method="get" action="{{ url_for('archive') }}" id="archive-form">
+            <!-- Top Row: Search Input and Buttons -->
+            <div class="search-row">
+                <input 
+                    type="search" 
+                    class="search-input" 
+                    name="q" 
+                    value="{{ q or '' }}" 
+                    placeholder="Search by bill ID, title, or keywords" 
+                    aria-label="Search bills"
+                    autocomplete="off"
+                    enterkeyhint="search"
+                >
+                <button 
+                    type="submit" 
+                    class="btn btn-search"
+                    aria-label="Search bills"
+                >
+                    Search
+                </button>
+                {% if q %}
+                <a 
+                    href="{{ url_for('archive') }}" 
+                    class="btn btn-clear"
+                    aria-label="Clear search"
+                >
+                    Clear
+                </a>
+                {% endif %}
             </div>
+
+            <!-- Bottom Row: Filters and Sort -->
+            <div class="controls-row">
+                <!-- Status Filter -->
+                <div class="filter-form">
+                    <label for="status-filter">Filter by status:</label>
+                    <select name="status" id="status-filter" aria-label="Filter bills by status">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+                        <option value="agreed_to_in_house" {% if status_filter == 'agreed_to_in_house' %}selected{% endif %}>Agreed to in House</option>
+                        <option value="agreed_to_in_senate" {% if status_filter == 'agreed_to_in_senate' %}selected{% endif %}>Agreed to in Senate</option>
+                        <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
+                        <option value="committee_consideration" {% if status_filter == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
+                        <option value="failed_house" {% if status_filter == 'failed_house' %}selected{% endif %}>Failed House</option>
+                        <option value="failed_senate" {% if status_filter == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
+                        <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
+                        <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
+                        <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
+                        <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+                        <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
+                        <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
+                    </select>
+                </div>
+
+                <!-- Sort by Teen Impact -->
+                <div class="sort-control">
+                    <label for="sort-by-impact">
+                        <input 
+                            type="checkbox" 
+                            id="sort-by-impact" 
+                            name="sort_by_impact" 
+                            value="1" 
+                            {% if sort_by_impact %}checked{% endif %}
+                            aria-label="Sort bills by teen impact score"
+                        >
+                        <span>Sort by Teen Impact Score</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Hidden field to preserve pagination state -->
+            <input type="hidden" name="page" value="{{ current_page }}" id="page-input">
         </form>
-        <script>
-            // Submit form when status filter changes
-            document.addEventListener('DOMContentLoaded', function() {
-                var statusFilter = document.getElementById('status-filter');
-                if (statusFilter) {
-                    statusFilter.addEventListener('change', function() {
-                        this.form.submit();
-                    });
-                }
-            });
-        </script>
-        <div class="sort-control">
-            <label for="sort-by-impact">
-                <input type="checkbox" id="sort-by-impact" name="sort-by-impact">
-                Sort by Teen Impact Score
-            </label>
-        </div>
     </div>
 
     {% if error or error_message %}
@@ -153,8 +95,7 @@
     {% if bills %}
     <div class="results-summary">
         {% if total_results > 0 %}
-            Showing {{ ((current_page - 1) * page_size) + 1 }}–{{ ((current_page - 1) * page_size) + bills|length }} of {{ total_results }} results
-            {% if q %} for "<strong>{{ q }}</strong>"{% endif %}.
+            Showing {{ ((current_page - 1) * page_size) + 1 }}–{{ ((current_page - 1) * page_size) + bills|length }} of {{ total_results }} result{{ 's' if total_results != 1 else '' }}{% if q %} for "<strong>{{ q }}</strong>"{% endif %}{% if status_filter != 'all' %} with status "<strong>{{ status_filter|format_status }}</strong>"{% endif %}{% if sort_by_impact %} <strong>sorted by Teen Impact Score</strong>{% endif %}.
         {% endif %}
     </div>
     <div class="bills-grid">
@@ -165,7 +106,7 @@
                     <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}">{{ bill.short_title or (bill.title|shorten_title(80)) }}</a>
                 </h2>
                 
-                <!-- Bill metadata moved here -->
+                <!-- Bill metadata -->
                 <div class="bill-meta">
                     <span class="bill-id">{{ bill.bill_id }}</span>
                     <span class="bill-date">{{ bill.date_introduced|format_date }}</span>
@@ -232,23 +173,23 @@
     {% if total_pages > 1 %}
     <div class="pagination">
         {% if current_page > 1 %}
-        <a href="{{ url_for('archive', page=current_page - 1, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link prev">
+        <a href="{{ url_for('archive', page=current_page - 1, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link prev" aria-label="Go to previous page">
             ← Previous
         </a>
         {% endif %}
 
         {% for page_num in range(1, total_pages + 1) %}
             {% if page_num == current_page %}
-            <span class="page-link current">{{ page_num }}</span>
+            <span class="page-link current" aria-current="page">{{ page_num }}</span>
             {% else %}
-            <a href="{{ url_for('archive', page=page_num, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link">
+            <a href="{{ url_for('archive', page=page_num, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link" aria-label="Go to page {{ page_num }}">
                 {{ page_num }}
             </a>
             {% endif %}
         {% endfor %}
 
         {% if current_page < total_pages %}
-        <a href="{{ url_for('archive', page=current_page + 1, q=q, status=status_filter if status_filter != 'all' else None) }}" class="page-link next">
+        <a href="{{ url_for('archive', page=current_page + 1, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link next" aria-label="Go to next page">
             Next →
         </a>
         {% endif %}
@@ -259,13 +200,59 @@
     <div class="no-bills-message">
         <h2>No Results Found</h2>
         {% if q %}
-            <p>No bills found for your search query "<strong>{{ q }}</strong>".</p>
-            <a href="{{ url_for('archive', status=status_filter if status_filter != 'all' else None) }}" class="btn btn-primary">Clear Search</a>
+            <p>No bills found for your search query "<strong>{{ q }}</strong>"{% if status_filter != 'all' %} with status "<strong>{{ status_filter|format_status }}</strong>"{% endif %}.</p>
+            <a href="{{ url_for('archive') }}" class="btn btn-primary">Clear Search</a>
+        {% elif status_filter != 'all' %}
+            <p>No bills found with status "<strong>{{ status_filter|format_status }}</strong>".</p>
+            <a href="{{ url_for('archive') }}" class="btn btn-primary">View All Bills</a>
         {% else %}
             <p>No bills available in the archive yet.</p>
         {% endif %}
     </div>
     {% endif %}
+    
     <script>
+    // Improved form submission handling with visual feedback
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('archive-form');
+        const statusFilter = document.getElementById('status-filter');
+        const sortCheckbox = document.getElementById('sort-by-impact');
+        const pageInput = document.getElementById('page-input');
+        
+        // Prevent double submission
+        let isSubmitting = false;
+        
+        function submitForm() {
+            if (isSubmitting) return;
+            isSubmitting = true;
+            
+            // Reset to page 1 when changing filters or sort
+            pageInput.value = '1';
+            
+            // Add loading state for visual feedback
+            form.classList.add('loading');
+            
+            // Submit after brief delay to ensure checkbox visual update
+            setTimeout(() => {
+                form.submit();
+            }, 100);
+        }
+        
+        // Status filter change handler
+        if (statusFilter) {
+            statusFilter.addEventListener('change', submitForm);
+        }
+        
+        // Sort checkbox change handler
+        if (sortCheckbox) {
+            sortCheckbox.addEventListener('change', submitForm);
+        }
+        
+        // Reset submission flag on page show (handles browser back button)
+        window.addEventListener('pageshow', function() {
+            isSubmitting = false;
+            form.classList.remove('loading');
+        });
+    });
     </script>
 {% endblock %}

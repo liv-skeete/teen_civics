@@ -527,6 +527,25 @@ def build_status_filter(status: Optional[str]) -> Tuple[str, Dict[str, Any]]:
         return "AND (normalized_status::text = %(status)s OR (normalized_status IS NULL AND REPLACE(LOWER(COALESCE(status, '')), ' ', '_') = %(status)s))", {'status': normalized_status}
     return "", {}
 
+def build_order_clause(sort_by_impact: bool) -> str:
+    """
+    Build SQL ORDER BY clause for consistent sorting across all query paths.
+    
+    When sorting by impact score:
+    - NULL/0 values are placed last using CASE expression
+    - Non-NULL/non-zero values are sorted by teen_impact_score DESC
+    - Tiebreaker is date_processed DESC
+    """
+    if sort_by_impact:
+        return """
+        ORDER BY
+            CASE WHEN teen_impact_score IS NULL OR teen_impact_score = 0 THEN 1 ELSE 0 END,
+            teen_impact_score DESC,
+            date_processed DESC
+        """
+    else:
+        return "ORDER BY date_processed DESC"
+
 def parse_date_range_from_query(q: str) -> Tuple[str, Optional[str], Optional[str]]:
     """
     Extract a date range from a free-form query string and return a cleaned query.
@@ -677,7 +696,7 @@ def build_date_filter(start_date: Optional[str], end_date: Optional[str]) -> Tup
 
 def _search_tweeted_bills_like(
     phrases: List[str], tokens: List[str], status: Optional[str], page: int, page_size: int,
-    start_date: Optional[str] = None, end_date: Optional[str] = None
+    start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by_impact: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Fallback search using LIKE queries.
@@ -711,13 +730,17 @@ def _search_tweeted_bills_like(
 
                 # Check if status is 'introduced' to adjust the tweet_posted condition
                 tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+
+                # Build ORDER BY clause using helper for consistency
+                order_clause = build_order_clause(sort_by_impact)
+
                 query = f"""
                     SELECT * FROM bills
                     WHERE {tweet_posted_condition}
                     AND ({full_like_clause})
                     {status_clause}
                     {date_clause}
-                    ORDER BY date_processed DESC
+                    {order_clause}
                     LIMIT %(limit)s OFFSET %(offset)s
                 """
                 cursor.execute(query, params)
@@ -726,7 +749,7 @@ def _search_tweeted_bills_like(
         logger.error(f"Error in LIKE search fallback: {e}")
         return []
 
-def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: int) -> List[Dict[str, Any]]:
+def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: int, sort_by_impact: bool = False) -> List[Dict[str, Any]]:
     """
     Search tweeted bills using PostgreSQL FTS with a LIKE fallback.
     Supports date filters embedded in the free-form query:
@@ -735,6 +758,13 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
       - "2025" (year)
     Dates filter by date_introduced. Date expressions are stripped from the
     text query before FTS/token parsing.
+
+    When sort_by_impact is True, results are ordered by:
+      1) teen_impact_score DESC (NULL/0 last)
+      2) date_processed DESC (tiebreaker)
+      
+    IMPORTANT: Sorting is applied in the database query BEFORE pagination
+    to ensure correct ordering across all pages.
     """
     norm_q = q.strip()[:200]
     offset = (page - 1) * page_size
@@ -748,11 +778,15 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     params.update({'limit': page_size, 'offset': offset})
                     # Check if status is 'introduced' to adjust the tweet_posted condition
                     tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+
+                    # Build ORDER BY clause using helper for consistency
+                    order_clause = build_order_clause(sort_by_impact)
+
                     query = f"""
                         SELECT * FROM bills
                         WHERE {tweet_posted_condition}
                         {status_clause}
-                        ORDER BY date_processed DESC
+                        {order_clause}
                         LIMIT %(limit)s OFFSET %(offset)s
                     """
                     cursor.execute(query, params)
@@ -775,13 +809,17 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     params.update(date_params)
                     # Check if status is 'introduced' to adjust the tweet_posted condition
                     tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+
+                    # Build ORDER BY clause using helper for consistency
+                    order_clause = build_order_clause(sort_by_impact)
+
                     cursor.execute(f"""
                         SELECT * FROM bills
                         WHERE {tweet_posted_condition}
                         AND LOWER(bill_id) = %(exact_id)s
                         {status_clause}
                         {date_clause}
-                        ORDER BY date_processed DESC
+                        {order_clause}
                         LIMIT %(limit)s OFFSET %(offset)s
                     """, params)
                     return [dict(row) for row in cursor.fetchall()]
@@ -802,12 +840,16 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     params.update(date_params)
                     # Check if status is 'introduced' to adjust the tweet_posted condition
                     tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+
+                    # Build ORDER BY clause using helper for consistency
+                    order_clause = build_order_clause(sort_by_impact)
+
                     cursor.execute(f"""
                         SELECT * FROM bills
                         WHERE {tweet_posted_condition}
                         {status_clause}
                         {date_clause}
-                        ORDER BY date_processed DESC
+                        {order_clause}
                         LIMIT %(limit)s OFFSET %(offset)s
                     """, params)
                     return [dict(row) for row in cursor.fetchall()]
@@ -831,6 +873,14 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                 # The tsvector column 'fts_vector' should be created via migration script
                 # Check if status is 'introduced' to adjust the tweet_posted condition
                 tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+
+                # Build ORDER BY: if sorting by impact, override FTS rank with impact
+                # When sorting by impact score, NULL/0 values are placed last
+                if sort_by_impact:
+                    order_clause = build_order_clause(True)
+                else:
+                    order_clause = "ORDER BY rank DESC, date_processed DESC"
+
                 query = f"""
                     SELECT *, ts_rank_cd(fts_vector, websearch_to_tsquery('english', %(fts_query)s)) as rank
                     FROM bills
@@ -838,19 +888,22 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
                     {status_clause}
                     {date_clause}
-                    ORDER BY rank DESC, date_processed DESC
+                    {order_clause}
                     LIMIT %(limit)s OFFSET %(offset)s
                 """
                 cursor.execute(query, params)
                 return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"FTS search failed: {e}. Falling back to LIKE search.")
-        return _search_tweeted_bills_like(phrases, tokens, status, page, page_size, start_date, end_date)
+        return _search_tweeted_bills_like(phrases, tokens, status, page, page_size, start_date, end_date, sort_by_impact)
 
 def _count_search_tweeted_bills_like(phrases: List[str], tokens: List[str], status: Optional[str],
                                      start_date: Optional[str] = None, end_date: Optional[str] = None) -> int:
     """
     Fallback count using LIKE queries.
+    
+    Note: This function counts matching records without applying sorting,
+    as sorting is only needed when retrieving the actual data for display.
     """
     like_terms = phrases + tokens
     if not like_terms:
@@ -886,6 +939,9 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
     """
     Count total results for a search query.
     Supports date filters embedded in the free-form query (see search_tweeted_bills).
+    
+    Note: This function counts matching records without applying sorting,
+    as sorting is only needed when retrieving the actual data for display.
     """
     norm_q = q.strip()[:200]
 

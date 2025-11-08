@@ -129,7 +129,7 @@ def inject_ga_measurement_id():
 def inject_current_year():
     return {"current_year": datetime.now(timezone.utc).year}
 
-# --- Jinja filters (unchanged) ---
+# --- Jinja filters ---
 @app.template_filter("format_date")
 def format_date_filter(date_str: Optional[str]) -> str:
     if not date_str:
@@ -318,7 +318,7 @@ def extract_teen_impact_score(summary: str) -> Optional[int]:
             pass
     return None
 
-# --- Routes (unchanged) ---
+# --- Routes ---
 @app.route("/")
 def index():
     start_time = time.time()
@@ -344,31 +344,114 @@ def index():
 
 @app.route("/archive")
 def archive():
+    """
+    Archive page route with search, filtering, and sorting capabilities.
+    
+    Query parameters:
+    - q: Search query string
+    - status: Bill status filter (default: 'all')
+    - page: Current page number (default: 1)
+    - sort_by_impact: Sort by teen impact score (1/true/on/yes or 0)
+    
+    Returns optimized, paginated bill results with proper error handling.
+    """
     import math
     from src.database.connection import get_connection_string
+    
     start_time = time.time()
     logger.info("=== Archive request started ===")
+    
     try:
+        # Verify database connection
         if not get_connection_string():
             error_msg = "Database connection not configured."
             logger.error(error_msg)
-            return render_template("archive.html", bills=[], error_message=error_msg), 500
+            return render_template(
+                "archive.html",
+                bills=[],
+                error_message=error_msg,
+                q="",
+                status_filter="all",
+                current_page=1,
+                total_pages=1,
+                total_results=0,
+                page_size=DEFAULT_ARCHIVE_PAGE_SIZE,
+                sort_by_impact=False
+            ), 500
+        
+        # Parse query parameters with validation
         q = request.args.get("q", "").strip()
-        status = request.args.get("status", "all")
+        status = request.args.get("status", "all").strip()
+        
+        # Validate status parameter
+        valid_statuses = [
+            "all", "agreed_to_in_house", "agreed_to_in_senate", "became_law",
+            "committee_consideration", "failed_house", "failed_senate",
+            "introduced", "passed_house", "passed_senate",
+            "referred_to_committee", "reported_by_committee", "vetoed"
+        ]
+        if status not in valid_statuses:
+            logger.warning(f"Invalid status parameter: {status}")
+            status = "all"
+        
+        # Parse page number safely with bounds checking
         try:
-            page = max(1, int(request.args.get("page", 1)))
-        except ValueError:
+            page = int(request.args.get("page", 1))
+            page = max(1, page)  # Ensure page is at least 1
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid page parameter: {request.args.get('page')}")
             page = 1
+        
+        # Parse sort_by_impact parameter (multiple formats supported)
+        sort_by_impact_param = request.args.get("sort_by_impact", "0").strip().lower()
+        sort_by_impact = sort_by_impact_param in ("1", "true", "on", "yes")
+        
         page_size = DEFAULT_ARCHIVE_PAGE_SIZE
+        
+        # Log request details for debugging
+        logger.info(
+            f"Archive query: q='{q}', status='{status}', "
+            f"page={page}, sort_by_impact={sort_by_impact}"
+        )
+        
+        # Execute database queries
         db_start = time.time()
-        logger.info(f"Searching for query='{q}', status='{status}', page={page}")
-        bills = search_tweeted_bills(q, status, page, page_size)
-        total_results = count_search_tweeted_bills(q, status)
+        
+        try:
+            bills = search_tweeted_bills(
+                q, status, page, page_size, sort_by_impact=sort_by_impact
+            )
+            total_results = count_search_tweeted_bills(q, status)
+        except Exception as db_error:
+            logger.error(f"Database query error: {db_error}", exc_info=True)
+            return render_template(
+                "archive.html",
+                bills=[],
+                error_message="Unable to retrieve bills. Please try again later.",
+                q=q,
+                status_filter=status,
+                current_page=page,
+                total_pages=1,
+                total_results=0,
+                page_size=page_size,
+                sort_by_impact=sort_by_impact
+            ), 500
+        
         db_time = time.time() - db_start
-        logger.info(f"Database query completed in {db_time:.3f}s, found {total_results} total results.")
+        logger.info(
+            f"Database query completed in {db_time:.3f}s, "
+            f"found {total_results} total results, returned {len(bills)} bills"
+        )
+        
+        # Calculate pagination with validation
         total_pages = math.ceil(total_results / page_size) if total_results > 0 else 1
-        if page > total_pages:
+        
+        # Adjust page if it exceeds total pages
+        if page > total_pages and total_pages > 0:
+            logger.info(f"Page {page} exceeds total pages {total_pages}, adjusting")
             page = total_pages
+        
+        # Render template
         render_start = time.time()
         response = render_template(
             "archive.html",
@@ -379,16 +462,34 @@ def archive():
             total_pages=total_pages,
             total_results=total_results,
             page_size=page_size,
+            sort_by_impact=sort_by_impact,
         )
+        
         render_time = time.time() - render_start
         total_time = time.time() - start_time
+        
         logger.info(f"Template rendered in {render_time:.3f}s")
         logger.info(f"=== Archive request completed in {total_time:.3f}s ===")
+        
         return response
+        
     except Exception as e:
         error_msg = f"Failed to load archive: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return render_template("archive.html", bills=[], error_message=error_msg), 500
+        
+        # Return error page with proper fallback values
+        return render_template(
+            "archive.html",
+            bills=[],
+            error_message=error_msg,
+            q=request.args.get("q", ""),
+            status_filter=request.args.get("status", "all"),
+            current_page=1,
+            total_pages=1,
+            total_results=0,
+            page_size=DEFAULT_ARCHIVE_PAGE_SIZE,
+            sort_by_impact=False
+        ), 500
 
 @app.route("/debug/env")
 def debug_env():
@@ -461,7 +562,6 @@ def page_not_found(e):
 def internal_server_error(e):
     return render_template("500.html"), 500
 
-# CSRF error handler: log and return JSON for API requests
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     logger.warning(f"CSRF error on {request.path}: {e.description}")
@@ -479,7 +579,6 @@ def record_vote():
         vote_type = data.get("vote_type")
         previous_vote = data.get("previous_vote")
 
-        # Log minimal request context for debugging vote issues (safe, no PII)
         logger.info(
             "Vote attempt req_id=%s bill_id=%s vote_type=%s previous_vote=%s content_type=%s origin=%s",
             getattr(g, "req_id", "-"),
@@ -527,7 +626,6 @@ def get_poll_results(bill_id: str):
         abort(500, description="Internal server error")
 
 if __name__ == "__main__":
-    # On Railway, env vars are injected—skip .env
     if os.environ.get("RAILWAY_ENVIRONMENT"):
         logger.info("Running on Railway — skipping .env load.")
     else:
