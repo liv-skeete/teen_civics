@@ -11,14 +11,14 @@
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="{% block og_url %}https://teencivics.org{{ request.path }}{% endblock %}">
-  <meta property="og:title" content="{% block og_title %}{% block title %}TeenCivics - Congressional Bills for Teens{% endblock %}{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
   <meta property="og:description" content="{% block og_description %}{% block meta_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}{% endblock %}">
   <meta property="og:image" content="{% block og_image %}{{ url_for('static', filename='img/og-default.png', _external=True) }}{% endblock %}">
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image">
   <meta property="twitter:url" content="{% block twitter_url %}https://teencivics.org{{ request.path }}{% endblock %}">
-  <meta property="twitter:title" content="{% block twitter_title %}{% block title %}TeenCivics - Congressional Bills for Teens{% endblock %}{% endblock %}">
+  <meta property="twitter:title" content="{% block twitter_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
   <meta property="twitter:description" content="{% block twitter_description %}{% block meta_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}{% endblock %}">
   <meta property="twitter:image" content="{% block twitter_image %}{{ url_for('static', filename='img/og-default.png', _external=True) }}{% endblock %}">
   <meta property="twitter:site" content="@TeenCivics">
