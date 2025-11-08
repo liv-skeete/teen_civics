@@ -6,7 +6,26 @@
   <title>{% block title %}TeenCivics - Congressional Bills for Teens{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
   <meta name="keywords" content="congress, bills, government, politics, teens, education, civic engagement">
-  <meta name="author" content="TeenCivics">
+  <meta name="author" content="Liv Skeete - TeenCivics">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{% block og_url %}https://teencivics.org{{ request.path }}{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}{% block title %}TeenCivics - Congressional Bills for Teens{% endblock %}{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}{% block meta_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}{% endblock %}">
+  <meta property="og:image" content="{% block og_image %}{{ url_for('static', filename='img/og-default.png', _external=True) }}{% endblock %}">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="{% block twitter_url %}https://teencivics.org{{ request.path }}{% endblock %}">
+  <meta property="twitter:title" content="{% block twitter_title %}{% block title %}TeenCivics - Congressional Bills for Teens{% endblock %}{% endblock %}">
+  <meta property="twitter:description" content="{% block twitter_description %}{% block meta_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}{% endblock %}">
+  <meta property="twitter:image" content="{% block twitter_image %}{{ url_for('static', filename='img/og-default.png', _external=True) }}{% endblock %}">
+  <meta property="twitter:site" content="@TeenCivics">
+  <meta property="twitter:creator" content="@TeenCivics">
+
+  <!-- Canonical URL for SEO -->
+  <link rel="canonical" href="https://teencivics.org{{ request.path }}">
 
   <!-- Favicons -->
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -15,34 +34,53 @@
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   <meta name="theme-color" content="#1A237E">
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2025-10-26-7') }}">
-  <style>
-    /* Cross-browser hardening for wrapping and Safari spacing */
-    .navbar .nav-menu .nav-link { white-space: nowrap !important; }
-    .search-form .btn-search { white-space: nowrap !important; }
-    .sort-control label { display: inline-flex; align-items: center; gap: var(--spacing-sm); }
-    .sort-control input[type="checkbox"] { margin: 0 !important; vertical-align: middle; }
-  </style>
-  
-  <!-- Google Fonts -->
+  <!-- Preconnect to external domains for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://www.googletagmanager.com">
+
+  <!-- CSS with cache busting -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2025-11-07') }}">
+  
+  <!-- Google Fonts - Load only weights we actually use -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Page-specific CSS injection point -->
   {% block extra_css %}{% endblock %}
 
+  <!-- Google Analytics -->
   {% if ga_measurement_id %}
-  <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', '{{ ga_measurement_id }}');
+    gtag('config', '{{ ga_measurement_id }}', {
+      'anonymize_ip': true,
+      'cookie_flags': 'SameSite=None;Secure'
+    });
   </script>
   {% endif %}
+
+  <!-- Structured Data for SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "TeenCivics",
+    "url": "https://teencivics.org",
+    "description": "Making congressional bills accessible and understandable for teenagers through AI-powered summaries.",
+    "author": {
+      "@type": "Person",
+      "name": "Liv Skeete"
+    },
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://teencivics.org/archive?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
 
   <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
 </head>
@@ -51,10 +89,10 @@
   <a href="#main-content" class="skip-to-content">Skip to main content</a>
 
   <!-- Navigation -->
-  <nav class="navbar">
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
     <div class="nav-container">
-      <a href="{{ url_for('index') }}" class="nav-logo">
-        <img src="{{ url_for('static', filename='icon-removebg-preview.png') }}" alt="TeenCivics Logo" class="nav-logo-img" width="390" height="382" decoding="async" fetchpriority="high">
+      <a href="{{ url_for('index') }}" class="nav-logo" aria-label="TeenCivics home">
+        <img src="{{ url_for('static', filename='icon-removebg-preview.png') }}" alt="" class="nav-logo-img" width="390" height="382" decoding="async" fetchpriority="high" role="presentation">
         <h1>TeenCivics</h1>
       </a>
       <div class="nav-menu" id="nav-menu">
@@ -76,11 +114,12 @@
   </main>
 
   <!-- Footer -->
-  <footer class="footer">
+  <footer class="footer" role="contentinfo">
     <div class="footer-container">
       <div class="footer-section">
         <h3>TeenCivics</h3>
-        <p>Making congressional bills accessible and understandable for teenagers.</p>
+        <p>Making congressional bills accessible and understandable for teenagers through AI-powered summaries.</p>
+        <p class="footer-credit">Created by <a href="{{ url_for('about') }}" style="color: var(--color-white); text-decoration: underline;">Liv Skeete</a></p>
       </div>
       <div class="footer-section">
         <h4>Quick Links</h4>
@@ -91,18 +130,19 @@
       </div>
       <div class="footer-section">
         <h4>Connect</h4>
-        <a href="https://twitter.com/TeenCivics" target="_blank" rel="noopener">Twitter</a>
+        <a href="https://twitter.com/TeenCivics" target="_blank" rel="noopener" aria-label="Follow TeenCivics on Twitter">Twitter</a>
         <a href="{{ url_for('contact') }}">Contact</a>
+        <a href="https://github.com/liv-skeete/teen_civics" target="_blank" rel="noopener" aria-label="View source code on GitHub">GitHub</a>
       </div>
     </div>
     <div class="footer-bottom">
-      <p>&copy; {{ current_year }} TeenCivics. A Congressional App Challenge project.</p>
+      <p>&copy; {{ current_year }} TeenCivics. A Congressional App Challenge project by Liv Skeete.</p>
+      <p class="footer-tech">Built with Python Flask, PostgreSQL, and Claude AI</p>
     </div>
-
-    <!-- JavaScript -->
-    <!-- Use defer + bumped version so clients fetch the new optimized JS -->
-    <script defer src="{{ url_for('static', filename='script.js', v='2025-10-26-3') }}"></script>
-    {% block extra_js %}{% endblock %}
   </footer>
+
+  <!-- JavaScript with cache busting and proper defer -->
+  <script defer src="{{ url_for('static', filename='script.js', v='2025-11-07') }}"></script>
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

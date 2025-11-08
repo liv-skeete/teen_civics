@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from database.db_utils import get_bill_by_id
 from publishers.twitter_publisher import format_bill_tweet
@@ -57,7 +57,8 @@ print("=" * 60)
 # Test with a sample bill
 test_bill = {
     'summary_tweet': 'This is a test bill summary that demonstrates the new formatting.',
-    'title': 'Test Bill'
+    'title': 'Test Bill',
+    'website_slug': 'test-bill-hr1234-118'
 }
 
 formatted_tweet = format_bill_tweet(test_bill)
@@ -68,11 +69,11 @@ print("-" * 60)
 
 # Check for required elements
 has_header = '🏛️ Today in Congress' in formatted_tweet
-has_footer = '👉 Want to learn more?' in formatted_tweet
+has_footer = '👉 See how this affects you:' in formatted_tweet
 within_limit = len(formatted_tweet) <= 280
 
 print(f"\n  Header emoji present: {'✅' if has_header else '❌'}")
-print(f"  Footer emoji present: {'✅' if has_footer else '❌'}")
+print(f"  Footer text present: {'✅' if has_footer else '❌'}")
 print(f"  Within 280 char limit: {'✅' if within_limit else '❌'}")
 
 if has_header and has_footer and within_limit:

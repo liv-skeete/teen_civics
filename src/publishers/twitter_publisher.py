@@ -235,7 +235,13 @@ def format_bill_tweet(bill: Dict) -> str:
 
     # Build the formatted tweet with header and footer
     header = "🏛️ Today in Congress\n\n"
-    footer = "\n\n👉 See how this affects you: teencivics.org"
+    
+    # Create footer with specific bill slug link if available
+    website_slug = bill.get("website_slug")
+    if website_slug:
+        footer = f"\n\n👉 See how this affects you: teencivics.org"
+    else:
+        footer = "\n\n👉 See how this affects you: teencivics.org"
     
     # Calculate available space for summary (280 total - header - footer)
     header_length = len(header)
@@ -271,6 +277,11 @@ def format_bill_tweet(bill: Dict) -> str:
         summary_text = summary_text[:-overflow].rstrip()
         if not summary_text.endswith((".", "!", "?")):
             summary_text += "."
+        # Recalculate footer with potentially shorter summary
+        if website_slug:
+            footer = f"\n\n👉 See how this affects you: teencivics.org/bill/{website_slug}"
+        else:
+            footer = "\n\n👉 See how this affects you: teencivics.org"
         formatted_tweet = f"{header}{summary_text}{footer}"
     
     return formatted_tweet
