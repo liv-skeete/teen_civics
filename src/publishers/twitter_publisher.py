@@ -239,13 +239,18 @@ def format_bill_tweet(bill: Dict) -> str:
     # Create footer with specific bill slug link if available
     website_slug = bill.get("website_slug")
     if website_slug:
-        footer = f"\n\n👉 See how this affects you: teencivics.org"
+        link = f"teencivics.org/bill/{website_slug}"
     else:
-        footer = "\n\n👉 See how this affects you: teencivics.org"
+        link = "teencivics.org"
+
+    footer_text = "\n\n👉 See how this affects you: "
     
-    # Calculate available space for summary (280 total - header - footer)
+    # Twitter shortens https links to 23 characters
+    tco_link_length = 23
+
+    # Calculate available space for summary
     header_length = len(header)
-    footer_length = len(footer)
+    footer_length = len(footer_text) + tco_link_length
     available_space = 280 - header_length - footer_length
     
     # Trim summary if needed to fit within available space
@@ -268,20 +273,23 @@ def format_bill_tweet(bill: Dict) -> str:
             summary_text = cut[:available_space]
     
     # Construct the final tweet
+    # Construct the final tweet
+    footer = f"{footer_text}{link}"
     formatted_tweet = f"{header}{summary_text}{footer}"
     
     # Final safety check - ensure we're within 280 characters
-    if len(formatted_tweet) > 280:
+    final_length = len(f"{header}{summary_text}{footer_text}") + tco_link_length
+    if final_length > 280:
         # Emergency trim - this shouldn't happen but just in case
-        overflow = len(formatted_tweet) - 280
+        overflow = final_length - 280
         summary_text = summary_text[:-overflow].rstrip()
+        # Ensure the text doesn't end with an incomplete word
+        if " " in summary_text:
+            summary_text = summary_text.rsplit(' ', 1)[0]
         if not summary_text.endswith((".", "!", "?")):
-            summary_text += "."
-        # Recalculate footer with potentially shorter summary
-        if website_slug:
-            footer = f"\n\n👉 See how this affects you: teencivics.org/bill/{website_slug}"
+            summary_text += "..."
         else:
-            footer = "\n\n👉 See how this affects you: teencivics.org"
+            summary_text = summary_text[:-1] + "..."
         formatted_tweet = f"{header}{summary_text}{footer}"
     
     return formatted_tweet
