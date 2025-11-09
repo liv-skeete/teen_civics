@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to regenerate the summary for bill HR3872-119.
+Script to regenerate the summary for bill S503-119.
 """
 
 import sys
@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 from dotenv import load_dotenv
 load_dotenv(project_root / '.env')
 
-from src.database.db_utils import get_bill_by_id
+from src.database.db_utils import get_bill_by_id, update_bill_summaries
 from src.fetchers.congress_fetcher import fetch_bill_text_from_api
 from src.processors.summarizer import summarize_bill_enhanced
 import logging
@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 def main():
-    bill_id = 'hr3872-119'
+    bill_id = 's503-119'
     print(f"Regenerating summary for bill {bill_id}...")
     
     # Check if DATABASE_URL is set
@@ -44,11 +44,18 @@ def main():
     print("✅ Bill found in database!")
     
     # Extract congress, bill_type, and bill_number from bill_id
-    # bill_id format: hr3872-119
-    parts = bill_id.replace('hr', '').split('-')
-    bill_number = parts[0]
-    congress = parts[1]
-    bill_type = 'hr'
+    # bill_id format: s503-119 or hr3872-119
+    if bill_id.startswith('hr'):
+        bill_type = 'hr'
+        bill_number = bill_id.replace('hr', '').split('-')[0]
+        congress = bill_id.replace('hr', '').split('-')[1]
+    elif bill_id.startswith('s'):
+        bill_type = 's'
+        bill_number = bill_id.replace('s', '').split('-')[0]
+        congress = bill_id.replace('s', '').split('-')[1]
+    else:
+        print(f"❌ Unsupported bill type in bill_id: {bill_id}")
+        return
     
     print(f"国会: {congress}, 类型: {bill_type}, 编号: {bill_number}")
     
@@ -121,6 +128,33 @@ def main():
                 if key.startswith('summary_') or key in ['overview', 'detailed', 'tweet']:
                     char_count = len(str(value)) if value else 0
                     print(f"✅ {key}: {char_count} characters")
+            
+            # Update the database with the new summaries
+            print("\n🔄 Updating database with new summaries...")
+            try:
+                # Extract the summaries
+                tweet_summary = summaries.get('tweet', '')
+                overview_summary = summaries.get('overview', '')
+                detailed_summary = summaries.get('detailed', '')
+                term_dictionary = summaries.get('term_dictionary', '')
+                
+                # Update the database
+                success = update_bill_summaries(
+                    bill_id,
+                    overview_summary,
+                    detailed_summary,
+                    tweet_summary,
+                    term_dictionary
+                )
+                
+                if success:
+                    print("✅ Database successfully updated with new summaries!")
+                else:
+                    print("❌ Failed to update database with new summaries")
+            except Exception as e:
+                print(f"❌ Error updating database: {e}")
+                import traceback
+                traceback.print_exc()
         else:
             print("❌ Failed to generate summaries")
             return

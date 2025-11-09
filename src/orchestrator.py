@@ -195,9 +195,34 @@ def main(dry_run: bool = False) -> int:
             selected_bill["normalized_status"] = derived_normalized_status
             logger.info(f"🧭 Derived status for {bill_id}: '{derived_status_text}' ({derived_normalized_status})")
 
+            # Ensure bill has full text before summarization
+            if not selected_bill.get("full_text") or len(selected_bill.get("full_text", "").strip()) < 100:
+                logger.error(f"❌ No valid full text for bill {bill_id}. Skipping.")
+                mark_bill_as_problematic(bill_id, "No valid full text available")
+                return 1
+
             logger.info("🧠 Generating new summaries...")
             summary = summarize_bill_enhanced(selected_bill)
             logger.info("✅ Summaries generated successfully")
+
+            # Validate summary content
+            if not summary.get("overview") or "full bill text needed" in summary.get("detailed", "").lower():
+                logger.error(f"❌ Invalid summary generated for bill {bill_id}. Marking as problematic.")
+                mark_bill_as_problematic(bill_id, "Invalid summary content")
+                return 1
+                
+            # Additional validation for "full bill text" phrases in any summary field
+            summary_fields = [summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")]
+            if any("full bill text" in field.lower() for field in summary_fields):
+                logger.error(f"❌ Summary contains 'full bill text' phrase for bill {bill_id}. Regenerating.")
+                # Try one more time with a retry mechanism
+                time.sleep(2)  # Small delay before retry
+                summary = summarize_bill_enhanced(selected_bill)
+                summary_fields = [summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")]
+                if any("full bill text" in field.lower() for field in summary_fields):
+                    logger.error(f"❌ Summary still contains 'full bill text' phrase after retry for bill {bill_id}. Marking as problematic.")
+                    mark_bill_as_problematic(bill_id, "Summary contains 'full bill text' phrase after retry")
+                    return 1
             
             term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Script to check if bill HR3872-119 exists in the database and retrieve its current data.
+Script to check if a bill exists in the database and retrieve its current data.
+Takes an optional bill ID as a command line argument.
 """
 
 import sys
@@ -18,7 +19,12 @@ load_dotenv(project_root / '.env')
 from src.database.db_utils import get_bill_by_id
 
 def main():
-    bill_id = 'hr3872-119'
+    # Check if a bill ID was provided as a command line argument
+    if len(sys.argv) > 1:
+        bill_id = sys.argv[1]
+    else:
+        bill_id = 'hr3872-119'  # Default fallback
+    
     print(f"Checking if bill {bill_id} exists in the database...")
     
     # Check if DATABASE_URL is set

@@ -274,43 +274,54 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                     full_text = ""
                     text_source = 'none'
                     
-                    # First, try to fetch text using the API text endpoint (most reliable)
-                    congress = bill.get('congress')
-                    bill_type = bill.get('bill_type')
-                    bill_number = bill.get('bill_number')
+                    # Retry mechanism for fetching bill text
+                    retry_count = 0
+                    max_retries = 3
                     
-                    if congress and bill_type and bill_number and CONGRESS_API_KEY:
-                        logger.info(f"📥 Fetching text for {bill['bill_id']} using API text endpoint")
-                        full_text, format_type = fetch_bill_text_from_api(
-                            congress, bill_type, bill_number, CONGRESS_API_KEY
-                        )
-                        if full_text:
-                            text_source = f'api-{format_type}'
-                            logger.info(f"✅ Got text from API ({format_type})")
-                    
-                    # If API text fetch failed, try direct text_url if available
-                    if (not full_text or len(full_text.strip()) <= 100) and bill.get('text_url'):
-                        text_url = bill.get('text_url')
-                        if text_url and text_url.startswith('http'):  # Validate it's a real URL
-                            logger.info(f"📥 Trying direct text URL for {bill['bill_id']}: {text_url}")
-                            full_text = _download_direct_text(text_url, bill['bill_id'])
+                    while retry_count < max_retries and (not full_text or len(full_text.strip()) <= 100):
+                        if retry_count > 0:
+                            logger.info(f"🔁 Retry {retry_count}/{max_retries-1} for fetching text for {bill['bill_id']}")
+                            time.sleep(2 ** retry_count)  # Exponential backoff
+                        
+                        # First, try to fetch text using the API text endpoint (most reliable)
+                        congress = bill.get('congress')
+                        bill_type = bill.get('bill_type')
+                        bill_number = bill.get('bill_number')
+                        
+                        if congress and bill_type and bill_number and CONGRESS_API_KEY:
+                            logger.info(f"📥 Fetching text for {bill['bill_id']} using API text endpoint")
+                            full_text, format_type = fetch_bill_text_from_api(
+                                congress, bill_type, bill_number, CONGRESS_API_KEY
+                            )
+                            if full_text:
+                                text_source = f'api-{format_type}'
+                                logger.info(f"✅ Got text from API ({format_type})")
+                        
+                        # If API text fetch failed, try direct text_url if available
+                        if (not full_text or len(full_text.strip()) <= 100) and bill.get('text_url'):
+                            text_url = bill.get('text_url')
+                            if text_url and text_url.startswith('http'):  # Validate it's a real URL
+                                logger.info(f"📥 Trying direct text URL for {bill['bill_id']}: {text_url}")
+                                full_text = _download_direct_text(text_url, bill['bill_id'])
+                                if full_text and len(full_text.strip()) > 100:
+                                    text_source = 'direct-url'
+                                    logger.info(f"✅ Got text from direct URL")
+                            else:
+                                logger.warning(f"⚠️ Invalid or missing text_url for {bill['bill_id']}: {text_url}")
+                        
+                        # If both API and direct URL failed, fall back to scraping (last resort)
+                        if (not full_text or len(full_text.strip()) <= 100) and bill.get('source_url') and not running_in_ci():
+                            source_url = bill.get('source_url')
+                            logger.info(f"📥 Falling back to scraping text for {bill['bill_id']} from {source_url}")
+                            full_text, status = download_bill_text(source_url, bill['bill_id'])
+                            if status:
+                                bill['status'] = status.lower() # Standardize to lowercase
+                                logger.info(f"✅ Updated bill status to '{status}' from scraping")
                             if full_text and len(full_text.strip()) > 100:
-                                text_source = 'direct-url'
-                                logger.info(f"✅ Got text from direct URL")
-                        else:
-                            logger.warning(f"⚠️ Invalid or missing text_url for {bill['bill_id']}: {text_url}")
-                    
-                    # If both API and direct URL failed, fall back to scraping (last resort)
-                    if (not full_text or len(full_text.strip()) <= 100) and bill.get('source_url') and not running_in_ci():
-                        source_url = bill.get('source_url')
-                        logger.info(f"📥 Falling back to scraping text for {bill['bill_id']} from {source_url}")
-                        full_text, status = download_bill_text(source_url, bill['bill_id'])
-                        if status:
-                            bill['status'] = status.lower() # Standardize to lowercase
-                            logger.info(f"✅ Updated bill status to '{status}' from scraping")
-                        if full_text and len(full_text.strip()) > 100:
-                            text_source = 'scraped'
-                            logger.info(f"✅ Got text from scraping")
+                                text_source = 'scraped'
+                                logger.info(f"✅ Got text from scraping")
+                        
+                        retry_count += 1
                     
                     # Validate and store text
                     if full_text and len(full_text.strip()) > 100:
@@ -324,7 +335,7 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                         logger.info(f"📄 First 100 words of {bill['bill_id']}: {preview}")
                         logger.info(f"✅ Successfully fetched {len(full_text)} chars for {bill['bill_id']} from {text_source}")
                     else:
-                        logger.warning(f"⚠️ No valid text found for {bill['bill_id']}")
+                        logger.warning(f"⚠️ No valid text found for {bill['bill_id']} after {max_retries} attempts")
                         bill['full_text'] = ""
                         bill['text_source'] = 'none'
                         bills_without_text += 1

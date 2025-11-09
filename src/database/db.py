@@ -1172,3 +1172,73 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
     except Exception as e:
         logger.error(f"Error marking bill {normalized_id} as problematic: {e}")
         return False
+
+def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str) -> bool:
+    """
+    Update the summaries for a specific bill.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                UPDATE bills
+                SET summary_overview = %s,
+                    summary_detailed = %s,
+                    summary_tweet = %s,
+                    term_dictionary = %s
+                WHERE bill_id = %s
+                ''', (overview, detailed, tweet, term_dictionary, normalized_id))
+                if cursor.rowcount == 1:
+                    logger.info(f"Successfully updated summaries for bill {normalized_id}")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to update summaries.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error updating summaries for bill {normalized_id}: {e}")
+        return False
+
+def update_bill_full_text(bill_id: str, full_text: str, text_format: str) -> bool:
+    """
+    Update the full text for a specific bill.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                UPDATE bills
+                SET full_text = %s,
+                    text_format = %s
+                WHERE bill_id = %s
+                ''', (full_text, text_format, normalized_id))
+                if cursor.rowcount == 1:
+                    logger.info(f"Successfully updated full text for bill {normalized_id}")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to update full text.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error updating full text for bill {normalized_id}: {e}")
+        return False
+def update_bill_teen_impact_score(bill_id: str, teen_impact_score: int) -> bool:
+    """
+    Update the teen impact score for a specific bill.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE bills
+                    SET teen_impact_score = %s
+                    WHERE bill_id = %s
+                    """,
+                    (teen_impact_score, normalized_id),
+                )
+                return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error updating teen impact score for bill {normalized_id}: {e}")
+        return False

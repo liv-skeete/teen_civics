@@ -50,6 +50,7 @@ if config.logging.file_path:
 
 # ---- Flask app ----
 app = Flask(__name__)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config["DEBUG"] = config.flask.debug
 
 # SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY, otherwise generate (dev)
@@ -612,13 +613,10 @@ def get_poll_results(bill_id: str):
         unsure = int(bill.get("poll_results_unsure", 0) or 0)
         total = yes + no + unsure
         results = {
-            "yes": yes,
-            "no": no,
-            "unsure": unsure,
             "yes_votes": yes,
             "no_votes": no,
             "unsure_votes": unsure,
-            "total": total,
+            "total": total
         }
         return jsonify(results)
     except Exception as e:

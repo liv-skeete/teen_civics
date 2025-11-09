@@ -4,6 +4,7 @@ import json
 import time
 import logging
 from typing import Dict, Any, Optional, List
+from datetime import datetime
 from dotenv import load_dotenv
 from anthropic import Anthropic
 
@@ -39,7 +40,7 @@ def _build_enhanced_system_prompt() -> str:
         "You are a careful, non-partisan summarizer for civic education targeting teens aged 13-19.\n"
         "**Your output must be STRICT JSON with four keys: `overview`, `detailed`, `term_dictionary`, and `tweet`. No code fences. No extra text.**\n\n"
         
-        "**CRITICAL: Even if full bill text is not provided, you MUST generate ALL four fields using the bill title, status, latest action, and any available metadata. Do NOT return empty strings for any field.**\n\n"
+        "**CRITICAL: If full bill text is not provided, you MUST return an empty JSON object. Do NOT attempt to summarize without the full bill text.**\n\n"
         
         "**ABSOLUTE PROHIBITIONS:**\n"
         "- ❌ NEVER write 'Expresses the sense of the Senate/House on the topic identified in the title'\n"
@@ -273,9 +274,7 @@ def _build_enhanced_system_prompt() -> str:
         "  ❌ Repetition: Check Overview and 'In short' first—don't repeat\n\n"
         
         "  If full bill text NOT available:\n"
-        "  - Write: 'Full bill text needed for detailed provisions'\n"
-        "  - Or: 'Based on title: likely includes [specific educated inference]'\n"
-        "  - Do NOT make up technical details or pad with generic statements\n\n"
+        "  - Return an empty JSON object: {}\n\n"
         
         "📌 Legislative Status\n"
         "  - Current stage: introduced/committee/passed House/Senate/sent to President/enacted\n"
@@ -336,7 +335,14 @@ def _build_enhanced_system_prompt() -> str:
 
 def _build_user_prompt(bill: Dict[str, Any]) -> str:
     """Build user prompt with bill metadata and optional full text."""
-    bill_json = json.dumps(bill, ensure_ascii=False)
+    # Custom JSON encoder to handle datetime objects
+    class DateTimeEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            return json.JSONEncoder.default(self, obj)
+
+    bill_json = json.dumps(bill, ensure_ascii=False, cls=DateTimeEncoder)
     
     full_text_section = ""
     if bill.get("full_text"):
@@ -636,9 +642,16 @@ def _tighten_tweet_model(client: Anthropic, raw_tweet: str, bill: Dict[str, Any]
         "Return ONLY the sentence."
     )
     
+    # Custom JSON encoder to handle datetime objects
+    class DateTimeEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            return json.JSONEncoder.default(self, obj)
+
     user = (
         f"Original tweet: {raw_tweet}\n\n"
-        f"Bill context: {json.dumps(bill, ensure_ascii=False)}"
+        f"Bill context: {json.dumps(bill, ensure_ascii=False, cls=DateTimeEncoder)}"
     )
     
     rewritten = _model_call_with_fallback(client, system, user)
@@ -948,39 +961,15 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     tweet_raw = str(parsed.get("tweet", "")).strip()
     tweet = _coherent_tighten_tweet(client, tweet_raw, bill, limit=200)
     
-    # Repair pass if underfilled and no full text
-    full_text = bill.get("full_text")
-    if (len(overview) < 100 or len(detailed) < 300) and not full_text:
-        logger.info("Underfilled without full text; attempting metadata repair")
-        parsed_meta = _generate_from_metadata_model(client, bill)
-        
-        if parsed_meta:
-            new_overview = _normalize_structured_text(parsed_meta.get("overview", ""))
-            new_detailed = _normalize_structured_text(parsed_meta.get("detailed", ""))
-            
-            if len(new_overview) > len(overview):
-                overview = new_overview
-            if len(new_detailed) > len(detailed):
-                detailed = new_detailed
-            
-            _merge_term_dictionary(term_dictionary_obj, parsed_meta.get("term_dictionary", []))
-            
-            if not tweet:
-                new_tweet = str(parsed_meta.get("tweet", "")).strip()
-                tweet = _coherent_tighten_tweet(client, new_tweet, bill, limit=200)
-    
-    # Last resort: Python synthesis
-    if (len(overview) < 100 or len(detailed) < 300) and not full_text:
-        logger.info("Still underfilled; synthesizing from metadata")
-        synth = _synthesize_from_metadata_py(bill)
-        
-        if synth:
-            if len(str(synth.get("overview", ""))) > len(overview):
-                overview = str(synth.get("overview", ""))
-            if len(str(synth.get("detailed", ""))) > len(detailed):
-                detailed = str(synth.get("detailed", ""))
-            
-            _merge_term_dictionary(term_dictionary_obj, synth.get("term_dictionary", []))
+    # If full text is not available, return empty summaries
+    if not bill.get("full_text"):
+        logger.warning(f"No full text for bill {bill.get('bill_id')}. Returning empty summaries.")
+        return {
+            "overview": "",
+            "detailed": "",
+            "term_dictionary": "[]",
+            "tweet": ""
+        }
     
     # Deduplicate headers and scores
     detailed = _deduplicate_headers_and_scores(detailed)
@@ -1000,6 +989,11 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     
     elapsed = time.monotonic() - start
     logger.info(f"Summary complete in {elapsed:.2f}s")
+    
+    # Final validation to ensure no "full bill text" phrases in output
+    summary_fields = [overview, detailed, tweet]
+    if any("full bill text" in field.lower() for field in summary_fields):
+        logger.warning(f"Summary for bill {bill.get('bill_id')} contains 'full bill text' phrase")
     
     return {
         "overview": overview,

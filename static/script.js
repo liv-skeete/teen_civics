@@ -174,18 +174,29 @@
 
     const yes = Number(results.yes_votes || 0);
     const no  = Number(results.no_votes  || 0);
-    const total = Number(
-      (results.total != null ? results.total : (yes + no))
-    );
+    // Compute total from the parts we render to avoid backend mismatches
+    const total = yes + no;
 
     const yesPercent = safePct(yes, total);
     const noPercent  = safePct(no, total);
+    
+    // Debug: compare backend total vs computed denominator for bars
+    log && log("Poll calc", { yes, no, total, backendTotal: results.total });
 
     const yesFill = container.querySelector(".yes-fill");
     const noFill  = container.querySelector(".no-fill");
 
-    if (yesFill) yesFill.style.width = `${yesPercent}%`;
-    if (noFill) noFill.style.width  = `${noPercent}%`;
+    // Ensure we update both width and visibility for proper display
+    if (yesFill) {
+      yesFill.style.width = `${yesPercent}%`;
+      // Ensure the element is visible even when width is 0%
+      yesFill.style.display = 'flex';
+    }
+    if (noFill) {
+      noFill.style.width = `${noPercent}%`;
+      // Ensure the element is visible even when width is 0%
+      noFill.style.display = 'flex';
+    }
 
     const yesCountEl = yesFill ? yesFill.querySelector(".result-count") : null;
     const noCountEl  = noFill  ? noFill.querySelector(".result-count")  : null;
@@ -195,6 +206,10 @@
 
     const totalEl = container.querySelector(".votes-count");
     if (totalEl) totalEl.textContent = String(isFinite(total) ? total : yes + no);
+    
+    // Force reflow to ensure the changes are rendered properly
+    if (yesFill) yesFill.offsetHeight;
+    if (noFill) noFill.offsetHeight;
   }
 
   // Highlight the user's current vote selection

@@ -15,3 +15,4 @@ regex==2024.5.15
 psycopg2-binary==2.9.10
 pytz==2024.1
 gunicorn==21.2.0
+SQLAlchemy==1.4.46
