@@ -1127,51 +1127,62 @@ def generate_website_slug(title: str, bill_id: str) -> str:
 def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
     """
     Mark a bill as problematic to prevent it from being processed again.
+
+    Behavior:
+      - UPDATE if the bill exists.
+      - If no rows updated, UPSERT a minimal placeholder row marked problematic.
     """
     normalized_id = normalize_bill_id(bill_id)
     try:
         with db_connect() as conn:
             with conn.cursor() as cursor:
-                cursor.execute('''
-                UPDATE bills
-                SET problematic = TRUE,
-                    problem_reason = %s
-                WHERE bill_id = %s
-                ''', (reason, normalized_id))
+                # Try to update first
+                cursor.execute(
+                    '''
+                    UPDATE bills
+                    SET problematic = TRUE,
+                        problem_reason = %s
+                    WHERE bill_id = %s
+                    ''',
+                    (reason, normalized_id)
+                )
                 if cursor.rowcount == 1:
                     logger.info(f"Successfully marked bill {normalized_id} as problematic.")
                     return True
-                else:
-                    logger.warning(f"Could not find bill {normalized_id} to mark as problematic.")
-                    return False
+
+                # If no existing row, insert minimal placeholder and mark problematic (UPSERT)
+                logger.info(f"Bill {normalized_id} not found; inserting minimal placeholder and marking problematic.")
+                title = ""
+                summary_tweet = ""
+                summary_long = ""
+                status = "problematic"
+                source_url = ""
+                website_slug = generate_website_slug(title, normalized_id)
+
+                cursor.execute(
+                    '''
+                    INSERT INTO bills (
+                        bill_id, title, summary_tweet, summary_long, status,
+                        date_processed, source_url, website_slug, problematic,
+                        problem_reason, tweet_posted
+                    )
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, TRUE, %s, FALSE)
+                    ON CONFLICT (bill_id)
+                    DO UPDATE SET
+                        problematic = EXCLUDED.problematic,
+                        problem_reason = EXCLUDED.problem_reason,
+                        updated_at = CURRENT_TIMESTAMP
+                    ''',
+                    (normalized_id, title, summary_tweet, summary_long, status, source_url, website_slug, reason)
+                )
+                logger.info(f"Upserted problematic bill {normalized_id}.")
+                return True
     except Exception as e:
         logger.error(f"Error marking bill {normalized_id} as problematic: {e}")
         return False
 
 
-def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
-    """
-    Mark a bill as problematic to prevent it from being processed again.
-    """
-    normalized_id = normalize_bill_id(bill_id)
-    try:
-        with db_connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute('''
-                UPDATE bills
-                SET problematic = TRUE,
-                    problem_reason = %s
-                WHERE bill_id = %s
-                ''', (reason, normalized_id))
-                if cursor.rowcount == 1:
-                    logger.info(f"Successfully marked bill {normalized_id} as problematic.")
-                    return True
-                else:
-                    logger.warning(f"Could not find bill {normalized_id} to mark as problematic.")
-                    return False
-    except Exception as e:
-        logger.error(f"Error marking bill {normalized_id} as problematic: {e}")
-        return False
+# Duplicate mark_bill_as_problematic removed (merged into single implementation above)
 
 def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str) -> bool:
     """

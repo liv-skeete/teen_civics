@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status
 from src.processors.summarizer import summarize_bill_enhanced
-from src.publishers.twitter_publisher import post_tweet, format_bill_tweet
+from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content
 from src.database.db import (
     bill_already_posted, get_bill_by_id, insert_bill, update_tweet_info,
     generate_website_slug, init_db, normalize_bill_id,
@@ -49,7 +49,7 @@ def extract_teen_impact_score(summary_detailed: str) -> Optional[int]:
             return None
     return None
 
-def derive_status_from_tracker(tracker: Any) -> (str, str):
+def derive_status_from_tracker(tracker: Any) -> tuple[str, str]:
     """
     Derive human-readable status and normalized_status from tracker data.
     The tracker may be a list[dict{name, selected}] or {'steps': [...]}.
@@ -166,7 +166,12 @@ def main(dry_run: bool = False) -> int:
                     selected_bill_data = existing_bill
                     break
                 else:
-                    logger.info(f"   🆕 Bill {bill_id} is new. Selecting for full processing.")
+                    ft = (bill.get("full_text") or "").strip()
+                    if len(ft) < 100:
+                        logger.info(f"   🚫 New bill {bill_id} missing valid full text (len={len(ft)}). Marking problematic and continuing.")
+                        mark_bill_as_problematic(bill_id, "No valid full text available during selection")
+                        continue
+                    logger.info(f"   🆕 Bill {bill_id} is new with full text. Selecting for full processing.")
                     selected_bill = bill
                     break
         
@@ -187,6 +192,63 @@ def main(dry_run: bool = False) -> int:
         if selected_bill_data:
             logger.info("💾 Using existing summaries from database")
             bill_data = selected_bill_data
+
+            # Decide whether to regenerate summaries based on DB content
+            summary_tweet_existing = (bill_data.get("summary_tweet") or "").strip()
+            needs_summary = (len(summary_tweet_existing) < 20) or ("no summary available" in summary_tweet_existing.lower())
+
+            # If we have fresh full text from enrichment and summaries are weak/missing, regenerate
+            if needs_summary and len((selected_bill.get("full_text") or "").strip()) >= 100:
+                logger.info("🧠 Existing summaries missing/weak; regenerating from fresh full text...")
+                tracker_data = selected_bill.get("tracker") or []
+                derived_status_text, derived_normalized_status = derive_status_from_tracker(tracker_data)
+                selected_bill["status"] = derived_status_text or bill_data.get("status")
+                selected_bill["normalized_status"] = derived_normalized_status or bill_data.get("normalized_status")
+
+                # Generate new summaries
+                summary = summarize_bill_enhanced(selected_bill)
+                logger.info("✅ Summaries generated successfully (regen path)")
+
+                # Validate summary content
+                if not summary.get("overview") or "full bill text needed" in summary.get("detailed", "").lower():
+                    logger.error(f"❌ Invalid summary generated for bill {bill_id}. Marking as problematic.")
+                    mark_bill_as_problematic(bill_id, "Invalid summary content (regen)")
+                    return 1
+
+                summary_fields = [summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")]
+                if any("full bill text" in field.lower() for field in summary_fields):
+                    logger.error(f"❌ Summary contains 'full bill text' phrase after regen for bill {bill_id}. Marking as problematic.")
+                    mark_bill_as_problematic(bill_id, "Summary contains 'full bill text' phrase after regen")
+                    return 1
+
+                term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+                teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+                logger.info(f"⭐️ Extracted Teen Impact Score (regen): {teen_impact_score}")
+
+                # Persist regenerated summaries
+                try:
+                    from src.database.db import update_bill_summaries as _ubs
+                    if _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", ""), term_dict_json):
+                        # Merge updated fields locally for tweet formatting
+                        bill_data.update({
+                            "summary_tweet": summary.get("tweet", ""),
+                            "summary_long": summary.get("long", ""),
+                            "summary_overview": summary.get("overview", ""),
+                            "summary_detailed": summary.get("detailed", ""),
+                            "term_dictionary": term_dict_json,
+                            "teen_impact_score": teen_impact_score,
+                            "normalized_status": selected_bill.get("normalized_status"),
+                            "status": selected_bill.get("status"),
+                        })
+                        logger.info("💾 Database summaries updated (regen).")
+                    else:
+                        logger.error("❌ Failed to update summaries in DB after regeneration.")
+                        mark_bill_as_problematic(bill_id, "update_bill_summaries failed (regen)")
+                        return 1
+                except Exception as e:
+                    logger.error(f"❌ Exception updating summaries in DB: {e}")
+                    mark_bill_as_problematic(bill_id, "Exception updating summaries (regen)")
+                    return 1
         else:
             # Derive status from tracker before summarization
             tracker_data = selected_bill.get("tracker") or []
@@ -196,7 +258,16 @@ def main(dry_run: bool = False) -> int:
             logger.info(f"🧭 Derived status for {bill_id}: '{derived_status_text}' ({derived_normalized_status})")
 
             # Ensure bill has full text before summarization
-            if not selected_bill.get("full_text") or len(selected_bill.get("full_text", "").strip()) < 100:
+            _ft = selected_bill.get("full_text") or ""
+            _ts = selected_bill.get("text_source", "none")
+            _ft_len = len(_ft.strip())
+            try:
+                _ft_preview = _ft[:120].replace("\n", " ").replace("\r", " ")
+            except Exception:
+                _ft_preview = ""
+            _preview_suffix = "..." if _ft_len > 80 else ""
+            logger.info(f"🔎 Full text precheck for {bill_id}: len={_ft_len}, source={_ts}, preview='{_ft_preview[:80]}{_preview_suffix}'")
+            if not _ft or _ft_len < 100:
                 logger.error(f"❌ No valid full text for bill {bill_id}. Skipping.")
                 mark_bill_as_problematic(bill_id, "No valid full text available")
                 return 1
@@ -263,12 +334,66 @@ def main(dry_run: bool = False) -> int:
                 return 1
             logger.info("✅ Bill inserted successfully")
 
+        # Ensure website_slug exists so the link is correct
+        if not bill_data.get("website_slug"):
+            slug = generate_website_slug(bill_data.get("title", ""), bill_id)
+            bill_data["website_slug"] = slug
+            logger.info(f"🔗 Set website_slug for {bill_id}: {slug}")
+
         formatted_tweet = format_bill_tweet(bill_data)
         logger.info(f"📝 Formatted tweet length: {len(formatted_tweet)} characters")
 
         if dry_run:
             logger.info("🔶 DRY-RUN MODE: Skipping tweet and DB update")
             logger.info(f"🔶 Tweet content:\n{formatted_tweet}")
+            return 0
+
+        # Quality gate: validate tweet content before posting
+        is_valid, reason = validate_tweet_content(formatted_tweet, bill_data)
+        if not is_valid:
+            logger.error(f"🚫 Tweet content failed validation for {bill_id}: {reason}")
+            # Attempt one-shot summary regeneration when full_text is present
+            if bill_data.get("full_text") and len(bill_data.get("full_text", "")) >= 100:
+                logger.info(f"🔄 Attempting one-shot summary regeneration for {bill_id}")
+                try:
+                    # Regenerate summaries
+                    summary = summarize_bill_enhanced(bill_data)
+                    
+                    # Update bill_data with new summaries
+                    bill_data["summary_tweet"] = summary.get("tweet", "")
+                    bill_data["summary_overview"] = summary.get("overview", "")
+                    bill_data["summary_detailed"] = summary.get("detailed", "")
+                    bill_data["term_dictionary"] = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+                    bill_data["teen_impact_score"] = extract_teen_impact_score(summary.get("detailed", ""))
+                    
+                    # Re-format tweet with regenerated summaries
+                    formatted_tweet = format_bill_tweet(bill_data)
+                    logger.info(f"📝 Re-formatted tweet length: {len(formatted_tweet)} characters")
+                    
+                    # Re-validate tweet content
+                    is_valid, reason = validate_tweet_content(formatted_tweet, bill_data)
+                    if not is_valid:
+                        logger.error(f"🚫 Tweet content still failed validation after regeneration for {bill_id}: {reason}")
+                except Exception as e:
+                    logger.error(f"❌ Exception during summary regeneration: {e}")
+                    is_valid = False
+                    reason = f"Exception during regeneration: {e}"
+            else:
+                logger.info(f"⏭️  No full text available for regeneration for {bill_id}")
+            
+            # If still invalid or no full_text, mark bill problematic and continue scanning
+            if not is_valid:
+                # Mark problematic only in live mode
+                mark_bill_as_problematic(bill_id, f"Tweet content failed validation: {reason}")
+                logger.info("⛔ Skipping posting due to quality gate.")
+                return 1
+
+        # Check environment safety switch
+        strict_posting = os.getenv("STRICT_POSTING", "true").lower() == "true"
+        if not strict_posting:
+            logger.warning("🚨 STRICT_POSTING is disabled! Skipping actual posting.")
+            logger.info("🟡 DRY-RUN MODE: Would post tweet:")
+            logger.info(f"🔵 Tweet content:\n{formatted_tweet}")
             return 0
 
         logger.info("🚀 Posting tweet...")

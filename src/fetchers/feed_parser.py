@@ -47,77 +47,88 @@ def scrape_bill_tracker(source_url: str, force_scrape=False, max_retries: int = 
             
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
-                context = browser.new_context(
-                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                               'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
-                )
-                page = context.new_page()
-                time.sleep(1)  # Small delay
-                response = page.goto(source_url, timeout=timeout, wait_until='networkidle')
-
-                if not response or response.status != 200:
-                    logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
-                    if attempt < max_retries - 1:
-                        logger.info(f"Retrying in 2 seconds...")
-                        time.sleep(2)
-                        continue
-                    return None
-
-                # Best-effort wait for either tracker list or the hidden status paragraph
                 try:
-                    page.wait_for_selector("ol.bill_progress, ol.bill-progress, p.hide_fromsighted", timeout=min(timeout, 10000))
-                except Exception:
-                    pass
+                    context = browser.new_context(
+                        user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                                   'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+                    )
+                    page = context.new_page()
+                    time.sleep(1)  # Small delay
+                    response = page.goto(source_url, timeout=timeout, wait_until='networkidle')
 
-                content = page.content()
-                soup = BeautifulSoup(content, 'html.parser')
+                    if not response or response.status != 200:
+                        logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
+                        if attempt < max_retries - 1:
+                            logger.info(f"Retrying in 2 seconds...")
+                            time.sleep(2)
+                            continue
+                        return None
 
-                # 1) Primary: ordered list tracker (support old/new class names)
-                tracker = soup.find('ol', class_=['bill_progress', 'bill-progress'])
-                steps: List[Dict[str, Any]] = []
+                    # Best-effort wait for either tracker list or the hidden status paragraph
+                    try:
+                        page.wait_for_selector("ol.bill_progress, ol.bill-progress, p.hide_fromsighted", timeout=min(timeout, 10000))
+                    except Exception:
+                        pass
 
-                if tracker:
-                    for li in tracker.find_all('li'):
-                        # Get only the direct text from the li element, excluding hidden div content
-                        text_parts = []
-                        for content in li.contents:
-                            # Skip hidden divs with class 'sol-step-info'
-                            if hasattr(content, 'name') and content.name == 'div' and 'sol-step-info' in (content.get('class', [])):
-                                continue
-                            # Extract text from text nodes and direct strings
-                            elif hasattr(content, 'string') and content.string:
-                                text_parts.append(content.string)
-                            elif isinstance(content, str):
-                                text_parts.append(content)
-                        
-                        name = ''.join(text_parts).strip()
-                        classes = (li.get('class') or [])
-                        selected = ('selected' in classes) or ('current' in classes)
-                        if name:
-                            steps.append({"name": name, "selected": selected})
+                    content = page.content()
+                    soup = BeautifulSoup(content, 'html.parser')
 
-                    if steps:
-                        logger.info(f"✅ Scraped {len(steps)} tracker steps from {source_url}")
-                        return steps
+                    # 1) Primary: ordered list tracker (support old/new class names)
+                    tracker = soup.find('ol', class_=['bill_progress', 'bill-progress'])
+                    steps: List[Dict[str, Any]] = []
 
-                # 2) Fallback: A11y paragraph explicitly states status
-                status_text = None
-                try:
-                    for p_tag in soup.find_all('p', class_='hide_fromsighted'):
-                        text = p_tag.get_text(" ", strip=True)
-                        m = re.search(r'This bill has the status\s*(.+)$', text, re.IGNORECASE)
-                        if m:
-                            status_text = m.group(1).strip()
-                            break
-                except Exception:
+                    if tracker:
+                        for li in tracker.find_all('li'):
+                            # Get only the direct text from the li element, excluding hidden div content
+                            text_parts = []
+                            for content in li.contents:
+                                # Skip hidden divs with class 'sol-step-info'
+                                if hasattr(content, 'name') and content.name == 'div' and 'sol-step-info' in (content.get('class', [])):
+                                    continue
+                                # Extract text from text nodes and direct strings
+                                elif hasattr(content, 'string') and content.string:
+                                    text_parts.append(content.string)
+                                elif isinstance(content, str):
+                                    text_parts.append(content)
+                            
+                            name = ''.join(text_parts).strip()
+                            classes = (li.get('class') or [])
+                            selected = ('selected' in classes) or ('current' in classes)
+                            if name:
+                                steps.append({"name": name, "selected": selected})
+
+                        if steps:
+                            logger.info(f"✅ Scraped {len(steps)} tracker steps from {source_url}")
+                            return steps
+
+                    # 2) Fallback: A11y paragraph explicitly states status
                     status_text = None
+                    try:
+                        for p_tag in soup.find_all('p', class_='hide_fromsighted'):
+                            text = p_tag.get_text(" ", strip=True)
+                            m = re.search(r'This bill has the status\s*(.+)$', text, re.IGNORECASE)
+                            if m:
+                                status_text = m.group(1).strip()
+                                break
+                    except Exception:
+                        status_text = None
 
-                if status_text:
-                    logger.info(f"✅ Parsed status from hidden paragraph for {source_url}: {status_text}")
-                    # Return a minimal steps list with the current status selected
-                    return [{"name": status_text, "selected": True}]
+                    if status_text:
+                        logger.info(f"✅ Parsed status from hidden paragraph for {source_url}: {status_text}")
+                        # Return a minimal steps list with the current status selected
+                        return [{"name": status_text, "selected": True}]
 
-                logger.warning(f"⚠️ Could not find bill tracker or status on page: {source_url}")
+                    logger.warning(f"⚠️ Could not find bill tracker or status on page: {source_url}")
+                finally:
+                    try:
+                        if 'context' in locals():
+                            context.close()
+                    except Exception as e:
+                        logger.debug(f"Error closing context: {e}")
+                    try:
+                        browser.close()
+                    except Exception as e:
+                        logger.debug(f"Error closing browser: {e}")
                 if attempt < max_retries - 1:
                     logger.info(f"Retrying in 2 seconds...")
                     time.sleep(2)
@@ -130,12 +141,6 @@ def scrape_bill_tracker(source_url: str, force_scrape=False, max_retries: int = 
                 time.sleep(2)
                 continue
             return None
-        finally:
-            try:
-                if 'browser' in locals():
-                    browser.close()
-            except Exception as e:
-                logger.warning(f"Error closing browser: {e}")
 
 def normalize_status(action_text: str, source_url: Optional[str] = None) -> str:
     """
@@ -186,92 +191,240 @@ def construct_bill_url(congress: str, bill_type: str, bill_number: str) -> str:
         return f"https://www.congress.gov/search?q={bill_type}{bill_number}"
     return f"https://www.congress.gov/bill/{congress}th-congress/{bill_type_slug}/{bill_number}"
 
+def fetch_bill_ids_from_texts_received_today() -> List[str]:
+    """
+    Scrapes the 'Bill Texts Received Today' page to find bills that have new texts.
+    Prefers a real browser (Playwright) when available and not running in CI to avoid 403s,
+    and falls back to requests with hardened headers.
+    """
+    url = "https://www.congress.gov/bill-texts-received-today"
+    logger.info(f"Scraping for bill IDs from {url}")
+
+    # 1) Try Playwright first (non-CI only) to avoid 403 blocks
+    if PLAYWRIGHT_AVAILABLE and not running_in_ci():
+        max_retries = 2
+        base_timeout = 30000  # ms
+        for attempt in range(max_retries):
+            try:
+                timeout = base_timeout * (attempt + 1)
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    try:
+                        ua = USER_AGENTS[attempt % len(USER_AGENTS)] if 'USER_AGENTS' in globals() and USER_AGENTS else HEADERS.get('User-Agent')
+                        context = browser.new_context(
+                            user_agent=ua,
+                            locale='en-US'
+                        )
+                        page = context.new_page()
+                        time.sleep(1)  # small delay
+                        page.goto(url, timeout=timeout, wait_until='networkidle')
+
+                        # Best-effort wait for table presence
+                        try:
+                            page.wait_for_selector("table.item_table", timeout=min(timeout, 10000))
+                        except Exception:
+                            pass
+
+                        html = page.content()
+                        soup = BeautifulSoup(html, 'html.parser')
+
+                        bill_ids: List[str] = []
+                        table = soup.find('table', class_='item_table')
+                        if not table:
+                            logger.info("No bill texts table found on page (may be empty today).")
+                            return []
+
+                        tbody = table.find('tbody')
+                        if not tbody:
+                            logger.info("No table body found in bill texts page.")
+                            return []
+
+                        for row in tbody.find_all('tr'):
+                            strong_tag = row.find('strong')
+                            if strong_tag:
+                                # Text is like: S.2392 [119th]
+                                match = re.search(r'([a-zA-Z\.]+)(\d+)\s*\[(\d+)th\]', strong_tag.text)
+                                if match:
+                                    bill_type, bill_number, congress = match.groups()
+                                    bill_type = bill_type.replace('.', '').lower()
+                                    bill_id = f"{bill_type}{bill_number}-{congress}"
+                                    bill_ids.append(bill_id)
+
+                        logger.info(f"Found {len(bill_ids)} bills on 'Texts Received Today' page: {bill_ids}")
+                        return bill_ids
+                    finally:
+                        try:
+                            context.close()
+                        except Exception:
+                            pass
+                        try:
+                            browser.close()
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.warning(f"Playwright scrape failed (attempt {attempt + 1}/{max_retries}) for '{url}': {e}")
+                if attempt < max_retries - 1:
+                    logger.info("Retrying in 2 seconds...")
+                    time.sleep(2)
+                    continue
+                # Fall through to requests fallback
+
+    # 2) Fall back to requests with hardened headers and short retry
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            # Build headers with optional UA rotation and referer
+            headers = dict(HEADERS)
+            headers.setdefault('Referer', 'https://www.congress.gov/')
+            if attempt > 0 and 'USER_AGENTS' in globals() and USER_AGENTS:
+                headers['User-Agent'] = USER_AGENTS[attempt % len(USER_AGENTS)]
+
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            bill_ids: List[str] = []
+            table = soup.find('table', class_='item_table')
+            if not table:
+                logger.info("No bill texts table found on page (may be empty today).")
+                return []
+
+            tbody = table.find('tbody')
+            if not tbody:
+                logger.info("No table body found in bill texts page.")
+                return []
+
+            for row in tbody.find_all('tr'):
+                strong_tag = row.find('strong')
+                if strong_tag:
+                    # Text is like: S.2392 [119th]
+                    match = re.search(r'([a-zA-Z\.]+)(\d+)\s*\[(\d+)th\]', strong_tag.text)
+                    if match:
+                        bill_type, bill_number, congress = match.groups()
+                        bill_type = bill_type.replace('.', '').lower()
+                        bill_id = f"{bill_type}{bill_number}-{congress}"
+                        bill_ids.append(bill_id)
+
+            logger.info(f"Found {len(bill_ids)} bills on 'Texts Received Today' page: {bill_ids}")
+            return bill_ids
+
+        except requests.RequestException as e:
+            logger.warning(f"403/Request failure scraping '{url}' (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                logger.info("Retrying in 2 seconds...")
+                time.sleep(2)
+                continue
+            return []
+
 def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
     """
     Fetches recent bills from the API and enriches them with tracker data.
+    It first tries to get bills from the 'Bill Texts Received Today' page,
+    and falls back to the general API if that fails.
     """
-    logger.info(f"🎯 Fetching and enriching bills from API (limit={limit})")
+    # Local import to avoid circular dependency with congress_fetcher
+    from .congress_fetcher import fetch_bill_text_from_api, download_bill_text
+    logger.info(f"🎯 Fetching and enriching bills (limit={limit})")
     api_key = os.getenv('CONGRESS_API_KEY')
     if not api_key:
         raise ValueError("CONGRESS_API_KEY environment variable not set")
 
-    seven_days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    url = f"https://api.congress.gov/v3/bill?fromDateTime={seven_days_ago}&sort=updateDate-desc&limit={limit * 3}"
+    bills_from_api = []
     
-    try:
-        response = requests.get(url, headers={"X-Api-Key": api_key, "Accept": "application/json"})
-        response.raise_for_status()
-        data = response.json()
-        bills_from_api = data.get('bills', [])
-        logger.info(f"📋 API returned {len(bills_from_api)} bills, checking for text and enriching with tracker data...")
+    # First, try scraping the "texts received today" page
+    scraped_bill_ids = fetch_bill_ids_from_texts_received_today()
 
-        enriched_bills = []
-        checked_bills = 0
-        for bill_data in bills_from_api:
-            checked_bills += 1
-            bill_type = bill_data.get('type', '').lower()
-            bill_number = bill_data.get('number')
-            congress = bill_data.get('congress')
-
-            if not all([bill_type, bill_number, congress]):
-                continue
-
-            text_versions_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/text"
-            if text_versions_url:
+    if scraped_bill_ids:
+        logger.info("Fetching details for bills found on 'Texts Received Today' page.")
+        for bill_id in scraped_bill_ids:
+            # Deconstruct bill_id to call API
+            match = re.match(r'([a-z]+)(\d+)-(\d+)', bill_id)
+            if match:
+                bill_type, bill_number, congress = match.groups()
+                detail_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}?api_key={api_key}"
                 try:
-                    text_response = requests.get(text_versions_url, headers={"X-Api-Key": api_key, "Accept": "application/json"})
-                    if text_response.status_code == 200 and text_response.json().get('textVersions'):
-                        logger.info(f"✅ {bill_type}{bill_number}-{congress} has text available")
-                        
-                        source_url = construct_bill_url(congress, bill_type, bill_number)
-                        tracker_data = None
-                        if source_url:
-                            tracker_data = scrape_bill_tracker(source_url, force_scrape=True)
+                    detail_resp = requests.get(detail_url, headers={"Accept": "application/json"})
+                    if detail_resp.status_code == 200:
+                        bill_data = detail_resp.json().get('bill')
+                        if bill_data:
+                            bills_from_api.append(bill_data)
+                except requests.RequestException as e:
+                    logger.warning(f"API call failed for {bill_id}: {e}")
+    
+    # Fallback to original method if scraping found nothing
+    if not bills_from_api:
+        logger.warning("Scraper found no bills, or failed. Falling back to general API query.")
+        seven_days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        url = f"https://api.congress.gov/v3/bill?fromDateTime={seven_days_ago}&sort=updateDate-desc&limit={limit * 3}&api_key={api_key}"
+        try:
+            response = requests.get(url, headers={"Accept": "application/json"})
+            response.raise_for_status()
+            data = response.json()
+            bills_from_api = data.get('bills', [])
+        except requests.RequestException as e:
+            logger.error(f"❌ API request failed: {e}")
+            return []
 
-                        # Ensure we have introduced date and robust latest action by calling the bill detail endpoint when needed
-                        detail_title = bill_data.get('title')
-                        detail_intro = bill_data.get('introducedDate')
-                        la_node = (bill_data.get('latestAction') or {})
-                        la_text = la_node.get('text')
-                        la_date = la_node.get('actionDate')
+    logger.info(f"📋 Processing {len(bills_from_api)} bills, checking for text and enriching with tracker data...")
 
-                        if not (detail_intro and detail_title and la_text and la_date):
-                            detail_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}"
-                            try:
-                                detail_resp = requests.get(detail_url, headers={"X-Api-Key": api_key, "Accept": "application/json"})
-                                if detail_resp.status_code == 200:
-                                    detail_json = detail_resp.json()
-                                    node = detail_json.get('bill') or detail_json
-                                    detail_intro = detail_intro or node.get('introducedDate')
-                                    detail_title = detail_title or node.get('title')
-                                    la_node2 = node.get('latestAction') or {}
-                                    la_text = la_text or la_node2.get('text') or la_node2.get('displayText')
-                                    la_date = la_date or la_node2.get('actionDate')
-                            except requests.RequestException as e:
-                                logger.debug(f"Detail fetch failed for {bill_type}{bill_number}-{congress}: {e}")
+    enriched_bills = []
+    checked_bills = 0
+    for bill_data in bills_from_api:
+        checked_bills += 1
+        bill_type = bill_data.get('type', '').lower()
+        bill_number = bill_data.get('number')
+        congress = bill_data.get('congress')
 
-                        enriched_bills.append({
-                            'bill_id': f"{bill_type}{bill_number}-{congress}",
-                            'title': detail_title,
-                            'text_url': text_versions_url,
-                            'source_url': source_url,
-                            'date_introduced': detail_intro,
-                            'congress': congress,
-                            'latest_action': la_text,
-                            'latest_action_date': la_date,
-                            'tracker': tracker_data
-                        })
-                        if len(enriched_bills) >= limit:
-                            break
-                except requests.RequestException:
-                    continue
+        if not all([bill_type, bill_number, congress]):
+            continue
+
+        text_versions_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/text"
         
-        logger.info(f"📊 Enrichment Results:\n   - Bills checked: {checked_bills}\n   - Bills enriched: {len(enriched_bills)}\n   - Bills returned: {len(enriched_bills)}")
-        return enriched_bills
+        source_url = construct_bill_url(congress, bill_type, bill_number)
+        tracker_data = None
+        if source_url:
+            tracker_data = scrape_bill_tracker(source_url, force_scrape=True)
 
-    except requests.RequestException as e:
-        logger.error(f"❌ API request failed: {e}")
-        return []
+        # Fetch full text via API; fallback to scrape if needed
+        full_text = ""
+        text_source = "none"
+        try:
+            ft, fmt = fetch_bill_text_from_api(str(congress), str(bill_type), str(bill_number), api_key, timeout=30)
+        except Exception:
+            ft, fmt = ("", None)
+        if ft and len(ft.strip()) > 100:
+            full_text = ft
+            text_source = f"api-{fmt or 'unknown'}"
+            logger.info(f"✅ Successfully fetched {len(ft)} chars for {bill_type}{bill_number}-{congress} from {text_source}")
+        elif source_url and not running_in_ci():
+            ft2, status = download_bill_text(source_url, f"{bill_type}{bill_number}-{congress}")
+            if ft2 and len(ft2.strip()) > 100:
+                full_text = ft2
+                text_source = "scraped"
+                if status:
+                    logger.info(f"✅ Updated bill status to '{status}' from scraping")
+                logger.info(f"✅ Successfully fetched {len(ft2)} chars for {bill_type}{bill_number}-{congress} from {text_source}")
+            else:
+                logger.warning(f"⚠️ No valid text found for {bill_type}{bill_number}-{congress} via scrape fallback")
+
+        enriched_bills.append({
+            'bill_id': f"{bill_type}{bill_number}-{congress}",
+            'title': bill_data.get('title'),
+            'text_url': text_versions_url,
+            'source_url': source_url,
+            'date_introduced': bill_data.get('introducedDate'),
+            'congress': congress,
+            'latest_action': (bill_data.get('latestAction') or {}).get('text'),
+            'latest_action_date': (bill_data.get('latestAction') or {}).get('actionDate'),
+            'tracker': tracker_data,
+            'full_text': full_text,
+            'text_source': text_source
+        })
+        if len(enriched_bills) >= limit:
+            break
+    
+    logger.info(f"📊 Enrichment Results:\n   - Bills checked: {checked_bills}\n   - Bills enriched: {len(enriched_bills)}\n   - Bills returned: {len(enriched_bills)}")
+    return enriched_bills
 
 # HTTP headers to avoid 403 errors
 HEADERS = {
@@ -281,6 +434,7 @@ HEADERS = {
     'Accept-Encoding': 'gzip, deflate',
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
+    'Referer': 'https://www.congress.gov/',
 }
 
 # User agents for rotation

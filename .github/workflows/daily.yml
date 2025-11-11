@@ -116,6 +116,7 @@ jobs:
     - name: Setup environment variables
       run: |
         echo "TESTING=false" >> $GITHUB_ENV
+        echo "STRICT_POSTING=true" >> $GITHUB_ENV
 
     - name: Run daily bill posting
       uses: nick-fields/retry@v2

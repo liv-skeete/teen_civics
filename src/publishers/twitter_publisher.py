@@ -208,14 +208,25 @@ def format_bill_tweet(bill: Dict) -> str:
     if not bill:
         bill = {}
 
-    # Choose best available short summary
+    # Choose best available short summary; never emit placeholder text
     summary_text = (
         bill.get("summary_tweet")
         or bill.get("summary_overview")
         or bill.get("summary_short")
         or bill.get("title")
-        or "No summary available"
     )
+    
+    # Check if summary contains placeholder text
+    if summary_text and "no summary available" in summary_text.lower():
+        summary_text = None
+    
+    # If still empty or contains placeholder, synthesize a safe, informative fallback from available fields
+    if not summary_text:
+        status_raw = (bill.get("normalized_status") or bill.get("status") or "").strip()
+        status_disp = status_raw.replace("_", " ").title() if status_raw else "Introduced"
+        title = (bill.get("title") or bill.get("short_title") or bill.get("bill_id") or "").strip()
+        base = title if title else (bill.get("bill_id") or "This bill")
+        summary_text = f"{base}. Status: {status_disp}."
 
     # Normalize whitespace and strip
     summary_text = (summary_text or "").replace("\n", " ").replace("\r", " ").strip()
@@ -293,6 +304,56 @@ def format_bill_tweet(bill: Dict) -> str:
         formatted_tweet = f"{header}{summary_text}{footer}"
     
     return formatted_tweet
+
+
+def validate_tweet_content(text: str, bill: dict) -> tuple[bool, str]:
+    """
+    Validate tweet content quality to prevent placeholder/low-quality posts.
+    Returns (is_valid, reason) where reason explains the failure.
+    Rules:
+      - Forbid placeholder phrases (e.g., "No summary available", "coming soon", "TBD").
+      - Require a valid bill link with website_slug.
+      - Require a minimum informative body length after removing the header and footer.
+    """
+    try:
+        t = (text or "").strip()
+        if not t:
+            return False, "Empty tweet text"
+        low = t.lower()
+
+        forbidden = [
+            "no summary available",
+            "link coming soon",
+            "coming soon",
+            "tbd",
+            "to be determined",
+        ]
+        for phrase in forbidden:
+            if phrase in low:
+                return False, f"Contains placeholder phrase '{phrase}'"
+
+        # Ensure the exact bill link is present
+        slug = (bill.get("website_slug") or "").strip() if isinstance(bill, dict) else ""
+        if slug:
+            expected = f"teencivics.org/bill/{slug}"
+            if expected not in t:
+                return False, "Missing or incorrect bill link"
+        else:
+            return False, "Missing website_slug"
+
+        # Measure body length (text before footer arrow and without header)
+        try:
+            body_part = t.split("👉")[0]
+            body_part = body_part.replace("🏛️ Today in Congress", "").strip()
+        except Exception:
+            body_part = t
+        if len(body_part) < 50:
+            return False, f"Summary too short ({len(body_part)} chars)"
+
+        return True, "ok"
+    except Exception as e:
+        # Fail closed on validator errors
+        return False, f"Validator exception: {e}"
 
 
 if __name__ == "__main__":
