@@ -152,6 +152,8 @@ def main(dry_run: bool = False) -> int:
 
         if bills:
             logger.info("🔍 Scanning for unprocessed bills...")
+            # Build list of candidates to try
+            candidates = []
             for bill in bills:
                 bill_id = normalize_bill_id(bill.get("bill_id", ""))
                 logger.info(f"   📋 Checking bill: {bill_id}")
@@ -161,34 +163,65 @@ def main(dry_run: bool = False) -> int:
                 
                 existing_bill = get_bill_by_id(bill_id)
                 if existing_bill:
-                    logger.info(f"   🎯 Bill {bill_id} exists but not tweeted. Selecting for tweet.")
-                    selected_bill = bill
-                    selected_bill_data = existing_bill
-                    break
+                    # Skip problematic bills
+                    if existing_bill.get("problematic"):
+                        logger.info(f"   ⚠️ Bill {bill_id} exists but is marked problematic. Skipping.")
+                        continue
+                    logger.info(f"   🎯 Bill {bill_id} exists but not tweeted. Adding to candidates.")
+                    candidates.append((bill, existing_bill))
                 else:
                     ft = (bill.get("full_text") or "").strip()
                     if len(ft) < 100:
                         logger.info(f"   🚫 New bill {bill_id} missing valid full text (len={len(ft)}). Marking problematic and continuing.")
                         mark_bill_as_problematic(bill_id, "No valid full text available during selection")
                         continue
-                    logger.info(f"   🆕 Bill {bill_id} is new with full text. Selecting for full processing.")
-                    selected_bill = bill
-                    break
+                    logger.info(f"   🆕 Bill {bill_id} is new with full text. Adding to candidates.")
+                    candidates.append((bill, None))
         
-        if not selected_bill:
-            logger.info("📭 No new bills from API. Checking DB for any unposted bills...")
-            unposted = select_and_lock_unposted_bill()
-            if unposted:
-                logger.info(f"   🔄 Found and locked unposted bill in DB: {unposted['bill_id']}")
-                selected_bill = {"bill_id": unposted["bill_id"]}
-                selected_bill_data = unposted
-            else:
+            
+            # If no candidates from API, check DB for unposted bills
+            if not candidates:
+                logger.info("📭 No new bills from API. Checking DB for any unposted bills...")
+                unposted = select_and_lock_unposted_bill()
+                if unposted:
+                    logger.info(f"   🔄 Found and locked unposted bill in DB: {unposted['bill_id']}")
+                    candidates.append(({"bill_id": unposted["bill_id"]}, unposted))
+            
+            if not candidates:
                 logger.info("📭 No unposted bills available. Nothing to do.")
                 return 0
+            
+            # Try each candidate until one succeeds or all fail
+            for selected_bill, selected_bill_data in candidates:
+                bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
+                logger.info(f"⚙️ Processing candidate bill: {bill_id}")
+                
+                # Attempt to process this bill
+                result = process_single_bill(selected_bill, selected_bill_data, dry_run)
+                
+                if result == 0:
+                    # Success! Exit with success
+                    logger.info(f"✅ Successfully processed bill {bill_id}")
+                    return 0
+                else:
+                    # Failed, try next candidate
+                    logger.info(f"⏭️  Bill {bill_id} failed processing, trying next candidate...")
+                    continue
+            
+            # If we get here, all candidates failed
+            logger.info("📭 All candidates failed processing. No tweet posted this run.")
+            return 0  # Return success so workflow doesn't fail
 
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+        return 1
+
+def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict], dry_run: bool) -> int:
+    """
+    Process a single bill candidate. Returns 0 on success, 1 on failure.
+    """
+    try:
         bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
-        logger.info(f"⚙️ Processing selected bill: {bill_id}")
-
         if selected_bill_data:
             logger.info("💾 Using existing summaries from database")
             bill_data = selected_bill_data
