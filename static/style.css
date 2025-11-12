@@ -9,7 +9,7 @@
  */
 
 :root {
-    /* Color Palette */
+    /* Color Palette - Light Theme (Default) */
     --color-beige: #FAF7F2;
     --color-white: #FFFFFF;
     --color-brown-black: #3E2723;
@@ -22,6 +22,39 @@
     --color-error: #F44336;
     --color-info: #2196F3;
     
+    /* Light Theme Variables */
+    --color-background: var(--color-beige);
+    --color-text: var(--color-brown-black);
+    --color-cards: var(--color-white);
+    --color-accent: var(--color-navy);
+    --color-borders: var(--color-gray);
+    
+    /* Dark Theme Colors */
+    --color-background-dark: #1e1e1e;
+    --color-cards-dark: #2a2a2a;
+    --color-text-dark: #e8e8e8;
+    --color-accent-dark: #6ba3e8;
+    --color-borders-dark: #444444;
+    
+    /* Theme Variables */
+    --color-background: var(--color-beige);
+    --color-text: var(--color-brown-black);
+    --color-cards: var(--color-white);
+    --color-accent: var(--color-navy);
+    --color-borders: var(--color-gray);
+}
+
+/* Dark Theme */
+[data-theme="dark"],
+.dark-theme {
+    --color-background: var(--color-background-dark);
+    --color-text: var(--color-text-dark);
+    --color-cards: var(--color-cards-dark);
+    --color-accent: var(--color-accent-dark);
+    --color-borders: var(--color-borders-dark);
+}
+
+:root {
     /* Spacing */
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
@@ -54,6 +87,7 @@
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
+    --transition-theme: 0.3s ease;
 }
 
 /* Reset and Base Styles */
@@ -106,6 +140,14 @@ body {
     min-height: -webkit-fill-available;
     display: flex;
     flex-direction: column;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark theme */
+[data-theme="dark"] body,
+.dark-theme body {
+    background-color: var(--color-background);
+    color: var(--color-text);
 }
 
 .main-content {
@@ -132,6 +174,23 @@ h1, h2, h3, h4, h5, h6 {
     line-height: 1.2;
     margin-bottom: var(--spacing-md);
     color: var(--color-brown-black);
+    transition: color 0.3s ease;
+}
+
+/* Dark theme headings */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6,
+.dark-theme h1,
+.dark-theme h2,
+.dark-theme h3,
+.dark-theme h4,
+.dark-theme h5,
+.dark-theme h6 {
+    color: var(--color-text);
 }
 
 h1 {
@@ -157,7 +216,13 @@ p {
 a {
     color: var(--color-navy);
     text-decoration: none;
-    transition: color var(--transition-fast);
+    transition: color 0.15s ease;
+}
+
+/* Dark theme links */
+[data-theme="dark"] a,
+.dark-theme a {
+    color: var(--color-accent);
 }
 
 a:hover {
@@ -208,23 +273,79 @@ textarea:focus-visible {
     outline-offset: 2px;
 }
 
-/* Navigation */
+/* Navigation - Consistent across light and dark mode */
 .navbar {
     background-color: var(--color-white);
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
     padding: var(--spacing-md) 0;
-    padding-left: 0;
-    padding-right: 0;
     position: sticky;
     top: 0;
     z-index: 1000;
+    transition: background-color 0.3s ease;
+}
+
+/* Dark theme navbar */
+[data-theme="dark"] .navbar,
+.dark-theme .navbar {
+    background-color: var(--color-cards-dark);
+    box-shadow: none;
+    position: sticky;
+}
+
+/* Seam-masking fix for 1px line artifact under sticky navbar in dark mode */
+[data-theme="dark"] .navbar::after,
+.dark-theme .navbar::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--color-cards-dark);
+    z-index: 1001;
+}
+
+
+
+/* Remove gap between navbar and hero section in dark mode */
+[data-theme="dark"] .hero-section,
+.dark-theme .hero-section {
+    margin-top: 0;
+    padding-top: var(--spacing-xxl);
+}
+
+/* Ensure navbar has no margin-bottom */
+[data-theme="dark"] .navbar,
+.dark-theme .navbar {
+    margin-bottom: 0;
+}
+
+/* Remove any top borders/margins that create a line after navbar */
+[data-theme="dark"] .navbar + *,
+.dark-theme .navbar + * {
+    margin-top: 0 !important;
+    border-top: none !important;
+}
+
+/* Specifically target hero section */
+[data-theme="dark"] .hero-section,
+.dark-theme .hero-section {
+    margin-top: 0;
+    border-top: none;
+}
+
+/* Also target main-content */
+[data-theme="dark"] .main-content,
+.dark-theme .main-content {
+    margin-top: 0;
+    border-top: none;
 }
 
 .nav-container {
     width: 100%;
-    max-width: none;
-    margin: 0;
-    padding: 0 var(--spacing-xl);
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 clamp(var(--spacing-md), 3vw, var(--spacing-xl));
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -239,18 +360,20 @@ textarea:focus-visible {
 }
 
 .nav-logo-img {
-    height: 36px;
+    height: clamp(32px, 4.5vw, 40px);
     width: auto;
     margin-right: var(--spacing-sm);
     object-fit: contain;
+    transition: height 0.2s ease;
 }
 
 .nav-logo h1 {
-    font-size: var(--font-size-xl);
+    font-size: clamp(1.25rem, 2.2vw, 1.625rem);
     color: var(--color-navy);
     margin: 0;
     font-weight: 600;
     padding-left: 0;
+    transition: font-size 0.2s ease;
 }
 
 .logo-img {
@@ -261,37 +384,66 @@ textarea:focus-visible {
 
 .nav-menu {
     display: flex;
-    gap: var(--spacing-lg);
+    gap: clamp(var(--spacing-sm), 1.5vw, var(--spacing-lg));
+    align-items: center;
 }
 
-@media (min-width: 769px) and (max-width: 992px) {
-    .nav-menu {
-        gap: var(--spacing-sm);
-    }
+/* Ensure nav-menu is transparent on desktop */
+[data-theme="dark"] .nav-menu {
+    background-color: transparent !important;
 }
 
 .nav-menu .nav-link {
     white-space: nowrap;
 }
 
+/* ===== CONSISTENT NAV LINK STYLING - LIGHT & DARK MODE ===== */
+
+/* Base nav link styling (desktop) */
 .nav-link {
-    color: var(--color-brown-black);
-    font-weight: 500;
-    padding: calc(var(--spacing-sm) + 2px) var(--spacing-md);
-    border-radius: var(--border-radius);
-    transition: background-color var(--transition-fast);
-    white-space: nowrap;
+  color: var(--color-brown-black);
+  font-weight: 500;
+  padding: calc(var(--spacing-sm) + 2px) clamp(var(--spacing-sm), 1.2vw, var(--spacing-md));
+  border-radius: var(--border-radius);
+  font-size: clamp(0.9375rem, 1.1vw, 1.0625rem);
+  transition: background-color 0.15s ease, color 0.15s ease, padding 0.2s ease, font-size 0.2s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 }
 
+/* Dark theme base nav links */
+[data-theme="dark"] .nav-link,
+.dark-theme .nav-link {
+  color: var(--color-text);
+}
+
+/* Hover state - light mode */
 .nav-link:hover {
-    background-color: var(--color-light-gray);
-    color: var(--color-navy);
+  background-color: var(--color-light-gray);
+  color: var(--color-navy);
 }
 
+/* Hover state - dark mode */
+[data-theme="dark"] .nav-link:hover,
+.dark-theme .nav-link:hover {
+  background-color: rgba(107, 163, 232, 0.1);
+  color: var(--color-accent-dark);
+}
+
+/* Active/current page - light mode */
 .nav-link[aria-current="page"] {
-    color: var(--color-navy);
-    font-weight: 600;
-    background-color: var(--color-light-gray);
+  color: var(--color-navy);
+  font-weight: 600;
+  background-color: var(--color-light-gray);
+}
+
+/* Active/current page - dark mode */
+[data-theme="dark"] .nav-link[aria-current="page"],
+.dark-theme .nav-link[aria-current="page"] {
+  color: var(--color-accent-dark);
+  font-weight: 600;
+  background-color: rgba(107, 163, 232, 0.15);
 }
 
 .nav-toggle {
@@ -311,6 +463,12 @@ textarea:focus-visible {
     margin: 3px 0;
     transition: all 0.3s ease;
     border-radius: 2px;
+}
+
+/* Dark theme nav toggle bar */
+[data-theme="dark"] .nav-toggle .bar,
+.dark-theme .nav-toggle .bar {
+    background-color: var(--color-text);
 }
 
 .nav-toggle .bar.active:nth-child(1) {
@@ -363,11 +521,31 @@ textarea:focus-visible {
 
 .btn-twitter {
     background-color: #1DA1F2;
-    color: var(--color-white);
+    color: #ffffff !important;
+    text-decoration: none;
 }
 
 .btn-twitter:hover {
     background-color: #1a91da;
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+.btn-twitter:visited {
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+.btn-twitter:focus {
+    outline: 2px solid var(--color-navy);
+    outline-offset: 2px;
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+[data-theme="dark"] .btn-twitter:focus,
+.dark-theme .btn-twitter:focus {
+    outline-color: #4a9eff;
 }
 
 .btn-share {
@@ -412,8 +590,15 @@ textarea:focus-visible {
     box-shadow: var(--shadow-md);
     padding: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
-    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
     border: 2px solid var(--color-navy);
+}
+
+/* Dark theme bill card */
+[data-theme="dark"] .bill-card,
+.dark-theme .bill-card {
+    background-color: var(--color-cards);
+    border-color: var(--color-borders-dark);
 }
 
 .bill-card:hover {
@@ -442,6 +627,16 @@ textarea:focus-visible {
     background-color: var(--color-light-gray);
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark theme bill meta */
+[data-theme="dark"] .bill-id,
+[data-theme="dark"] .bill-date,
+.dark-theme .bill-id,
+.dark-theme .bill-date {
+    color: var(--color-text);
+    background-color: var(--color-borders-dark);
 }
 
 .bill-status {
@@ -451,12 +646,26 @@ textarea:focus-visible {
     border-radius: var(--border-radius);
     color: var(--color-white) !important;
     background-color: #666666 !important;
+    transition: background-color 0.3s ease;
 }
 
 .bill-status.introduced,
 .bill-status.referred-to-committee {
     background-color: var(--color-info) !important;
     color: var(--color-white) !important;
+}
+
+/* Dark theme bill status */
+[data-theme="dark"] .bill-status,
+.dark-theme .bill-status {
+    background-color: #555555 !important;
+}
+
+[data-theme="dark"] .bill-status.introduced,
+[data-theme="dark"] .bill-status.referred-to-committee,
+.dark-theme .bill-status.introduced,
+.dark-theme .bill-status.referred-to-committee {
+    background-color: var(--color-info) !important;
 }
 
 .bill-status.committee-consideration,
@@ -1010,6 +1219,17 @@ textarea:focus-visible {
     box-shadow: var(--shadow-sm);
 }
 
+/* Dark theme no bills message */
+[data-theme="dark"] .no-bills-message,
+.dark-theme .no-bills-message {
+    background-color: var(--color-cards);
+}
+
+[data-theme="dark"] .no-bills-message h2,
+.dark-theme .no-bills-message h2 {
+    color: var(--color-text);
+}
+
 .no-bills-message h2 {
     color: var(--color-navy);
     margin-bottom: var(--spacing-md);
@@ -1367,6 +1587,22 @@ textarea:focus-visible {
     color: var(--color-dark-gray);
 }
 
+[data-theme="dark"] .term-dictionary-content p {
+    color: var(--color-text-dark);
+}
+
+[data-theme="dark"] .term-dictionary-content p {
+    color: var(--color-text-dark);
+}
+
+[data-theme="dark"] .term-dictionary-content p {
+    color: var(--color-text-dark);
+}
+
+[data-theme="dark"] .term-dictionary-content p {
+    color: var(--color-text-dark);
+}
+
 .term-dictionary-content ul {
     list-style: none;
     padding: 0;
@@ -1381,6 +1617,22 @@ textarea:focus-visible {
     text-decoration: none;
     color: var(--color-navy);
     font-weight: 500;
+}
+
+[data-theme="dark"] .term-dictionary-content a {
+    color: var(--color-accent-dark);
+}
+
+[data-theme="dark"] .term-dictionary-content a {
+    color: var(--color-accent-dark);
+}
+
+[data-theme="dark"] .term-dictionary-content a {
+    color: var(--color-accent-dark);
+}
+
+[data-theme="dark"] .term-dictionary-content a {
+    color: var(--color-accent-dark);
 }
 
 .term-dictionary-content a:hover {
@@ -1617,6 +1869,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Responsive Design - Mobile */
 @media (max-width: 768px) {
+    /* Mobile menu */
     .nav-menu {
         display: none;
         flex-direction: column;
@@ -1627,9 +1880,73 @@ h1, h2, h3, h4, h5, h6 {
         background-color: var(--color-white);
         box-shadow: var(--shadow-md);
         padding: var(--spacing-md);
+        gap: var(--spacing-xs);
+    }
+    
+    /* Dark mode mobile menu */
+    [data-theme="dark"] .nav-menu,
+    .dark-theme .nav-menu {
+        background-color: var(--color-cards-dark) !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        border-top: 1px solid var(--color-borders-dark);
     }
 
-    .nav-link,
+    /* Mobile nav links */
+    .nav-menu .nav-link,
+    .nav-menu .theme-toggle {
+        width: 100%;
+        text-align: left;
+        justify-content: flex-start;
+        min-height: 44px;
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-radius: var(--border-radius);
+    }
+    
+    /* Light mode mobile nav link hover */
+    .nav-menu .nav-link:hover {
+        background-color: var(--color-light-gray);
+        color: var(--color-navy);
+    }
+    
+    /* Dark mode mobile nav link */
+    [data-theme="dark"] .nav-menu .nav-link,
+    .dark-theme .nav-menu .nav-link {
+        color: var(--color-text);
+    }
+    
+    /* Dark mode mobile nav link hover */
+    [data-theme="dark"] .nav-menu .nav-link:hover,
+    .dark-theme .nav-menu .nav-link:hover {
+        background-color: rgba(107, 163, 232, 0.1);
+        color: var(--color-accent-dark);
+    }
+    
+    /* Active page in mobile menu - light mode */
+    .nav-menu .nav-link[aria-current="page"] {
+        background-color: var(--color-light-gray);
+        color: var(--color-navy);
+        font-weight: 600;
+    }
+    
+    /* Active page in mobile menu - dark mode */
+    [data-theme="dark"] .nav-menu .nav-link[aria-current="page"],
+    .dark-theme .nav-menu .nav-link[aria-current="page"] {
+        background-color: rgba(107, 163, 232, 0.15);
+        color: var(--color-accent-dark);
+        font-weight: 600;
+    }
+    
+    /* Theme toggle in mobile menu */
+    .nav-menu .theme-toggle:hover {
+        background-color: var(--color-light-gray);
+    }
+    
+    [data-theme="dark"] .nav-menu .theme-toggle:hover,
+    .dark-theme .nav-menu .theme-toggle:hover {
+        background-color: rgba(107, 163, 232, 0.1);
+    }
+
+    /* Other mobile touch targets */
     .btn,
     .page-link {
         min-height: 44px;
@@ -1749,6 +2066,376 @@ h1, h2, h3, h4, h5, h6 {
     }
 }
 
+/* Theme Toggle Button Styles */
+.theme-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: calc(var(--spacing-sm) + 2px) clamp(var(--spacing-sm), 1.2vw, var(--spacing-md));
+  border-radius: var(--border-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease, padding 0.2s ease;
+  margin: 0;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.theme-toggle:hover {
+  background-color: var(--color-light-gray);
+  color: var(--color-navy);
+}
+
+.theme-toggle:focus {
+  outline: 2px solid var(--color-navy);
+  outline-offset: 2px;
+  background-color: var(--color-light-gray);
+  color: var(--color-navy);
+}
+
+[data-theme="dark"] .theme-toggle:hover,
+[data-theme="dark"] .theme-toggle:focus {
+    background-color: rgba(107, 163, 232, 0.1);
+    color: var(--color-accent-dark);
+    outline-color: var(--color-accent-dark);
+}
+
+.icon {
+  font-size: clamp(1rem, 1.2vw, 1.125rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  transition: font-size 0.2s ease;
+}
+
+.sun-icon {
+  display: none;
+}
+
+[data-theme="dark"] .sun-icon {
+  display: flex;
+}
+
+.moon-icon {
+  display: flex;
+}
+
+[data-theme="dark"] .moon-icon {
+  display: none;
+}
+
+/* ===== COMPLETE DARK MODE CONTAINER FIXES ===== */
+
+/* Search and Filter Section */
+[data-theme="dark"] .search-and-filter-section,
+.dark-theme .search-and-filter-section {
+  background-color: var(--color-cards);
+  border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .search-input,
+[data-theme="dark"] .filter-form select,
+.dark-theme .search-input,
+.dark-theme .filter-form select {
+  background-color: #383838; /* Slightly lighter than cards */
+  color: var(--color-text);
+  border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .search-input::placeholder,
+.dark-theme .search-input::placeholder {
+  color: rgba(232, 232, 232, 0.5);
+}
+
+/* Button overrides for dark mode */
+[data-theme="dark"] .btn-search,
+[data-theme="dark"] .btn-clear,
+.dark-theme .btn-search,
+.dark-theme .btn-clear {
+  background-color: #555555 !important;
+  color: var(--color-text) !important;
+  border-color: #666666 !important;
+}
+
+[data-theme="dark"] .btn-search:hover,
+[data-theme="dark"] .btn-clear:hover,
+.dark-theme .btn-search:hover,
+.dark-theme .btn-clear:hover {
+  background-color: #666666 !important;
+  color: var(--color-white) !important;
+}
+
+/* Bill Card - CRITICAL */
+[data-theme="dark"] .bill-card,
+.dark-theme .bill-card {
+  background-color: var(--color-cards);
+  color: var(--color-text);
+  border-color: #4a9eff; /* Brighter border for dark mode */
+}
+
+[data-theme="dark"] .bill-title,
+.dark-theme .bill-title {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .bill-short-title,
+.dark-theme .bill-short-title {
+  color: rgba(232, 232, 232, 0.8);
+}
+
+[data-theme="dark"] .summary-text,
+.dark-theme .summary-text {
+  color: var(--color-text);
+}
+
+/* Poll Widget & Poll Preview */
+[data-theme="dark"] .poll-widget,
+.dark-theme .poll-widget {
+  background-color: var(--color-cards);
+  border: 1px solid var(--color-borders-dark);
+}
+
+[data-theme="dark"] .poll-preview,
+.dark-theme .poll-preview {
+  background-color: var(--color-cards);
+  border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .poll-preview h4,
+.dark-theme .poll-preview h4 {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .poll-preview .poll-label,
+[data-theme="dark"] .poll-preview .poll-percentage,
+.dark-theme .poll-preview .poll-label,
+.dark-theme .poll-preview .poll-percentage {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .poll-option,
+.dark-theme .poll-option {
+  background-color: #383838;
+  color: var(--color-text);
+  border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .poll-option:hover,
+.dark-theme .poll-option:hover {
+  background-color: #454545;
+  border-color: #4a9eff;
+}
+
+/* Poll Preview overrides - dark mode: remove row background and darken track to avoid halo */
+[data-theme="dark"] .poll-preview .poll-option,
+.dark-theme .poll-preview .poll-option {
+  background: none;
+  border: none;
+}
+
+[data-theme="dark"] .poll-preview .poll-option:hover,
+.dark-theme .poll-preview .poll-option:hover {
+  background: none;
+  border: none;
+}
+
+[data-theme="dark"] .poll-preview .poll-bar,
+.dark-theme .poll-preview .poll-bar {
+  background-color: var(--color-borders-dark);
+}
+/* Resource Cards */
+[data-theme="dark"] .resource-card,
+.dark-theme .resource-card {
+  background-color: var(--color-cards);
+  border-color: #4a9eff;
+}
+
+[data-theme="dark"] .resource-card h2,
+.dark-theme .resource-card h2 {
+  color: #4a9eff;
+}
+
+[data-theme="dark"] .resource-link,
+.dark-theme .resource-link {
+  background-color: #383838;
+  color: #4a9eff;
+}
+
+/* Feature Cards */
+[data-theme="dark"] .feature-card,
+.dark-theme .feature-card {
+  background-color: var(--color-cards);
+  border-color: #4a9eff;
+}
+
+[data-theme="dark"] .feature-card h3,
+.dark-theme .feature-card h3 {
+  color: #4a9eff;
+}
+
+[data-theme="dark"] .feature-card p,
+.dark-theme .feature-card p {
+  color: var(--color-text);
+}
+
+/* About Cards */
+[data-theme="dark"] .about-card,
+.dark-theme .about-card {
+  background-color: var(--color-cards);
+  border-color: #4a9eff;
+}
+
+[data-theme="dark"] .about-card h2,
+.dark-theme .about-card h2 {
+  color: #4a9eff;
+}
+
+/* Dark theme mission card */
+[data-theme="dark"] .mission-card,
+.dark-theme .mission-card {
+  background: linear-gradient(135deg, var(--color-cards-dark) 0%, #2d2d2d 100%);
+  border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .about-text p,
+.dark-theme .about-text p {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .tech-item,
+.dark-theme .tech-item {
+  background-color: #383838;
+  border-color: var(--color-borders-dark);
+}
+
+/* Stat Cards */
+[data-theme="dark"] .stat-card,
+.dark-theme .stat-card {
+  background-color: var(--color-cards);
+  border-color: #4a9eff;
+}
+
+[data-theme="dark"] .stat-headline,
+.dark-theme .stat-headline {
+  color: #4a9eff;
+}
+
+[data-theme="dark"] .stat-text,
+.dark-theme .stat-text {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .stat-source,
+.dark-theme .stat-source {
+  color: rgba(232, 232, 232, 0.7);
+}
+
+/* ===== LOGO & NAV FIX ===== */
+
+/* Make logo/heading bright in dark mode */
+[data-theme="dark"] .nav-logo h1,
+.dark-theme .nav-logo h1 {
+  color: #4a9eff; /* Bright cyan - visible on dark background */
+}
+
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+.dark-theme h1,
+.dark-theme h2,
+.dark-theme h3 {
+  color: var(--color-text);
+}
+
+/* Creator heading contrast in dark mode */
+[data-theme="dark"] .creator-card .creator-info h3,
+.dark-theme .creator-card .creator-info h3 {
+  color: var(--color-text);
+}
+
+/* ===== THEME TOGGLE FIX ===== */
+
+[data-theme="dark"] .theme-toggle,
+.dark-theme .theme-toggle {
+  color: var(--color-text);
+  background: none;
+  border: none;
+}
+
+/* Dark hover merged into unified rule above near theme-toggle hover/focus */
+
+[data-theme="dark"] .icon,
+.dark-theme .icon {
+  color: #4a9eff;
+}
+
+/* Additional/info sections */
+[data-theme="dark"] .additional-info,
+.dark-theme .additional-info {
+  background-color: var(--color-cards);
+  border-color: #4a9eff;
+}
+
+[data-theme="dark"] .term-dictionary-section,
+.dark-theme .term-dictionary-section {
+  border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .term-dictionary-content,
+.dark-theme .term-dictionary-content {
+  background-color: #383838;
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .term-dictionary-content p,
+.dark-theme .term-dictionary-content p {
+  color: rgba(232, 232, 232, 0.9);
+}
+
+[data-theme="dark"] .bill-meta-bottom,
+.dark-theme .bill-meta-bottom {
+  background-color: #383838;
+  border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .meta-label,
+.dark-theme .meta-label {
+  color: rgba(232, 232, 232, 0.8);
+}
+
+[data-theme="dark"] .meta-value,
+.dark-theme .meta-value {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .stats-section,
+.dark-theme .stats-section {
+  background-color: var(--color-background);
+}
+
+[data-theme="dark"] .stats-section h2,
+.dark-theme .stats-section h2 {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .no-bills-message,
+.dark-theme .no-bills-message {
+  background-color: var(--color-cards);
+}
+
+/* Fix for pill/badge styling in dark mode */
+[data-theme="dark"] .bill-id,
+[data-theme="dark"] .bill-date,
+.dark-theme .bill-id,
+.dark-theme .bill-date {
+  background-color: #383838;
+  color: rgba(232, 232, 232, 0.9);
+  border: 1px solid var(--color-borders-dark);
+}
+
 @media (max-width: 992px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1803,5 +2490,119 @@ h1, h2, h3, h4, h5, h6 {
     
     .bill-card {
         page-break-inside: avoid;
+    }
+}
+/* ========================================
+   MOBILE UI FIXES - Added 2025-11-12
+   ======================================== */
+
+/* 1. Mobile dropdown menu dark mode styling */
+/* 2. Stats grid responsive improvements */
+@media (max-width: 768px) {
+    .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+        padding: var(--spacing-sm);
+    }
+    
+    .stat-card {
+        width: 100%;
+        padding: var(--spacing-md);
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-lg);
+    }
+}
+
+@media (min-width: 1025px) {
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* 3. Creator section layout fixes for mobile/tablet/desktop */
+@media (max-width: 768px) {
+    .creator-card .creator-profile {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-lg);
+        text-align: center;
+    }
+    
+    .creator-card .creator-photo {
+        order: -1;
+        display: flex;
+        justify-content: center;
+    }
+    
+    .creator-card .creator-img {
+        max-width: 200px;
+        height: auto;
+    }
+    
+    .creator-card .creator-info h3 {
+        font-size: var(--font-size-lg);
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .creator-card .creator-profile {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-xl);
+    }
+    
+    .creator-card .creator-img {
+        max-width: 250px;
+    }
+}
+
+@media (min-width: 1025px) {
+    .creator-card .creator-profile {
+        grid-template-columns: 1.5fr 1fr;
+        gap: var(--spacing-xl);
+    }
+    
+    .creator-card .creator-img {
+        max-width: 320px;
+    }
+}
+
+/* 4. Overflow prevention on mobile */
+@media (max-width: 768px) {
+    body, 
+    .container, 
+    .summary-text, 
+    .bill-title, 
+    .meta-value, 
+    .resource-link, 
+    .page-link,
+    .stat-text,
+    .creator-bio,
+    .about-text {
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        word-break: break-word;
+        hyphens: auto;
+    }
+    
+    .container {
+        padding: var(--spacing-sm);
+    }
+    
+    .nav-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 var(--spacing-md);
+    }
+    
+    .bills-grid,
+    .resources-grid,
+    .features-grid {
+        gap: var(--spacing-md);
     }
 }
