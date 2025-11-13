@@ -115,9 +115,21 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
         logger.error("Cannot post empty tweet")
         return False, None
 
-    if len(text) > 280:
-        logger.error(f"Tweet text exceeds 280 characters ({len(text)} chars)")
+    # Calculate effective length accounting for t.co URL shortening
+    # Twitter shortens all URLs to 23 characters (t.co links)
+    import re
+    url_pattern = r'https?://[^\s]+'
+    urls = re.findall(url_pattern, text)
+    effective_length = len(text)
+    for url in urls:
+        # Each URL gets shortened to 23 chars
+        effective_length = effective_length - len(url) + 23
+    
+    if effective_length > 280:
+        logger.error(f"Tweet text exceeds 280 characters ({effective_length} effective chars, {len(text)} raw chars)")
         return False, None
+
+    logger.info(f"Tweet length check: {effective_length} effective chars (raw: {len(text)} chars)")
 
     # DIAGNOSTIC: Log full tweet content hash for duplicate detection
     import hashlib
@@ -318,8 +330,14 @@ def format_bill_tweet(bill: Dict) -> str:
             # Summary is too short even for overflow - use minimal version
             summary_text = summary_text[:50].rsplit(' ', 1)[0] + "..."
         
+        # Rebuild tweet with trimmed summary
+        footer = f"{footer_text}{link}"
         formatted_tweet = f"{header}{summary_text}{footer}"
         logger.info(f"After emergency trim: {len(header) + len(summary_text) + len(footer_text) + tco_link_length} chars")
+    
+    # Log the effective length (as Twitter will see it after t.co shortening)
+    effective_length = len(header) + len(summary_text) + len(footer_text) + tco_link_length
+    logger.info(f"📝 Tweet effective length (with t.co): {effective_length} chars, actual string length: {len(formatted_tweet)} chars")
     
     return formatted_tweet
 
