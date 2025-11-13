@@ -350,6 +350,16 @@ def _build_user_prompt(bill: Dict[str, Any]) -> str:
             tf = bill.get("text_format")
             tu = bill.get("text_url")
             ft = bill["full_text"]
+            
+            # Rough token estimation: ~4 chars per token
+            # Claude's limit is 200k tokens, so we'll use ~750k chars as a safe limit
+            MAX_CHARS = 750000
+            
+            if len(ft) > MAX_CHARS:
+                logger.warning(f"Bill text too long ({len(ft)} chars, ~{len(ft)//4} tokens). Truncating to {MAX_CHARS} chars.")
+                ft = ft[:MAX_CHARS]
+                ft += "\n\n[... Bill text truncated due to length. Summary based on first portion ...]"
+            
             logger.info(f"Including full_text: {len(ft)} chars; format={tf}; url={tu}")
             full_text_section = f"\n\nFull bill text (no truncation):\n{ft}"
         except Exception as e:

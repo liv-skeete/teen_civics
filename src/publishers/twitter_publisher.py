@@ -260,48 +260,66 @@ def format_bill_tweet(bill: Dict) -> str:
     tco_link_length = 23
 
     # Calculate available space for summary
+    # The footer_text + link will be counted where the link counts as tco_link_length
     header_length = len(header)
-    footer_length = len(footer_text) + tco_link_length
-    available_space = 280 - header_length - footer_length
+    footer_with_placeholder_length = len(footer_text) + tco_link_length
+    available_space = 280 - header_length - footer_with_placeholder_length
+    
+    # Ensure we have minimum 50 chars for summary
+    if available_space < 50:
+        logger.warning(f"Very limited space for summary: {available_space} chars")
+        available_space = max(50, available_space)
     
     # Trim summary if needed to fit within available space
     if len(summary_text) > available_space:
+        logger.info(f"Trimming summary from {len(summary_text)} to {available_space} chars")
         # Sentence-aware trimming
         cut = summary_text[:available_space].rstrip()
         # Prefer cutting at sentence boundary if reasonably far into the text
         for p in [".", "!", "?"]:
             idx = cut.rfind(p)
-            if idx != -1 and idx >= 60:
+            if idx != -1 and idx >= 40:  # Lowered threshold for shorter content
                 summary_text = cut[: idx + 1]
                 break
         else:
-            # Else cut at last space and add a period if needed
+            # Else cut at last space and add ellipsis
             sp = cut.rfind(" ")
-            if sp >= 60:
+            if sp >= 40:
                 cut = cut[:sp].rstrip()
             if not cut.endswith((".", "!", "?")):
-                cut += "."
+                cut += "..."
             summary_text = cut[:available_space]
     
-    # Construct the final tweet
     # Construct the final tweet
     footer = f"{footer_text}{link}"
     formatted_tweet = f"{header}{summary_text}{footer}"
     
     # Final safety check - ensure we're within 280 characters
-    final_length = len(f"{header}{summary_text}{footer_text}") + tco_link_length
+    # Properly calculate: header + summary + footer_text + tco_link_length
+    final_length = len(header) + len(summary_text) + len(footer_text) + tco_link_length
+    
     if final_length > 280:
+        logger.warning(f"Tweet still too long after trimming: {final_length} chars. Emergency trim required.")
         # Emergency trim - this shouldn't happen but just in case
         overflow = final_length - 280
-        summary_text = summary_text[:-overflow].rstrip()
-        # Ensure the text doesn't end with an incomplete word
-        if " " in summary_text:
-            summary_text = summary_text.rsplit(' ', 1)[0]
-        if not summary_text.endswith((".", "!", "?")):
-            summary_text += "..."
+        # Add safety margin
+        overflow += 5
+        
+        if len(summary_text) > overflow:
+            summary_text = summary_text[:-overflow].rstrip()
+            # Ensure the text doesn't end with an incomplete word
+            if " " in summary_text:
+                summary_text = summary_text.rsplit(' ', 1)[0].rstrip()
+            if not summary_text.endswith((".", "!", "?")):
+                summary_text += "..."
+            elif summary_text.endswith("."):
+                summary_text = summary_text[:-1] + "..."
         else:
-            summary_text = summary_text[:-1] + "..."
+            # Summary is too short even for overflow - use minimal version
+            summary_text = summary_text[:50].rsplit(' ', 1)[0] + "..."
+        
         formatted_tweet = f"{header}{summary_text}{footer}"
+        logger.info(f"After emergency trim: {len(header) + len(summary_text) + len(footer_text) + tco_link_length} chars")
     
     return formatted_tweet
 
