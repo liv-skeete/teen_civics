@@ -12,15 +12,17 @@ import os
 import requests
 from bs4 import BeautifulSoup
 
+# Configure logging first
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 try:
     from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
-except ImportError:
+    logger.info("✅ Playwright successfully imported and available")
+except ImportError as e:
     PLAYWRIGHT_AVAILABLE = False
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+    logger.warning(f"⚠️ Playwright not available: {e}")
 
 def running_in_ci() -> bool:
     """Check if the code is running in a CI environment."""
@@ -194,19 +196,22 @@ def construct_bill_url(congress: str, bill_type: str, bill_number: str) -> str:
 def fetch_bill_ids_from_texts_received_today() -> List[str]:
     """
     Scrapes the 'Bill Texts Received Today' page to find bills that have new texts.
-    Prefers a real browser (Playwright) when available and not running in CI to avoid 403s,
-    and falls back to requests with hardened headers.
+    Uses Playwright for reliable scraping (works in both local and CI environments).
+    Falls back to requests with hardened headers if Playwright is unavailable.
     """
     url = "https://www.congress.gov/bill-texts-received-today"
     logger.info(f"Scraping for bill IDs from {url}")
+    logger.info(f"Playwright available: {PLAYWRIGHT_AVAILABLE}")
 
-    # 1) Try Playwright first (non-CI only) to avoid 403 blocks
-    if PLAYWRIGHT_AVAILABLE and not running_in_ci():
+    # 1) Try Playwright first (works in both local and CI)
+    if PLAYWRIGHT_AVAILABLE:
+        logger.info("Attempting to use Playwright for scraping...")
         max_retries = 2
         base_timeout = 30000  # ms
         for attempt in range(max_retries):
             try:
                 timeout = base_timeout * (attempt + 1)
+                logger.info(f"Playwright attempt {attempt + 1}/{max_retries} with timeout {timeout}ms")
                 with sync_playwright() as p:
                     browser = p.chromium.launch(headless=True)
                     try:
@@ -267,9 +272,13 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
                     logger.info("Retrying in 2 seconds...")
                     time.sleep(2)
                     continue
+                logger.warning("Playwright retries exhausted, falling back to requests method")
                 # Fall through to requests fallback
+    else:
+        logger.warning("Playwright not available, using requests fallback")
 
     # 2) Fall back to requests with hardened headers and short retry
+    logger.info("Using requests-based scraping as fallback...")
     max_retries = 2
     for attempt in range(max_retries):
         try:
@@ -463,14 +472,14 @@ def _extract_introduced_date_from_bill_page(url: str, timeout: int = 30) -> Opti
     Returns an ISO date string (YYYY-MM-DD) or None if not found.
 
     Implementation notes:
-    - Tries a real browser via Playwright first to bypass Cloudflare, when available and not in CI.
+    - Tries a real browser via Playwright first to bypass Cloudflare (works in both local and CI).
     - Falls back to requests-based fetch using HEADERS if Playwright is unavailable or fails.
     """
     try:
         html: Optional[str] = None
 
         # 1) Try browser-based fetch to avoid anti-bot challenges
-        if PLAYWRIGHT_AVAILABLE and not running_in_ci():
+        if PLAYWRIGHT_AVAILABLE:
             try:
                 with sync_playwright() as p:
                     browser = p.chromium.launch(headless=True)
