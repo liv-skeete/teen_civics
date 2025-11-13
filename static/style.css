@@ -2068,12 +2068,12 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Theme Toggle Button Styles */
 .theme-toggle {
+  display: none !important; /* Hide theme toggle - using system preference only */
   background: none;
   border: none;
   cursor: pointer;
   padding: calc(var(--spacing-sm) + 2px) clamp(var(--spacing-sm), 1.2vw, var(--spacing-md));
   border-radius: var(--border-radius);
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: background-color 0.15s ease, color 0.15s ease, padding 0.2s ease;
@@ -2331,6 +2331,14 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .stat-source,
 .dark-theme .stat-source {
   color: rgba(232, 232, 232, 0.7);
+}
+
+/* ===== HERO SECTION DARK MODE ===== */
+
+/* Change hero to a more subtle deep purple/navy gradient in dark mode */
+[data-theme="dark"] .hero-section,
+.dark-theme .hero-section {
+  background: linear-gradient(135deg, #1a1f35 0%, #2d1b4e 50%, #1e293b 100%);
 }
 
 /* ===== LOGO & NAV FIX ===== */

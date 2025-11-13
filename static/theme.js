@@ -13,16 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
  * Set up theme toggle button functionality
  */
 function setupThemeToggle() {
-    const toggleButton = document.getElementById('theme-toggle');
-    if (!toggleButton) return;
-    
-    // Update button text based on current theme
-    updateToggleButtonText();
-    
-    // Add click event listener
-    toggleButton.addEventListener('click', function() {
-        toggleTheme();
-    });
+    // Theme toggle functionality removed
 }
 
 /**
