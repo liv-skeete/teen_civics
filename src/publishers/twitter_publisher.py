@@ -262,9 +262,9 @@ def format_bill_tweet(bill: Dict) -> str:
     # Create footer with specific bill slug link if available
     website_slug = bill.get("website_slug")
     if website_slug:
-        link = f"teencivics.org/bill/{website_slug}"
+        link = f"https://teencivics.org/bill/{website_slug}"
     else:
-        link = "teencivics.org"
+        link = "https://teencivics.org"
 
     footer_text = "\n\n👉 See how this affects you: "
     
