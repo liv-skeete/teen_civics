@@ -313,6 +313,8 @@ def _build_enhanced_system_prompt() -> str:
         "  4. Direct impact: 'School lunch programs face changes...', 'Teen privacy online gets new protections'\n"
         "- Focus on core purpose or impact on real people\n"
         "- Neutral, factual tone. No clickbait, emojis, or hashtags\n"
+        "- **NEVER predict legislative outcomes or chances:** Avoid phrases like 'unlikely to advance', 'expected to fail', 'little chance of passing', 'won't make it through'. These are opinions that discourage civic engagement.\n"
+        "- **Instead, describe controversy factually:** Use 'highly divisive', 'splits Congress', 'polarizing measure with [X] cosponsors', 'faces opposition from [group]'. Let teens judge importance themselves.\n"
         "- Use stage-appropriate verbs based on bill status:\n"
         "  * Newly introduced → 'proposes', 'would'\n"
         "  * Passed House/Senate → 'passed House', 'advances'\n"
