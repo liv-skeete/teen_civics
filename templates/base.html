@@ -177,6 +177,40 @@
   <!-- JavaScript with cache busting and proper defer -->
   <script defer src="{{ url_for('static', filename='script.js', v='2025-11-11-v4') }}"></script>
   <script defer src="{{ url_for('static', filename='theme.js', v='2025-11-18-v1') }}"></script>
+
+  <!-- Fallback: ensure floating theme toggle works even if theme.js is cached/old -->
+  <script>
+    (function() {
+      var setupFloatingToggleFallback = function() {
+        // If ThemeManager.toggleTheme exists (from theme.js), rely on that and do nothing here
+        if (window.ThemeManager && typeof window.ThemeManager.toggleTheme === 'function') {
+          return;
+        }
+
+        var btn = document.getElementById('floating-theme-toggle');
+        if (!btn) return;
+
+        btn.addEventListener('click', function() {
+          var root = document.documentElement;
+          var current = root.getAttribute('data-theme');
+          var next = current === 'dark' ? 'light' : 'dark';
+          root.setAttribute('data-theme', next);
+          try {
+            localStorage.setItem('theme', next);
+          } catch (e) {
+            // Ignore storage errors (e.g., private mode)
+          }
+        });
+      };
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupFloatingToggleFallback);
+      } else {
+        setupFloatingToggleFallback();
+      }
+    })();
+  </script>
+
   {% block extra_js %}{% endblock %}
 </body>
 </html>
