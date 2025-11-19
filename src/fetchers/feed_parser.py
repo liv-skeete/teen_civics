@@ -422,12 +422,18 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
             else:
                 logger.warning(f"⚠️ No valid text found for {bill_type}{bill_number}-{congress} via scrape fallback")
 
+        # Extract metadata with logging for debugging
+        introduced_date = bill_data.get('introducedDate')
+        if not introduced_date:
+            logger.warning(f"⚠️ No introducedDate in API response for {bill_type}{bill_number}-{congress}")
+            logger.debug(f"Available keys in bill_data: {list(bill_data.keys())}")
+        
         enriched_bills.append({
             'bill_id': f"{bill_type}{bill_number}-{congress}",
             'title': bill_data.get('title'),
             'text_url': text_versions_url,
             'source_url': source_url,
-            'date_introduced': bill_data.get('introducedDate'),
+            'date_introduced': introduced_date,
             'congress': congress,
             'latest_action': (bill_data.get('latestAction') or {}).get('text'),
             'latest_action_date': (bill_data.get('latestAction') or {}).get('actionDate'),

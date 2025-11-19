@@ -64,6 +64,10 @@ def fetch_bill_details_from_api(congress: str, bill_type: str, bill_number: str,
         response.raise_for_status()
         data = response.json().get('bill', {})
         
+        # Log introduced date for debugging
+        if not data.get('introducedDate'):
+            logger.warning(f"⚠️ API response missing introducedDate for {bill_type}{bill_number}-{congress}")
+        
         # Fetch actions separately if needed
         actions_url = f'https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/actions?format=json'
         if api_key:
@@ -265,6 +269,14 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                     bill['latest_action'] = details.get('latestAction', {})
                     actions = details.get('actions', [])
                     bill['tracker'] = derive_tracker_from_actions(actions) # Default tracker
+                    
+                    # Capture introducedDate from API if not already set
+                    if not bill.get('date_introduced') and not bill.get('introduced_date'):
+                        if details.get('introducedDate'):
+                            bill['date_introduced'] = details['introducedDate']
+                            logger.info(f"✅ Set date_introduced for {bill.get('bill_id')} from API: {details['introducedDate']}")
+                        else:
+                            logger.warning(f"⚠️ No introducedDate available from API for {bill.get('bill_id')}")
                 
                 # Override with more accurate scraped tracker if available
                 if bill.get('source_url') and scraped_trackers.get(bill['source_url']):
