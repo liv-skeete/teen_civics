@@ -13,7 +13,20 @@ document.addEventListener('DOMContentLoaded', function() {
  * Set up theme toggle button functionality
  */
 function setupThemeToggle() {
-    // Theme toggle functionality removed
+    const toggleButton = document.getElementById('floating-theme-toggle');
+    if (!toggleButton) return;
+
+    // Avoid double-binding if another script (e.g., inline fallback) has already wired this button
+    if (toggleButton.dataset.floatingToggleBound === '1') return;
+    toggleButton.dataset.floatingToggleBound = '1';
+
+    // Add click handler
+    toggleButton.addEventListener('click', function() {
+        toggleTheme();
+    });
+    
+    // Set initial aria-label
+    updateToggleButtonText();
 }
 
 /**
@@ -37,18 +50,12 @@ function toggleTheme() {
  * Update theme toggle button text based on current theme
  */
 function updateToggleButtonText() {
-    const toggleButton = document.getElementById('theme-toggle');
+    const toggleButton = document.getElementById('floating-theme-toggle');
     if (!toggleButton) return;
     
     const currentTheme = document.documentElement.getAttribute('data-theme');
     toggleButton.setAttribute('aria-label', 
         currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
-    
-    // If button contains text, update it
-    if (toggleButton.textContent) {
-        toggleButton.textContent = 
-            currentTheme === 'dark' ? 'Light Mode' : 'Dark Mode';
-    }
 }
 
 /**

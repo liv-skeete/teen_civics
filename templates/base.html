@@ -176,19 +176,18 @@
 
   <!-- JavaScript with cache busting and proper defer -->
   <script defer src="{{ url_for('static', filename='script.js', v='2025-11-11-v4') }}"></script>
-  <script defer src="{{ url_for('static', filename='theme.js', v='2025-11-18-v1') }}"></script>
+  <script defer src="{{ url_for('static', filename='theme.js', v='2025-11-19-v2') }}"></script>
 
   <!-- Fallback: ensure floating theme toggle works even if theme.js is cached/old -->
   <script>
     (function() {
       var setupFloatingToggleFallback = function() {
-        // If ThemeManager.toggleTheme exists (from theme.js), rely on that and do nothing here
-        if (window.ThemeManager && typeof window.ThemeManager.toggleTheme === 'function') {
-          return;
-        }
-
         var btn = document.getElementById('floating-theme-toggle');
         if (!btn) return;
+
+        // If a handler has already been bound (by theme.js or another script), skip
+        if (btn.dataset.floatingToggleBound === '1') return;
+        btn.dataset.floatingToggleBound = '1';
 
         btn.addEventListener('click', function() {
           var root = document.documentElement;
