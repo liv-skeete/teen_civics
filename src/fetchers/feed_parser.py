@@ -424,6 +424,79 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
 
         # Extract metadata with logging for debugging
         introduced_date = bill_data.get('introducedDate')
+
+        # Fallback 1: Try to get introducedDate from latestAction if it's an introduction
+        if not introduced_date:
+            latest_action = bill_data.get('latestAction', {})
+            action_text = (latest_action.get('text') or '').lower()
+            if 'introduced' in action_text:
+                introduced_date = latest_action.get('actionDate')
+                if introduced_date:
+                    logger.info(
+                        f"ℹ️ Derived introducedDate from latestAction for {bill_type}{bill_number}-{congress}: {introduced_date}"
+                    )
+
+        # Fallback 2: Scan full actions history for an Introduced event
+        if not introduced_date:
+            actions = bill_data.get('actions') or []
+            introduced_action_date = None
+            for action in actions:
+                text = (action.get('text') or '').lower()
+                if 'introduced' in text:
+                    introduced_action_date = action.get('actionDate')
+                    if introduced_action_date:
+                        break
+
+            if introduced_action_date:
+                introduced_date = introduced_action_date
+                logger.info(
+                    f"ℹ️ Derived introducedDate from actions history for {bill_type}{bill_number}-{congress}: {introduced_date}"
+                )
+
+        # Fallback 3: If still missing, call the bill detail endpoint once
+        if not introduced_date:
+            try:
+                detail_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}?api_key={api_key}"
+                logger.info(
+                    f"🔍 Fetching bill detail for introducedDate fallback: {bill_type}{bill_number}-{congress}"
+                )
+                detail_resp = requests.get(detail_url, headers={"Accept": "application/json"}, timeout=30)
+                if detail_resp.status_code == 200:
+                    detail_bill = detail_resp.json().get("bill") or {}
+                    introduced_date = detail_bill.get("introducedDate")
+
+                    # Reuse latestAction/actions fallbacks on the richer payload if needed
+                    if not introduced_date:
+                        latest_action = detail_bill.get("latestAction", {})
+                        action_text = (latest_action.get("text") or "").lower()
+                        if "introduced" in action_text:
+                            introduced_date = latest_action.get("actionDate")
+
+                    if not introduced_date:
+                        actions = detail_bill.get("actions") or []
+                        introduced_action_date = None
+                        for action in actions:
+                            text = (action.get("text") or "").lower()
+                            if "introduced" in text:
+                                introduced_action_date = action.get("actionDate")
+                                if introduced_action_date:
+                                    break
+                        if introduced_action_date:
+                            introduced_date = introduced_action_date
+
+                    if introduced_date:
+                        logger.info(
+                            f"ℹ️ Derived introducedDate from detail endpoint for {bill_type}{bill_number}-{congress}: {introduced_date}"
+                        )
+                else:
+                    logger.warning(
+                        f"⚠️ Detail endpoint returned status {detail_resp.status_code} for {bill_type}{bill_number}-{congress}"
+                    )
+            except requests.RequestException as e:
+                logger.warning(
+                    f"⚠️ Failed to fetch bill detail for introducedDate fallback on {bill_type}{bill_number}-{congress}: {e}"
+                )
+
         if not introduced_date:
             logger.warning(f"⚠️ No introducedDate in API response for {bill_type}{bill_number}-{congress}")
             logger.debug(f"Available keys in bill_data: {list(bill_data.keys())}")
