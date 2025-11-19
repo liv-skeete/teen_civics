@@ -204,7 +204,7 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
     logger.info(f"Playwright available: {PLAYWRIGHT_AVAILABLE}")
 
     # 1) Try Playwright first (works in both local and CI)
-    if PLAYWRIGHT_AVAILABLE:
+    if PLAYWRIGHT_AVAILABLE and not running_in_ci():
         logger.info("Attempting to use Playwright for scraping...")
         max_retries = 2
         base_timeout = 30000  # ms

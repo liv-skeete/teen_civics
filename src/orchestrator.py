@@ -339,10 +339,27 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     tracker_raw_serialized = json.dumps(tracker_data)
                 except (TypeError, ValueError) as e:
                     logger.warning(f"Failed to serialize tracker_data for bill {bill_id}: {e}")
+            
+            # Title length validation and truncation
+            raw_title = selected_bill.get("title", "")
+            title_length = len(raw_title)
+            
+            if title_length > 300:
+                logger.warning(f"⚠️ Bill title extremely long ({title_length} chars), truncating to 300 chars.")
+                logger.warning(f"   Original: \"{raw_title}\"")
+                truncated_title = raw_title[:300] + "..."
+                logger.warning(f"   Truncated: \"{truncated_title}\"")
+                final_title = truncated_title
+            elif title_length > 200:
+                logger.warning(f"⚠️ Bill title is long ({title_length} chars) but within acceptable range (≤300)")
+                logger.info(f"   Title: \"{raw_title}\"")
+                final_title = raw_title
+            else:
+                final_title = raw_title
 
             bill_data = {
                 "bill_id": bill_id,
-                "title": selected_bill.get("title", ""),
+                "title": final_title,
                 "status": derived_status_text,
                 "summary_tweet": summary.get("tweet", ""),
                 "summary_long": summary.get("long", ""),
