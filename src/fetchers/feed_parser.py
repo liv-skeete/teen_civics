@@ -352,13 +352,19 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
                 bill_type, bill_number, congress = match.groups()
                 detail_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}?api_key={api_key}"
                 try:
-                    detail_resp = requests.get(detail_url, headers={"Accept": "application/json"})
+                    detail_resp = requests.get(detail_url, headers={"Accept": "application/json"}, timeout=30)
                     if detail_resp.status_code == 200:
                         bill_data = detail_resp.json().get('bill')
                         if bill_data:
                             bills_from_api.append(bill_data)
+                            # Log metadata to verify API is returning it
+                            logger.debug(f"✅ API data for {bill_id}: congress={bill_data.get('congress')}, introducedDate={bill_data.get('introducedDate')}")
+                        else:
+                            logger.warning(f"⚠️ No bill data in API response for {bill_id}")
+                    else:
+                        logger.warning(f"⚠️ API returned status {detail_resp.status_code} for {bill_id}")
                 except requests.RequestException as e:
-                    logger.warning(f"API call failed for {bill_id}: {e}")
+                    logger.warning(f"❌ API call failed for {bill_id}: {e}")
     
     # Fallback to original method if scraping found nothing
     if not bills_from_api:

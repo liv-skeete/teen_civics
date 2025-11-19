@@ -378,6 +378,12 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 "teen_impact_score": teen_impact_score,
             }
             
+            # Warn about missing metadata to help debug future issues
+            if not bill_data.get("congress_session"):
+                logger.warning(f"⚠️ Bill {bill_id} missing congress_session - will display 'N/A' on site")
+            if not bill_data.get("date_introduced"):
+                logger.warning(f"⚠️ Bill {bill_id} missing date_introduced - will display 'N/A' on site")
+            
             logger.info("💾 Inserting new bill into database...")
             if not insert_bill(bill_data):
                 logger.error(f"❌ Failed to insert bill {bill_id}")
