@@ -116,13 +116,14 @@ def derive_status_from_tracker(tracker: Any) -> tuple[str, str]:
 
     return status_text, normalized
 
-def main(dry_run: bool = False) -> int:
+def main(dry_run: bool = False, test_mode: bool = False) -> int:
     """
     Main orchestrator function.
     """
     try:
         logger.info("🚀 Starting orchestrator...")
         logger.info(f"📊 Dry-run mode: {dry_run}")
+        logger.info(f"🧪 Test mode: {test_mode}")
 
         et_tz = pytz.timezone('America/New_York')
         current_time_et = datetime.now(et_tz).time()
@@ -381,6 +382,16 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             logger.info(f"🔶 Tweet content:\n{formatted_tweet}")
             return 0
 
+        # Test mode: output bill and summary to logs, then exit successfully
+        if test_mode:
+            logger.info("🧪 TEST MODE: Bill processed successfully")
+            logger.info(f"🧪 Bill ID: {bill_data.get('bill_id')}")
+            logger.info(f"🧪 Title: {bill_data.get('title')}")
+            logger.info(f"🧪 Tweet Summary:\n{formatted_tweet}")
+            logger.info(f"🧪 Detailed Summary (first 500 chars):\n{bill_data.get('summary_detailed', 'N/A')[:500]}...")
+            logger.info(f"🧪 Teen Impact Score: {bill_data.get('teen_impact_score', 'N/A')}")
+            return 0
+
         # Quality gate: validate tweet content before posting
         is_valid, reason = validate_tweet_content(formatted_tweet, bill_data)
         if not is_valid:
@@ -455,5 +466,10 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="TeenCivics Orchestrator")
     parser.add_argument("--dry-run", action="store_true", help="Run without posting to Twitter or updating DB")
+    parser.add_argument("--test-mode", action="store_true", help="Test mode: fetch bill, generate summary, output to logs (no DB write, no tweet)")
     args = parser.parse_args()
-    sys.exit(main(dry_run=args.dry_run))
+    
+    if args.test_mode:
+        sys.exit(main(dry_run=True, test_mode=True))
+    else:
+        sys.exit(main(dry_run=args.dry_run))
