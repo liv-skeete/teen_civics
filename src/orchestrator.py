@@ -198,7 +198,7 @@ def main(dry_run: bool = False, test_mode: bool = False) -> int:
                 logger.info(f"⚙️ Processing candidate bill: {bill_id}")
                 
                 # Attempt to process this bill
-                result = process_single_bill(selected_bill, selected_bill_data, dry_run)
+                result = process_single_bill(selected_bill, selected_bill_data, dry_run, test_mode)
                 
                 if result == 0:
                     # Success! Exit with success
@@ -217,9 +217,10 @@ def main(dry_run: bool = False, test_mode: bool = False) -> int:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
         return 1
 
-def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict], dry_run: bool) -> int:
+def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict], dry_run: bool, test_mode: bool = False) -> int:
     """
     Process a single bill candidate. Returns 0 on success, 1 on failure.
+    In test_mode, no database writes occur - only validation and logging.
     """
     try:
         bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
@@ -262,7 +263,20 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 # Persist regenerated summaries
                 try:
                     from src.database.db import update_bill_summaries as _ubs
-                    if _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", ""), term_dict_json):
+                    if test_mode:
+                        logger.info("🧪 TEST MODE: Skipping database update of summaries (regen)")
+                        # Still merge locally for tweet formatting
+                        bill_data.update({
+                            "summary_tweet": summary.get("tweet", ""),
+                            "summary_long": summary.get("long", ""),
+                            "summary_overview": summary.get("overview", ""),
+                            "summary_detailed": summary.get("detailed", ""),
+                            "term_dictionary": term_dict_json,
+                            "teen_impact_score": teen_impact_score,
+                            "normalized_status": selected_bill.get("normalized_status"),
+                            "status": selected_bill.get("status"),
+                        })
+                    elif _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", ""), term_dict_json):
                         # Merge updated fields locally for tweet formatting
                         bill_data.update({
                             "summary_tweet": summary.get("tweet", ""),
@@ -341,9 +355,26 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 except (TypeError, ValueError) as e:
                     logger.warning(f"Failed to serialize tracker_data for bill {bill_id}: {e}")
 
+            # Title length validation and truncation
+            raw_title = selected_bill.get("title", "")
+            title_length = len(raw_title)
+            
+            if title_length > 200:
+                logger.warning(f"⚠️ Bill title extremely long ({title_length} chars), truncating to 200 chars.")
+                logger.warning(f"   Original: \"{raw_title}\"")
+                truncated_title = raw_title[:200] + "..."
+                logger.warning(f"   Truncated: \"{truncated_title}\"")
+                final_title = truncated_title
+            elif title_length > 150:
+                logger.warning(f"⚠️ Bill title is long ({title_length} chars) but within acceptable range (≤200)")
+                logger.info(f"   Title: \"{raw_title}\"")
+                final_title = raw_title
+            else:
+                final_title = raw_title
+
             bill_data = {
                 "bill_id": bill_id,
-                "title": selected_bill.get("title", ""),
+                "title": final_title,
                 "status": derived_status_text,
                 "summary_tweet": summary.get("tweet", ""),
                 "summary_long": summary.get("long", ""),
@@ -362,11 +393,16 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 "teen_impact_score": teen_impact_score,
             }
             
-            logger.info("💾 Inserting new bill into database...")
-            if not insert_bill(bill_data):
-                logger.error(f"❌ Failed to insert bill {bill_id}")
-                return 1
-            logger.info("✅ Bill inserted successfully")
+            if test_mode:
+                logger.info("🧪 TEST MODE: Skipping database insert, bill data prepared")
+                logger.info(f"🧪 Would insert bill: {bill_id}")
+                logger.info(f"🧪 Title: {bill_data.get('title', '')[:150]}...")
+            else:
+                logger.info("💾 Inserting new bill into database...")
+                if not insert_bill(bill_data):
+                    logger.error(f"❌ Failed to insert bill {bill_id}")
+                    return 1
+                logger.info("✅ Bill inserted successfully")
 
         # Ensure website_slug exists so the link is correct
         if not bill_data.get("website_slug"):
