@@ -2068,7 +2068,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Theme Toggle Button Styles */
 .theme-toggle {
-  display: none !important; /* Hide theme toggle - using system preference only */
+  display: none !important; /* Hide old navbar theme toggle */
   background: none;
   border: none;
   cursor: pointer;
@@ -2080,6 +2080,123 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* Floating Theme Toggle - Bottom Right */
+.floating-theme-toggle {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-white);
+  border: 2px solid var(--color-navy);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  /* Remove flex to avoid conflict with absolute children */
+  display: block; 
+  font-size: 1.75rem;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  padding: 0;
+  outline: none;
+  color: var(--color-navy);
+}
+
+.floating-theme-toggle:hover {
+  transform: scale(1.1) rotate(15deg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.floating-theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.floating-theme-toggle:focus {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* Theme icons */
+.theme-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* Simplified transform to just centering */
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  z-index: 2; /* Increased z-index */
+  display: block; /* Ensure block display */
+
+  /* Ensure SVG rendering is driven by color */
+  color: currentColor;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* Light mode: show sun (floating toggle only) */
+#floating-theme-toggle .sun-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0deg) scale(1);
+  color: #1A237E; /* navy stroke on light background */
+}
+
+/* Light mode: hide moon initially (floating toggle only) */
+#floating-theme-toggle .moon-icon {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-90deg) scale(0.5);
+  color: #1A237E; /* default; overridden in dark mode */
+}
+
+/* Dark mode transitions (floating toggle only) */
+[data-theme="dark"] #floating-theme-toggle .sun-icon {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(90deg) scale(0.5);
+}
+
+[data-theme="dark"] #floating-theme-toggle .moon-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0deg) scale(1);
+  color: #FFFFFF; /* white stroke on dark background */
+}
+
+/* Dark mode button styling */
+[data-theme="dark"] .floating-theme-toggle {
+  background: var(--color-background-dark);
+  border-color: var(--color-accent-dark);
+  box-shadow: 0 4px 12px rgba(107, 163, 232, 0.2);
+  color: var(--color-white);
+}
+
+[data-theme="dark"] .floating-theme-toggle:hover {
+  box-shadow: 0 6px 20px rgba(107, 163, 232, 0.3);
+}
+
+[data-theme="dark"] .floating-theme-toggle:focus {
+  outline-color: var(--color-accent-dark);
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .floating-theme-toggle {
+    bottom: 1.5rem;
+    right: 1.5rem;
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
+  }
+}
+
+/* Ensure button doesn't interfere with footer on small screens */
+@media (max-width: 480px) {
+  .floating-theme-toggle {
+    bottom: 1rem;
+    right: 1rem;
+  }
 }
 
 .theme-toggle:hover {
@@ -2111,19 +2228,19 @@ h1, h2, h3, h4, h5, h6 {
   transition: font-size 0.2s ease;
 }
 
-.sun-icon {
+.theme-toggle .sun-icon {
   display: none;
 }
 
-[data-theme="dark"] .sun-icon {
+[data-theme="dark"] .theme-toggle .sun-icon {
   display: flex;
 }
 
-.moon-icon {
+.theme-toggle .moon-icon {
   display: flex;
 }
 
-[data-theme="dark"] .moon-icon {
+[data-theme="dark"] .theme-toggle .moon-icon {
   display: none;
 }
 
