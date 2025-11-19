@@ -45,9 +45,3 @@ jobs:
           STRICT_POSTING: false
         run: python src/orchestrator.py --test-mode
 
-      - name: Upload Test Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: orchestrator-test-logs
-          path: /tmp/teencivics-test.log
