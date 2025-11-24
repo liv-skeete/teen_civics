@@ -229,6 +229,12 @@ a:hover {
     color: var(--color-brown-black);
 }
 
+/* Dark theme link hover */
+[data-theme="dark"] a:hover,
+.dark-theme a:hover {
+    color: var(--color-white);
+}
+
 /* Responsive media baseline */
 img, svg, video {
   max-width: 100%;
@@ -264,6 +270,19 @@ textarea:focus {
     outline-offset: 2px;
 }
 
+[data-theme="dark"] a:focus,
+[data-theme="dark"] button:focus,
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus,
+.dark-theme a:focus,
+.dark-theme button:focus,
+.dark-theme input:focus,
+.dark-theme select:focus,
+.dark-theme textarea:focus {
+    outline-color: var(--color-accent-dark);
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -271,6 +290,19 @@ select:focus-visible,
 textarea:focus-visible {
     outline: 3px solid var(--color-navy);
     outline-offset: 2px;
+}
+
+[data-theme="dark"] a:focus-visible,
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] input:focus-visible,
+[data-theme="dark"] select:focus-visible,
+[data-theme="dark"] textarea:focus-visible,
+.dark-theme a:focus-visible,
+.dark-theme button:focus-visible,
+.dark-theme input:focus-visible,
+.dark-theme select:focus-visible,
+.dark-theme textarea:focus-visible {
+    outline-color: var(--color-accent-dark);
 }
 
 /* Navigation - Consistent across light and dark mode */
