@@ -8,18 +8,13 @@ import os
 import sys
 import logging
 import json
-import requests
 from typing import Dict, Any, Optional
 from datetime import datetime, time
 import pytz
-from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -32,129 +27,6 @@ from src.database.db import (
     generate_website_slug, init_db, normalize_bill_id,
     select_and_lock_unposted_bill, has_posted_today, mark_bill_as_problematic
 )
-
-def post_to_substack(summary: str, tweet_url: str) -> bool:
-    """
-    Post the bill summary to Substack Notes with a link to the tweet.
-    """
-    try:
-        # Import cloudscraper here to avoid hard dependency if not installed
-        try:
-            import cloudscraper
-        except ImportError:
-            logger.error("❌ cloudscraper module not found. Cannot post to Substack.")
-            return False
-
-        email = os.environ.get("SUBSTACK_EMAIL")
-        password = os.environ.get("SUBSTACK_PASSWORD")
-        import urllib.parse
-        cookie_sid = os.environ.get("SUBSTACK_SID", "").strip('"').strip("'")
-        if cookie_sid.startswith("s%3A"):
-            cookie_sid = urllib.parse.unquote(cookie_sid)
-            
-        user_agent = os.environ.get("SUBSTACK_USER_AGENT", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").strip('"').strip("'")
-
-        if not cookie_sid and (not email or not password):
-            logger.warning("⚠️ Substack credentials (SID or EMAIL/PASSWORD) missing. Skipping Substack post.")
-            return False
-
-        # Use cloudscraper to bypass Cloudflare
-        session = cloudscraper.create_scraper(
-            browser={
-                'browser': 'chrome',
-                'platform': 'darwin',
-                'desktop': True
-            }
-        )
-        
-        # Mimic a real browser to avoid being blocked
-        session.headers.update({
-            "User-Agent": user_agent,
-            "Referer": "https://substack.com/",
-            "Origin": "https://substack.com",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-        })
-
-        if cookie_sid:
-            logger.info("Using SUBSTACK_SID cookie for authentication...")
-            session.cookies.set("substack.sid", cookie_sid, domain=".substack.com")
-        else:
-            logger.info(f"Attempting to login to Substack as {email}...")
-            login_response = session.post(
-                "https://substack.com/api/v1/login",
-                json={
-                    "email": email,
-                    "password": password,
-                    "redirect": "/"
-                }
-            )
-
-            if login_response.status_code != 200:
-                logger.error(f"❌ Substack login failed: {login_response.status_code} - {login_response.text}")
-                return False
-            
-            logger.info("✅ Substack login successful.")
-
-        # Format bill summary as Note content (ProseMirror JSON)
-        note_content = []
-        for line in summary.split("\n"):
-            if line.strip():
-                note_content.append({
-                    "type": "paragraph",
-                    "content": [{"type": "text", "text": line}]
-                })
-
-        # Add link back to X post using 'marks' (standard ProseMirror format)
-        if tweet_url:
-            note_content.append({
-                "type": "paragraph",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "💬 Discuss on X",
-                        "marks": [
-                            {
-                                "type": "link",
-                                "attrs": {
-                                    "href": tweet_url,
-                                    "title": "Discuss on X"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            })
-
-        logger.info("Posting note to Substack...")
-        
-        # Post the Note
-        note_response = session.post(
-            "https://substack.com/api/v1/comment/feed",
-            json={
-                "bodyJson": {
-                    "type": "doc",
-                    "attrs": {"schemaVersion": "v1"},
-                    "content": note_content
-                },
-                "tabId": "for-you" # Posts to the main feed
-            }
-        )
-
-        if note_response.status_code == 200:
-            logger.info("✅ Posted to Substack Notes successfully!")
-            return True
-        else:
-            logger.error(f"❌ Substack post failed: {note_response.status_code} - {note_response.text}")
-            return False
-
-    except Exception as e:
-        logger.error(f"❌ Error posting to Substack: {e}", exc_info=True)
-        return False
 
 def snake_case(text: str) -> str:
     """Converts text to snake_case."""
@@ -585,15 +457,9 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
 
         if success:
             logger.info(f"✅ Tweet posted: {tweet_url}")
-            
-            # Post to Substack Notes
-            logger.info("🚀 Posting to Substack Notes...")
-            post_to_substack(formatted_tweet, tweet_url)
-            
             logger.info("💾 Updating database with tweet information...")
             if update_tweet_info(bill_id, tweet_url):
                 logger.info("✅ Database updated successfully")
-                
                 logger.info("🎉 Orchestrator completed successfully!")
                 return 0
             else:
