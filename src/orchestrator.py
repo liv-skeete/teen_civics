@@ -59,11 +59,11 @@ def post_to_substack(summary: str, tweet_url: str) -> bool:
             return False
 
         # Use cloudscraper to bypass Cloudflare
+        # We must use the exact User-Agent that matches the session cookie
+        # Passing 'custom' to browser prevents cloudscraper from generating a mismatching UA
         session = cloudscraper.create_scraper(
             browser={
-                'browser': 'chrome',
-                'platform': 'darwin',
-                'desktop': True
+                'custom': user_agent,
             }
         )
         
