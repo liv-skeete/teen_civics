@@ -36,8 +36,17 @@ from src.database.db import (
 def post_to_substack(summary: str, tweet_url: str) -> bool:
     """
     Post the bill summary to Substack Notes with a link to the tweet.
-    Uses Playwright to login and bypass Cloudflare protection on headless servers.
+    
+    NOTE: Substack posting is currently disabled because Cloudflare blocks
+    automated access from datacenter IPs (like GitHub Actions). The code
+    remains here for future use if we find a workaround (e.g., residential
+    proxy, running locally, or if Substack releases a public API).
     """
+    # Temporarily disabled - Cloudflare blocks GitHub Actions IPs
+    logger.info("ℹ️ Substack posting is currently disabled (Cloudflare blocking). Skipping.")
+    return False
+    
+    # Original implementation below (kept for future use)
     try:
         email = os.environ.get("SUBSTACK_EMAIL", "").strip()
         password = os.environ.get("SUBSTACK_PASSWORD", "").strip()
