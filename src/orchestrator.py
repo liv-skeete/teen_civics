@@ -36,17 +36,9 @@ from src.database.db import (
 def post_to_substack(summary: str, tweet_url: str) -> bool:
     """
     Post the bill summary to Substack Notes with a link to the tweet.
+    Uses Playwright to bypass Cloudflare protection on headless servers.
     """
     try:
-        # Import cloudscraper here to avoid hard dependency if not installed
-        try:
-            import cloudscraper
-        except ImportError:
-            logger.error("❌ cloudscraper module not found. Cannot post to Substack.")
-            return False
-
-        email = os.environ.get("SUBSTACK_EMAIL")
-        password = os.environ.get("SUBSTACK_PASSWORD")
         import urllib.parse
         cookie_sid = os.environ.get("SUBSTACK_SID", "").strip('"').strip("'")
         if cookie_sid.startswith("s%3A"):
@@ -54,53 +46,67 @@ def post_to_substack(summary: str, tweet_url: str) -> bool:
             
         user_agent = os.environ.get("SUBSTACK_USER_AGENT", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").strip('"').strip("'")
 
-        if not cookie_sid and (not email or not password):
-            logger.warning("⚠️ Substack credentials (SID or EMAIL/PASSWORD) missing. Skipping Substack post.")
+        if not cookie_sid:
+            logger.warning("⚠️ SUBSTACK_SID missing. Skipping Substack post.")
             return False
 
-        # Use cloudscraper to bypass Cloudflare
-        # We must use the exact User-Agent that matches the session cookie
-        # Passing 'custom' to browser prevents cloudscraper from generating a mismatching UA
-        session = cloudscraper.create_scraper(
-            browser={
-                'custom': user_agent,
-            }
-        )
+        # Try Playwright first (works on headless servers like GitHub Actions)
+        try:
+            from playwright.sync_api import sync_playwright
+            logger.info("Using Playwright for Substack posting...")
+            return _post_to_substack_playwright(summary, tweet_url, cookie_sid, user_agent)
+        except ImportError:
+            logger.info("Playwright not available, falling back to cloudscraper...")
+        except Exception as e:
+            logger.warning(f"Playwright failed: {e}, falling back to cloudscraper...")
+
+        # Fallback to cloudscraper (works on local machines with browsers)
+        try:
+            import cloudscraper
+        except ImportError:
+            logger.error("❌ Neither Playwright nor cloudscraper available. Cannot post to Substack.")
+            return False
+
+        return _post_to_substack_cloudscraper(summary, tweet_url, cookie_sid, user_agent)
+
+    except Exception as e:
+        logger.error(f"❌ Error posting to Substack: {e}", exc_info=True)
+        return False
+
+
+def _post_to_substack_playwright(summary: str, tweet_url: str, cookie_sid: str, user_agent: str) -> bool:
+    """
+    Post to Substack using Playwright (handles Cloudflare on headless servers).
+    """
+    from playwright.sync_api import sync_playwright
+    
+    with sync_playwright() as p:
+        # Launch browser - use headed mode if available, headless otherwise
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(user_agent=user_agent)
         
-        # Mimic a real browser to avoid being blocked
-        session.headers.update({
-            "User-Agent": user_agent,
-            "Referer": "https://substack.com/",
-            "Origin": "https://substack.com",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-        })
-
-        if cookie_sid:
-            logger.info("Using SUBSTACK_SID cookie for authentication...")
-            session.cookies.set("substack.sid", cookie_sid, domain=".substack.com")
-        else:
-            logger.info(f"Attempting to login to Substack as {email}...")
-            login_response = session.post(
-                "https://substack.com/api/v1/login",
-                json={
-                    "email": email,
-                    "password": password,
-                    "redirect": "/"
-                }
-            )
-
-            if login_response.status_code != 200:
-                logger.error(f"❌ Substack login failed: {login_response.status_code} - {login_response.text}")
-                return False
-            
-            logger.info("✅ Substack login successful.")
-
-        # Format bill summary as Note content (ProseMirror JSON)
+        # Set the session cookie
+        context.add_cookies([{
+            "name": "substack.sid",
+            "value": cookie_sid,
+            "domain": ".substack.com",
+            "path": "/",
+            "httpOnly": True,
+            "secure": True,
+            "sameSite": "Lax"
+        }])
+        
+        page = context.new_page()
+        
+        # Navigate to Substack to establish session and pass Cloudflare
+        logger.info("Navigating to Substack to establish session...")
+        page.goto("https://substack.com/", wait_until="networkidle", timeout=30000)
+        
+        # Wait a moment for any Cloudflare challenge to complete
+        page.wait_for_timeout(2000)
+        
+        # Now make the API request using the authenticated context
+        # Build the note content
         note_content = []
         for line in summary.split("\n"):
             if line.strip():
@@ -109,7 +115,6 @@ def post_to_substack(summary: str, tweet_url: str) -> bool:
                     "content": [{"type": "text", "text": line}]
                 })
 
-        # Add link back to X post using 'marks' (standard ProseMirror format)
         if tweet_url:
             note_content.append({
                 "type": "paragraph",
@@ -130,30 +135,119 @@ def post_to_substack(summary: str, tweet_url: str) -> bool:
                 ]
             })
 
-        logger.info("Posting note to Substack...")
-        
-        # Post the Note
-        note_response = session.post(
-            "https://substack.com/api/v1/comment/feed",
-            json={
-                "bodyJson": {
-                    "type": "doc",
-                    "attrs": {"schemaVersion": "v1"},
-                    "content": note_content
-                },
-                "tabId": "for-you" # Posts to the main feed
-            }
-        )
+        payload = {
+            "bodyJson": {
+                "type": "doc",
+                "attrs": {"schemaVersion": "v1"},
+                "content": note_content
+            },
+            "tabId": "for-you"
+        }
 
-        if note_response.status_code == 200:
+        logger.info("Posting note to Substack via Playwright...")
+        
+        # Use page.evaluate to make the fetch request with all cookies/headers
+        result = page.evaluate("""
+            async (payload) => {
+                const response = await fetch('https://substack.com/api/v1/comment/feed', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                    credentials: 'include'
+                });
+                return {
+                    status: response.status,
+                    text: await response.text()
+                };
+            }
+        """, payload)
+        
+        browser.close()
+        
+        if result['status'] == 200:
             logger.info("✅ Posted to Substack Notes successfully!")
             return True
         else:
-            logger.error(f"❌ Substack post failed: {note_response.status_code} - {note_response.text}")
+            logger.error(f"❌ Substack post failed: {result['status']} - {result['text'][:200]}")
             return False
 
-    except Exception as e:
-        logger.error(f"❌ Error posting to Substack: {e}", exc_info=True)
+
+def _post_to_substack_cloudscraper(summary: str, tweet_url: str, cookie_sid: str, user_agent: str) -> bool:
+    """
+    Post to Substack using cloudscraper (works on machines with browsers).
+    """
+    import cloudscraper
+    
+    session = cloudscraper.create_scraper(
+        browser={
+            'custom': user_agent,
+        }
+    )
+    
+    session.headers.update({
+        "User-Agent": user_agent,
+        "Referer": "https://substack.com/",
+        "Origin": "https://substack.com",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    })
+
+    session.cookies.set("substack.sid", cookie_sid, domain=".substack.com")
+
+    # Format bill summary as Note content (ProseMirror JSON)
+    note_content = []
+    for line in summary.split("\n"):
+        if line.strip():
+            note_content.append({
+                "type": "paragraph",
+                "content": [{"type": "text", "text": line}]
+            })
+
+    if tweet_url:
+        note_content.append({
+            "type": "paragraph",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "💬 Discuss on X",
+                    "marks": [
+                        {
+                            "type": "link",
+                            "attrs": {
+                                "href": tweet_url,
+                                "title": "Discuss on X"
+                            }
+                        }
+                    ]
+                }
+            ]
+        })
+
+    logger.info("Posting note to Substack via cloudscraper...")
+    
+    note_response = session.post(
+        "https://substack.com/api/v1/comment/feed",
+        json={
+            "bodyJson": {
+                "type": "doc",
+                "attrs": {"schemaVersion": "v1"},
+                "content": note_content
+            },
+            "tabId": "for-you"
+        }
+    )
+
+    if note_response.status_code == 200:
+        logger.info("✅ Posted to Substack Notes successfully!")
+        return True
+    else:
+        logger.error(f"❌ Substack post failed: {note_response.status_code} - {note_response.text[:200]}")
         return False
 
 def snake_case(text: str) -> str:
