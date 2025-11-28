@@ -20,13 +20,15 @@ Key features include:
 
 This project is built with a modern Python stack:
 
-*   [Python](https://www.python.org/)
-*   [Flask](https://flask.palletsprojects.com/)
+*   [Python 3.10+](https://www.python.org/)
+*   [Flask](https://flask.palletsprojects.com/) with Flask-Limiter and Flask-WTF for rate limiting and CSRF protection
 *   [PostgreSQL](https://www.postgresql.org/)
 *   [SQLAlchemy](https://www.sqlalchemy.org/)
 *   [Tweepy](https://www.tweepy.org/)
 *   [Anthropic API (Claude)](https://www.anthropic.com/)
 *   [Congress.gov API](https://api.congress.gov/)
+*   [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) and [Playwright](https://playwright.dev/) for web scraping
+*   [Gunicorn](https://gunicorn.org/) for production WSGI serving
 
 ## Getting Started
 
@@ -34,7 +36,7 @@ To get a local copy up and running, follow these simple steps.
 
 ### Prerequisites
 
-*   Python 3.8+
+*   Python 3.10+
 *   pip
 *   A PostgreSQL database
 
@@ -60,10 +62,12 @@ To get a local copy up and running, follow these simple steps.
         cp .env.example .env
         ```
     -   Add your API keys and database URL to the `.env` file. You will need keys for:
-        *   Congress.gov API
-        *   Anthropic API
-        *   Twitter/X API (Consumer Key, Consumer Secret, Access Token, Access Token Secret)
+        *   Congress.gov API (`CONGRESS_API_KEY`)
+        *   Anthropic API (`ANTHROPIC_API_KEY`)
+        *   Twitter/X API (`TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`)
         *   Your PostgreSQL `DATABASE_URL`
+        *   Optional: `GA_MEASUREMENT_ID` for Google Analytics
+        *   Optional: `SUMMARIZER_MODEL` to specify Claude model (defaults to claude-sonnet-4-5)
 
 5.  **Initialize the database**
     The database schema is created automatically on the first run.
@@ -127,46 +131,51 @@ TeenCivics includes a Teen Impact Score that estimates how directly and signific
 
 Developer tools:
 - Regenerate any missing scores:
-  - python [regenerate_missing_teen_impact_scores.py](regenerate_missing_teen_impact_scores.py:1)
+  - python [scripts/regenerate_missing_teen_impact_scores.py](scripts/regenerate_missing_teen_impact_scores.py:1)
 - Tests (if present) live under [tests/](tests)
 
 ## Security and Secrets
 
 This repo follows a strict "No secrets in source" policy. See [SECURITY.md](SECURITY.md).
 
-- Load credentials at runtime via [load_env()](src/load_env.py:9)
+- Load credentials at runtime via [load_env()](src/load_env.py:6)
 - CI blocks leaks using a repo scanner:
   - Run locally before committing:
-    - python [secret_scan.py](scripts/secret_scan.py:1)
+    - python [scripts/secret_scan.py](scripts/secret_scan.py:1)
 
 ## CI and Automation
 
 - Daily posting workflow: [.github/workflows/daily.yml](.github/workflows/daily.yml:1)
+  - Runs twice daily (9:00 AM ET and 10:30 PM ET)
   - Uses GitHub Actions Secrets (masked in logs)
   - Performs secret scanning early to block leaks
-- Weekly digest workflow (planned v2): [.github/workflows/weekly.yml](.github/workflows/weekly.yml:1)
+  - Uses Playwright for bill text extraction with fallback to API
+- Test workflow: [.github/workflows/test-orchestrator.yml](.github/workflows/test-orchestrator.yml:1)
+- Weekly digest workflow (disabled): [.github/workflows/weekly.yml](.github/workflows/weekly.yml:1)
 
 ## Production Readiness Checklist
 
 - Secrets are not logged or embedded in code
   - Environment dumping removed from orchestrator
 - Secret scanning enforced in CI
-- Database connections use SSL by default via [init_connection_pool()](src/database/connection.py:50)
-- Duplicate tweet prevention enabled via [has_posted_today()](src/database/db.py:95)
+- Database connections use SSL by default via [init_connection_pool()](src/database/connection.py:73)
+- Duplicate tweet prevention enabled via [has_posted_today()](src/database/db.py:103)
 - Idempotent tweet updates and row-level locking to avoid race conditions
 
 ## Local Development
 
 - Web app: python [app.py](app.py:1) then open http://127.0.0.1:5000
-- Orchestrator (fetch → summarize → store → tweet): python [orchestrator.py](src/orchestrator.py:1)
-- Secret scan: python [secret_scan.py](scripts/secret_scan.py:1)
+- Orchestrator (fetch → summarize → store → tweet): python [src/orchestrator.py](src/orchestrator.py:1)
+- Secret scan: python [scripts/secret_scan.py](scripts/secret_scan.py:1)
+- Run tests: `pytest tests/`
 - Optional: install pre-commit and add a hook to run secret_scan before each commit
-- For development with browser automation: set `DEV_BROWSER=1` when installing dependencies to include Playwright and its dependencies (optional)
+- For development with browser automation: Playwright is used for bill text extraction (installed automatically in CI)
 
 ## Future Improvements (TODO)
 
 The following enhancements are planned for future versions:
 
+- **Weekly Digest**: Implement weekly summary feature (workflow exists but functionality not yet complete)
 - **Documentation**: Add architecture diagram and status badge to README
 - **SEO**: Implement structured data markup (JSON-LD) and canonical URLs
 - **Accessibility**: Remove emoji from summaries for screen reader compatibility
