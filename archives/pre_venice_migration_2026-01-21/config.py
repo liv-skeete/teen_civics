@@ -41,14 +41,13 @@ class CongressAPIConfig:
 
 
 @dataclass
-class VeniceConfig:
-    """Venice AI API configuration (OpenAI-compatible)."""
+class AnthropicConfig:
+    """Anthropic (Claude) API configuration."""
     api_key: str
-    base_url: str = "https://api.venice.ai/api/v1"
 
     def validate(self) -> bool:
         if not self.api_key:
-            logger.warning("VENICE_API_KEY is not set")
+            logger.warning("ANTHROPIC_API_KEY is not set")
             return False
         return True
 
@@ -132,7 +131,7 @@ class Config:
         # Initialize configuration sections
         self.database = self._load_database_config()
         self.congress_api = self._load_congress_config()
-        self.venice = self._load_venice_config()
+        self.anthropic = self._load_anthropic_config()
         self.twitter = self._load_twitter_config()
         self.flask = FlaskConfig.from_env()
         self.logging = LoggingConfig.from_env()
@@ -151,11 +150,8 @@ class Config:
     def _load_congress_config(self) -> CongressAPIConfig:
         return CongressAPIConfig(api_key=os.getenv("CONGRESS_API_KEY", ""))
 
-    def _load_venice_config(self) -> VeniceConfig:
-        return VeniceConfig(
-            api_key=os.getenv("VENICE_API_KEY", ""),
-            base_url=os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
-        )
+    def _load_anthropic_config(self) -> AnthropicConfig:
+        return AnthropicConfig(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 
     def _load_twitter_config(self) -> TwitterConfig:
         return TwitterConfig(
@@ -172,7 +168,7 @@ class Config:
         logger.info("Configuration loaded:")
         logger.info("  Database: %s", "PostgreSQL" if self.database.is_postgresql else "SQLite")
         logger.info("  Congress API: %s", "configured" if self.congress_api.validate() else "missing")
-        logger.info("  Venice AI API: %s", "configured" if self.venice.validate() else "missing")
+        logger.info("  Anthropic API: %s", "configured" if self.anthropic.validate() else "missing")
         logger.info("  Twitter API: %s", "configured" if self.twitter.validate() else "missing")
         logger.info("  Flask: debug=%s, port=%d", self.flask.debug, self.flask.port)
 
@@ -180,7 +176,7 @@ class Config:
         validations = [
             ("Database", bool(self.database.url)),
             ("Congress API", self.congress_api.validate()),
-            ("Venice AI API", self.venice.validate()),
+            ("Anthropic API", self.anthropic.validate()),
             ("Twitter API", self.twitter.validate()),
         ]
         all_valid = all(valid for _, valid in validations)

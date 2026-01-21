@@ -149,14 +149,17 @@ jobs:
           python src/orchestrator.py
       env:
         CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
-        VENICE_API_KEY: ${{ secrets.VENICE_API_KEY }}
-        VENICE_BASE_URL: https://api.venice.ai/api/v1
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
         TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
         TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
         TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
         TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        SUBSTACK_SID: ${{ secrets.SUBSTACK_SID }}
+        SUBSTACK_USER_AGENT: ${{ secrets.SUBSTACK_USER_AGENT }}
+        SUBSTACK_EMAIL: ${{ secrets.SUBSTACK_EMAIL }}
+        SUBSTACK_PASSWORD: ${{ secrets.SUBSTACK_PASSWORD }}
 
     - name: Notify on failure
       if: failure()

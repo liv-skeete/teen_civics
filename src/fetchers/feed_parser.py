@@ -203,8 +203,10 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
     logger.info(f"Scraping for bill IDs from {url}")
     logger.info(f"Playwright available: {PLAYWRIGHT_AVAILABLE}")
 
-    # 1) Try Playwright first (works in both local and CI)
-    if PLAYWRIGHT_AVAILABLE and not running_in_ci():
+    # 1) Try Playwright first (works in both local and CI environments)
+    # Note: CI check removed - Playwright is installed in CI and should be used
+    # to avoid Cloudflare 403 blocks that occur with requests-based fallback
+    if PLAYWRIGHT_AVAILABLE:
         logger.info("Attempting to use Playwright for scraping...")
         max_retries = 2
         base_timeout = 30000  # ms
@@ -369,8 +371,9 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
     # Fallback to original method if scraping found nothing
     if not bills_from_api:
         logger.warning("Scraper found no bills, or failed. Falling back to general API query.")
-        seven_days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        url = f"https://api.congress.gov/v3/bill?fromDateTime={seven_days_ago}&sort=updateDate-desc&limit={limit * 3}&api_key={api_key}"
+        # Use 119th Congress endpoint with introducedDate-desc sort to get recently
+        # introduced bills, not old bills with recent metadata updates
+        url = f"https://api.congress.gov/v3/bill/119?sort=introducedDate-desc&limit={limit}&api_key={api_key}"
         try:
             response = requests.get(url, headers={"Accept": "application/json"})
             response.raise_for_status()

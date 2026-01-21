@@ -2,7 +2,7 @@ requests==2.31.0
 tweepy>=4.15.0
 python-dotenv==1.0.0
 feedparser==6.0.10
-openai>=1.0.0
+anthropic==0.25.4
 httpx<0.28
 Flask==3.0.0
 Flask-Limiter==3.5.0

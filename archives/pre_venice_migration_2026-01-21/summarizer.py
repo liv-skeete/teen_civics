@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from dotenv import load_dotenv
-from openai import OpenAI
+from anthropic import Anthropic
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -15,32 +15,21 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Venice AI Configuration
-VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
-
-# Model configuration - Venice AI uses claude-sonnet-45
-PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-45")
-FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-opus-45")
+# Model configuration
+PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-4-5")
+FALLBACK_MODEL = os.getenv("ANTHROPIC_MODEL_FALLBACK", "claude-haiku-4-5-20251001")
 
 VALID_MODELS = {
-    "claude-sonnet-45",
-    "claude-opus-45",
+    "claude-sonnet-4-5",
+    "claude-haiku-4-5-20251001"
 }
 
 def _ensure_api_key() -> str:
-    api_key = os.getenv("VENICE_API_KEY")
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        logger.error("VENICE_API_KEY not found in environment variables")
-        raise ValueError("VENICE_API_KEY not found in environment variables")
+        logger.error("ANTHROPIC_API_KEY not found in environment variables")
+        raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
     return api_key
-
-def _get_venice_client() -> OpenAI:
-    """Create Venice AI client using OpenAI-compatible API."""
-    api_key = _ensure_api_key()
-    return OpenAI(
-        api_key=api_key,
-        base_url=VENICE_BASE_URL
-    )
 
 def _build_enhanced_system_prompt() -> str:
     """
@@ -389,13 +378,13 @@ def _build_user_prompt(bill: Dict[str, Any]) -> str:
     return user_prompt
 
 def _extract_text_from_response(resp) -> str:
-    """Extract text from OpenAI-compatible API response (Venice AI)."""
-    # OpenAI format: resp.choices[0].message.content
-    if hasattr(resp, 'choices') and resp.choices:
-        content = resp.choices[0].message.content
-        if content:
-            return content.strip()
-    return ""
+    """Extract text from Anthropic API response."""
+    parts: List[str] = []
+    for block in getattr(resp, "content", []) or []:
+        text = getattr(block, "text", None)
+        if isinstance(text, str):
+            parts.append(text)
+    return "".join(parts).strip()
 
 def _strip_code_fences(text: str) -> str:
     """Remove markdown code fences from response."""
@@ -538,20 +527,18 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
             "tweet": text[:200] if text else ""
         }
 
-def _call_venice_once(client: OpenAI, model: str, system: str, user: str):
-    """Single API call to Venice AI (OpenAI-compatible)."""
-    return client.chat.completions.create(
+def _call_anthropic_once(client: Anthropic, model: str, system: str, user: str):
+    """Single API call to Anthropic."""
+    return client.messages.create(
         model=model,
         max_tokens=4096,
         temperature=0.2,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user}
-        ],
+        system=system,
+        messages=[{"role": "user", "content": [{"type": "text", "text": user}]}],
     )
 
-def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
-    """Call Venice AI with preferred model, fallback on errors."""
+def _model_call_with_fallback(client: Anthropic, system: str, user: str) -> str:
+    """Call Anthropic with preferred model, fallback on errors."""
     models_to_try = [m for m in (PREFERRED_MODEL, FALLBACK_MODEL) if m in VALID_MODELS]
     
     if not models_to_try:
@@ -563,8 +550,8 @@ def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
         delay = 1.0
         for attempt in range(1, 4):
             try:
-                logger.info(f"Calling Venice AI: {model} (attempt {attempt})")
-                resp = _call_venice_once(client, model, system, user)
+                logger.info(f"Calling Anthropic: {model} (attempt {attempt})")
+                resp = _call_anthropic_once(client, model, system, user)
                 text = _extract_text_from_response(resp)
                 if text:
                     return text
@@ -592,7 +579,7 @@ def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
     
     if last_err:
         raise last_err
-    raise RuntimeError("No response from Venice AI")
+    raise RuntimeError("No response from Anthropic")
 
 def _normalize_structured_text(value: Any) -> str:
     """Normalize structured text that may arrive as list or string."""
@@ -656,7 +643,7 @@ def _tighten_tweet_heuristic(text: str, limit: int = 200) -> str:
     cut = cut.rstrip(",;:- ")
     return _ensure_period(cut)
 
-def _tighten_tweet_model(client: OpenAI, raw_tweet: str, bill: Dict[str, Any], limit: int = 200) -> str:
+def _tighten_tweet_model(client: Anthropic, raw_tweet: str, bill: Dict[str, Any], limit: int = 200) -> str:
     """Use model to rewrite tweet to fit character limit."""
     system = (
         "Rewrite this tweet into a single complete sentence for X/Twitter.\n"
@@ -689,7 +676,7 @@ def _tighten_tweet_model(client: OpenAI, raw_tweet: str, bill: Dict[str, Any], l
     
     return tightened
 
-def _coherent_tighten_tweet(client: OpenAI, raw_tweet: str, bill: Dict[str, Any], limit: int = 200) -> str:
+def _coherent_tighten_tweet(client: Anthropic, raw_tweet: str, bill: Dict[str, Any], limit: int = 200) -> str:
     """Ensure tweet fits limit using model or heuristic."""
     if len(raw_tweet.strip()) <= limit and raw_tweet.strip():
         return _ensure_period(raw_tweet)
@@ -736,7 +723,7 @@ def _merge_term_dictionary(acc: List[Dict[str, str]], incoming: Any) -> List[Dic
     
     return acc
 
-def _generate_from_metadata_model(client: OpenAI, bill: Dict[str, Any]) -> Dict[str, Any]:
+def _generate_from_metadata_model(client: Anthropic, bill: Dict[str, Any]) -> Dict[str, Any]:
     """Generate summary from metadata only when full text unavailable."""
     bill_meta = {
         "bill_id": bill.get("bill_id"),
@@ -947,8 +934,9 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     
     _ensure_api_key()
     
-    # Use Venice AI client (OpenAI-compatible)
-    client = _get_venice_client()
+    import httpx
+    http_client = httpx.Client()
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], http_client=http_client)
     
     system = _build_enhanced_system_prompt()
     user = _build_user_prompt(bill)
@@ -1030,7 +1018,8 @@ def summarize_title(bill_title: str) -> str:
     Summarizes a long bill title to be more informative than simple truncation.
     """
     try:
-        client = _get_venice_client()
+        api_key = _ensure_api_key()
+        client = Anthropic(api_key=api_key)
         
         system_prompt = (
             "You are an expert at summarizing long, complex legislative titles into short, informative phrases for a general audience. "
@@ -1040,12 +1029,12 @@ def summarize_title(bill_title: str) -> str:
         
         user_prompt = f"Summarize the following bill title: \"{bill_title}\""
         
-        response = client.chat.completions.create(
+        response = client.messages.create(
             model=PREFERRED_MODEL,
             max_tokens=100,
             temperature=0.5,
+            system=system_prompt,
             messages=[
-                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
         )

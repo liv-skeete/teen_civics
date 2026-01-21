@@ -63,3 +63,16 @@ build/
 
 # Instance folder
 /instance/
+
+# Temporary files
+temp.txt
+*.tmp
+COMMIT_MESSAGE.txt
+
+# One-off reports
+*_qa_report.txt
+*_QA_*.md
+
+# macOS
+.DS_Store
+**/.DS_Store

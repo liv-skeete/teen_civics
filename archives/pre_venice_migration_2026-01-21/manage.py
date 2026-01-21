@@ -259,7 +259,8 @@ def debug_summarizer(
         _model_call_with_fallback,
         _try_parse_json_with_fallback
     )
-    from openai import OpenAI
+    from anthropic import Anthropic
+    import httpx
 
     logger.info("="*60)
     logger.info(f"DEBUGGING SUMMARY GENERATION FOR: {bill_id}")
@@ -293,10 +294,10 @@ def debug_summarizer(
     logger.debug(f"User prompt length: {len(user_prompt)} chars")
 
     # Step 4: Call Claude API
-    logger.info("\n4. Calling Venice AI API...")
-    api_key = os.getenv("VENICE_API_KEY")
+    logger.info("\n4. Calling Claude API...")
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        logger.error("VENICE_API_KEY not found!")
+        logger.error("ANTHROPIC_API_KEY not found!")
         raise typer.Exit(code=1)
     
     http_client = httpx.Client()

@@ -1,0 +1,771 @@
+#!/usr/bin/env python3
+"""
+Orchestrator script that combines bill fetching, summarization, and Twitter posting.
+Designed for daily automation via GitHub Actions.
+"""
+
+import os
+import sys
+import logging
+import json
+import requests
+from typing import Dict, Any, Optional
+from datetime import datetime, time
+import pytz
+from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+
+# Add src to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status
+from src.processors.summarizer import summarize_bill_enhanced
+from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content
+from src.database.db import (
+    bill_already_posted, get_bill_by_id, insert_bill, update_tweet_info,
+    generate_website_slug, init_db, normalize_bill_id,
+    select_and_lock_unposted_bill, has_posted_today, mark_bill_as_problematic
+)
+
+def post_to_substack(summary: str, tweet_url: str) -> bool:
+    """
+    Post the bill summary to Substack Notes with a link to the tweet.
+    
+    NOTE: Substack posting is currently disabled because Cloudflare blocks
+    automated access from datacenter IPs (like GitHub Actions). The code
+    remains here for future use if we find a workaround (e.g., residential
+    proxy, running locally, or if Substack releases a public API).
+    """
+    # Temporarily disabled - Cloudflare blocks GitHub Actions IPs
+    logger.info("ℹ️ Substack posting is currently disabled (Cloudflare blocking). Skipping.")
+    return False
+    
+    # Original implementation below (kept for future use)
+    try:
+        email = os.environ.get("SUBSTACK_EMAIL", "").strip()
+        password = os.environ.get("SUBSTACK_PASSWORD", "").strip()
+        
+        if not email or not password:
+            logger.warning("⚠️ SUBSTACK_EMAIL or SUBSTACK_PASSWORD missing. Skipping Substack post.")
+            return False
+
+        # Try Playwright first (works on headless servers like GitHub Actions)
+        try:
+            from playwright.sync_api import sync_playwright
+            logger.info("Using Playwright for Substack posting...")
+            return _post_to_substack_playwright(summary, tweet_url, email, password)
+        except ImportError:
+            logger.info("Playwright not available, falling back to cloudscraper...")
+        except Exception as e:
+            logger.warning(f"Playwright failed: {e}, falling back to cloudscraper...")
+
+        # Fallback to cloudscraper (works on local machines with browsers)
+        try:
+            import cloudscraper
+            import urllib.parse
+            cookie_sid = os.environ.get("SUBSTACK_SID", "").strip('"').strip("'")
+            if cookie_sid.startswith("s%3A"):
+                cookie_sid = urllib.parse.unquote(cookie_sid)
+            user_agent = os.environ.get("SUBSTACK_USER_AGENT", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").strip('"').strip("'")
+            if cookie_sid:
+                return _post_to_substack_cloudscraper(summary, tweet_url, cookie_sid, user_agent)
+            else:
+                logger.error("❌ Cloudscraper fallback requires SUBSTACK_SID cookie.")
+                return False
+        except ImportError:
+            logger.error("❌ Neither Playwright nor cloudscraper available. Cannot post to Substack.")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Error posting to Substack: {e}", exc_info=True)
+        return False
+
+
+def _post_to_substack_playwright(summary: str, tweet_url: str, email: str, password: str) -> bool:
+    """
+    Post to Substack using Playwright with fresh login (handles Cloudflare on headless servers).
+    """
+    from playwright.sync_api import sync_playwright
+    
+    with sync_playwright() as p:
+        # Launch browser in headless mode
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080},
+            locale="en-US",
+        )
+        
+        page = context.new_page()
+        
+        try:
+            # Navigate to Substack sign-in page
+            logger.info("Navigating to Substack sign-in page...")
+            page.goto("https://substack.com/sign-in", wait_until="networkidle", timeout=60000)
+            
+            # Wait for Cloudflare challenge to complete (if any)
+            page.wait_for_timeout(3000)
+            
+            # Check if we're past Cloudflare
+            if "Just a moment" in page.title():
+                logger.info("Waiting for Cloudflare challenge to complete...")
+                page.wait_for_timeout(5000)
+            
+            # Click "Sign in with password" or similar link if it exists
+            try:
+                # Look for email input or "continue with email" option
+                signin_with_email = page.locator("text=Sign in with email")
+                if signin_with_email.count() > 0:
+                    signin_with_email.first.click()
+                    page.wait_for_timeout(1000)
+            except Exception:
+                pass  # May not exist, continue
+            
+            # Fill in email
+            logger.info(f"Entering email: {email[:3]}***")
+            email_input = page.locator('input[type="email"], input[name="email"], input[placeholder*="mail"]').first
+            email_input.wait_for(timeout=10000)
+            email_input.fill(email)
+            
+            # Click continue/next button
+            continue_btn = page.locator('button:has-text("Continue"), button:has-text("Next"), button[type="submit"]').first
+            continue_btn.click()
+            page.wait_for_timeout(2000)
+            
+            # Fill in password
+            logger.info("Entering password...")
+            password_input = page.locator('input[type="password"]').first
+            password_input.wait_for(timeout=10000)
+            password_input.fill(password)
+            
+            # Click sign in button
+            signin_btn = page.locator('button:has-text("Sign in"), button:has-text("Log in"), button[type="submit"]').first
+            signin_btn.click()
+            
+            # Wait for login to complete
+            logger.info("Waiting for login to complete...")
+            page.wait_for_timeout(5000)
+            
+            # Check if login was successful by looking for signs of being logged in
+            # Navigate to home to verify
+            page.goto("https://substack.com/", wait_until="networkidle", timeout=30000)
+            page.wait_for_timeout(2000)
+            
+            # Build the note content
+            note_content = []
+            for line in summary.split("\n"):
+                if line.strip():
+                    note_content.append({
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": line}]
+                    })
+
+            if tweet_url:
+                note_content.append({
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "💬 Discuss on X",
+                            "marks": [
+                                {
+                                    "type": "link",
+                                    "attrs": {
+                                        "href": tweet_url,
+                                        "title": "Discuss on X"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                })
+
+            payload = {
+                "bodyJson": {
+                    "type": "doc",
+                    "attrs": {"schemaVersion": "v1"},
+                    "content": note_content
+                },
+                "tabId": "for-you"
+            }
+
+            logger.info("Posting note to Substack via Playwright...")
+            
+            # Use page.evaluate to make the fetch request with all cookies/headers
+            result = page.evaluate("""
+                async (payload) => {
+                    const response = await fetch('https://substack.com/api/v1/comment/feed', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload),
+                        credentials: 'include'
+                    });
+                    return {
+                        status: response.status,
+                        text: await response.text()
+                    };
+                }
+            """, payload)
+            
+            if result['status'] == 200:
+                logger.info("✅ Posted to Substack Notes successfully!")
+                return True
+            else:
+                logger.error(f"❌ Substack post failed: {result['status']} - {result['text'][:500]}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Playwright login/post failed: {e}", exc_info=True)
+            # Take a screenshot for debugging
+            try:
+                page.screenshot(path="/tmp/substack_error.png")
+                logger.info("Screenshot saved to /tmp/substack_error.png")
+            except Exception:
+                pass
+            return False
+        finally:
+            browser.close()
+
+
+def _post_to_substack_cloudscraper(summary: str, tweet_url: str, cookie_sid: str, user_agent: str) -> bool:
+    """
+    Post to Substack using cloudscraper (works on machines with browsers).
+    """
+    import cloudscraper
+    
+    session = cloudscraper.create_scraper(
+        browser={
+            'custom': user_agent,
+        }
+    )
+    
+    session.headers.update({
+        "User-Agent": user_agent,
+        "Referer": "https://substack.com/",
+        "Origin": "https://substack.com",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    })
+
+    session.cookies.set("substack.sid", cookie_sid, domain=".substack.com")
+
+    # Format bill summary as Note content (ProseMirror JSON)
+    note_content = []
+    for line in summary.split("\n"):
+        if line.strip():
+            note_content.append({
+                "type": "paragraph",
+                "content": [{"type": "text", "text": line}]
+            })
+
+    if tweet_url:
+        note_content.append({
+            "type": "paragraph",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "💬 Discuss on X",
+                    "marks": [
+                        {
+                            "type": "link",
+                            "attrs": {
+                                "href": tweet_url,
+                                "title": "Discuss on X"
+                            }
+                        }
+                    ]
+                }
+            ]
+        })
+
+    logger.info("Posting note to Substack via cloudscraper...")
+    
+    note_response = session.post(
+        "https://substack.com/api/v1/comment/feed",
+        json={
+            "bodyJson": {
+                "type": "doc",
+                "attrs": {"schemaVersion": "v1"},
+                "content": note_content
+            },
+            "tabId": "for-you"
+        }
+    )
+
+    if note_response.status_code == 200:
+        logger.info("✅ Posted to Substack Notes successfully!")
+        return True
+    else:
+        logger.error(f"❌ Substack post failed: {note_response.status_code} - {note_response.text[:200]}")
+        return False
+
+def snake_case(text: str) -> str:
+    """Converts text to snake_case."""
+    import re
+    result = re.sub(r'[^a-zA-Z0-9]+', '_', text.lower())
+    return result.strip('_')
+
+def extract_teen_impact_score(summary_detailed: str) -> Optional[int]:
+    """
+    Extract Teen Impact Score from the detailed summary text.
+    """
+    if not summary_detailed:
+        return None
+    import re
+    match = re.search(r"Teen impact score:\s*(\d+)/10", summary_detailed, re.IGNORECASE)
+    if match:
+        try:
+            return int(match.group(1))
+        except (ValueError, IndexError):
+            return None
+    return None
+
+def derive_status_from_tracker(tracker: Any) -> tuple[str, str]:
+    """
+    Derive human-readable status and normalized_status from tracker data.
+    The tracker may be a list[dict{name, selected}] or {'steps': [...]}.
+    """
+    steps = []
+    try:
+        if isinstance(tracker, list):
+            steps = tracker
+        elif isinstance(tracker, dict):
+            steps = tracker.get("steps") or []
+    except Exception:
+        steps = []
+
+    latest_name = ""
+    # Prefer the last selected step (current status)
+    try:
+        for step in reversed(steps):
+            if isinstance(step, dict) and step.get("selected"):
+                latest_name = str(step.get("name", "")).strip()
+                break
+    except Exception:
+        pass
+
+    # Fallback: use the last step name if none marked selected
+    if not latest_name and steps:
+        try:
+            last_step = steps[-1]
+            latest_name = str(last_step.get("name") if isinstance(last_step, dict) else last_step).strip()
+        except Exception:
+            latest_name = ""
+
+    status_text = latest_name or "Introduced"
+    s = status_text.lower()
+
+    # Map common tracker phrases to normalized_status values used by the site/CSS
+    mapping = {
+        "introduced": "introduced",
+        "committee consideration": "committee_consideration",
+        "reported by committee": "reported_by_committee",
+        "passed house": "passed_house",
+        "passed senate": "passed_senate",
+        "agreed to in house": "agreed_to_in_house",
+        "agreed to in senate": "agreed_to_in_senate",
+        "to president": "to_president",
+        "sent to president": "to_president",
+        "presented to president": "to_president",
+        "became law": "became_law",
+        "enacted": "became_law",
+        "vetoed": "vetoed",
+        "failed house": "failed_house",
+        "failed senate": "failed_senate",
+    }
+
+    normalized = None
+    for key, val in mapping.items():
+        if key in s:
+            normalized = val
+            break
+    if not normalized:
+        # Generic normalization as a safety net
+        normalized = s.replace(" ", "_") if s else "introduced"
+        if normalized not in mapping.values():
+            normalized = "introduced"
+
+    return status_text, normalized
+
+def main(dry_run: bool = False) -> int:
+    """
+    Main orchestrator function.
+    """
+    try:
+        logger.info("🚀 Starting orchestrator...")
+        logger.info(f"📊 Dry-run mode: {dry_run}")
+
+        et_tz = pytz.timezone('America/New_York')
+        current_time_et = datetime.now(et_tz).time()
+        
+        scan_type = "MANUAL"
+        if time(8, 30) <= current_time_et <= time(9, 30):
+            scan_type = "MORNING"
+        elif time(22, 0) <= current_time_et <= time(23, 0):
+            scan_type = "EVENING"
+        
+        logger.info(f"⏰ Scan type: {scan_type}")
+
+        logger.info("🗄️ Initializing database...")
+        init_db()
+        logger.info("✅ Database initialization complete")
+
+        if not dry_run and scan_type == "EVENING" and has_posted_today():
+            logger.info("🛑 DUPLICATE PREVENTION: A bill was already posted today. Skipping evening scan.")
+            return 0
+
+        logger.info("📥 Fetching and enriching recent bills from Congress.gov...")
+        bills = fetch_and_enrich_bills(limit=25)
+        logger.info(f"📊 Retrieved and enriched {len(bills)} bills")
+
+        selected_bill = None
+        selected_bill_data = None
+
+        if bills:
+            logger.info("🔍 Scanning for unprocessed bills...")
+            # Build list of candidates to try
+            candidates = []
+            for bill in bills:
+                bill_id = normalize_bill_id(bill.get("bill_id", ""))
+                logger.info(f"   📋 Checking bill: {bill_id}")
+                if bill_already_posted(bill_id):
+                    logger.info(f"   ✅ Bill {bill_id} already tweeted. Skipping.")
+                    continue
+                
+                existing_bill = get_bill_by_id(bill_id)
+                if existing_bill:
+                    # Skip problematic bills
+                    if existing_bill.get("problematic"):
+                        logger.info(f"   ⚠️ Bill {bill_id} exists but is marked problematic. Skipping.")
+                        continue
+                    logger.info(f"   🎯 Bill {bill_id} exists but not tweeted. Adding to candidates.")
+                    candidates.append((bill, existing_bill))
+                else:
+                    ft = (bill.get("full_text") or "").strip()
+                    if len(ft) < 100:
+                        logger.info(f"   🚫 New bill {bill_id} missing valid full text (len={len(ft)}). Marking problematic and continuing.")
+                        mark_bill_as_problematic(bill_id, "No valid full text available during selection")
+                        continue
+                    logger.info(f"   🆕 Bill {bill_id} is new with full text. Adding to candidates.")
+                    candidates.append((bill, None))
+        
+            
+            # If no candidates from API, check DB for unposted bills
+            if not candidates:
+                logger.info("📭 No new bills from API. Checking DB for any unposted bills...")
+                unposted = select_and_lock_unposted_bill()
+                if unposted:
+                    logger.info(f"   🔄 Found and locked unposted bill in DB: {unposted['bill_id']}")
+                    candidates.append(({"bill_id": unposted["bill_id"]}, unposted))
+            
+            if not candidates:
+                logger.info("📭 No unposted bills available. Nothing to do.")
+                return 0
+            
+            # Try each candidate until one succeeds or all fail
+            for selected_bill, selected_bill_data in candidates:
+                bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
+                logger.info(f"⚙️ Processing candidate bill: {bill_id}")
+                
+                # Attempt to process this bill
+                result = process_single_bill(selected_bill, selected_bill_data, dry_run)
+                
+                if result == 0:
+                    # Success! Exit with success
+                    logger.info(f"✅ Successfully processed bill {bill_id}")
+                    return 0
+                else:
+                    # Failed, try next candidate
+                    logger.info(f"⏭️  Bill {bill_id} failed processing, trying next candidate...")
+                    continue
+            
+            # If we get here, all candidates failed
+            logger.info("📭 All candidates failed processing. No tweet posted this run.")
+            return 0  # Return success so workflow doesn't fail
+
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+        return 1
+
+def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict], dry_run: bool) -> int:
+    """
+    Process a single bill candidate. Returns 0 on success, 1 on failure.
+    """
+    try:
+        bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
+        if selected_bill_data:
+            logger.info("💾 Using existing summaries from database")
+            bill_data = selected_bill_data
+
+            # Decide whether to regenerate summaries based on DB content
+            summary_tweet_existing = (bill_data.get("summary_tweet") or "").strip()
+            needs_summary = (len(summary_tweet_existing) < 20) or ("no summary available" in summary_tweet_existing.lower())
+
+            # If we have fresh full text from enrichment and summaries are weak/missing, regenerate
+            if needs_summary and len((selected_bill.get("full_text") or "").strip()) >= 100:
+                logger.info("🧠 Existing summaries missing/weak; regenerating from fresh full text...")
+                tracker_data = selected_bill.get("tracker") or []
+                derived_status_text, derived_normalized_status = derive_status_from_tracker(tracker_data)
+                selected_bill["status"] = derived_status_text or bill_data.get("status")
+                selected_bill["normalized_status"] = derived_normalized_status or bill_data.get("normalized_status")
+
+                # Generate new summaries
+                summary = summarize_bill_enhanced(selected_bill)
+                logger.info("✅ Summaries generated successfully (regen path)")
+
+                # Validate summary content
+                if not summary.get("overview") or "full bill text needed" in summary.get("detailed", "").lower():
+                    logger.error(f"❌ Invalid summary generated for bill {bill_id}. Marking as problematic.")
+                    mark_bill_as_problematic(bill_id, "Invalid summary content (regen)")
+                    return 1
+
+                summary_fields = [summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")]
+                if any("full bill text" in field.lower() for field in summary_fields):
+                    logger.error(f"❌ Summary contains 'full bill text' phrase after regen for bill {bill_id}. Marking as problematic.")
+                    mark_bill_as_problematic(bill_id, "Summary contains 'full bill text' phrase after regen")
+                    return 1
+
+                term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+                teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+                logger.info(f"⭐️ Extracted Teen Impact Score (regen): {teen_impact_score}")
+
+                # Persist regenerated summaries
+                try:
+                    from src.database.db import update_bill_summaries as _ubs
+                    if _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", ""), term_dict_json):
+                        # Merge updated fields locally for tweet formatting
+                        bill_data.update({
+                            "summary_tweet": summary.get("tweet", ""),
+                            "summary_long": summary.get("long", ""),
+                            "summary_overview": summary.get("overview", ""),
+                            "summary_detailed": summary.get("detailed", ""),
+                            "term_dictionary": term_dict_json,
+                            "teen_impact_score": teen_impact_score,
+                            "normalized_status": selected_bill.get("normalized_status"),
+                            "status": selected_bill.get("status"),
+                        })
+                        logger.info("💾 Database summaries updated (regen).")
+                    else:
+                        logger.error("❌ Failed to update summaries in DB after regeneration.")
+                        mark_bill_as_problematic(bill_id, "update_bill_summaries failed (regen)")
+                        return 1
+                except Exception as e:
+                    logger.error(f"❌ Exception updating summaries in DB: {e}")
+                    mark_bill_as_problematic(bill_id, "Exception updating summaries (regen)")
+                    return 1
+        else:
+            # Derive status from tracker before summarization
+            tracker_data = selected_bill.get("tracker") or []
+            derived_status_text, derived_normalized_status = derive_status_from_tracker(tracker_data)
+            selected_bill["status"] = derived_status_text
+            selected_bill["normalized_status"] = derived_normalized_status
+            logger.info(f"🧭 Derived status for {bill_id}: '{derived_status_text}' ({derived_normalized_status})")
+
+            # Ensure bill has full text before summarization
+            _ft = selected_bill.get("full_text") or ""
+            _ts = selected_bill.get("text_source", "none")
+            _ft_len = len(_ft.strip())
+            try:
+                _ft_preview = _ft[:120].replace("\n", " ").replace("\r", " ")
+            except Exception:
+                _ft_preview = ""
+            _preview_suffix = "..." if _ft_len > 80 else ""
+            logger.info(f"🔎 Full text precheck for {bill_id}: len={_ft_len}, source={_ts}, preview='{_ft_preview[:80]}{_preview_suffix}'")
+            if not _ft or _ft_len < 100:
+                logger.error(f"❌ No valid full text for bill {bill_id}. Skipping.")
+                mark_bill_as_problematic(bill_id, "No valid full text available")
+                return 1
+
+            logger.info("🧠 Generating new summaries...")
+            summary = summarize_bill_enhanced(selected_bill)
+            logger.info("✅ Summaries generated successfully")
+
+            # Validate summary content
+            if not summary.get("overview") or "full bill text needed" in summary.get("detailed", "").lower():
+                logger.error(f"❌ Invalid summary generated for bill {bill_id}. Marking as problematic.")
+                mark_bill_as_problematic(bill_id, "Invalid summary content")
+                return 1
+                
+            # Additional validation for "full bill text" phrases in any summary field
+            summary_fields = [summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")]
+            if any("full bill text" in field.lower() for field in summary_fields):
+                logger.error(f"❌ Summary contains 'full bill text' phrase for bill {bill_id}. Regenerating.")
+                # Try one more time with a retry mechanism
+                time.sleep(2)  # Small delay before retry
+                summary = summarize_bill_enhanced(selected_bill)
+                summary_fields = [summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")]
+                if any("full bill text" in field.lower() for field in summary_fields):
+                    logger.error(f"❌ Summary still contains 'full bill text' phrase after retry for bill {bill_id}. Marking as problematic.")
+                    mark_bill_as_problematic(bill_id, "Summary contains 'full bill text' phrase after retry")
+                    return 1
+            
+            term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+
+            teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+            logger.info(f"⭐️ Extracted Teen Impact Score: {teen_impact_score}")
+            
+            tracker_raw_serialized = None
+            if tracker_data:
+                try:
+                    tracker_raw_serialized = json.dumps(tracker_data)
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"Failed to serialize tracker_data for bill {bill_id}: {e}")
+            
+            # Title length validation and truncation
+            raw_title = selected_bill.get("title", "")
+            title_length = len(raw_title)
+            
+            if title_length > 300:
+                logger.warning(f"⚠️ Bill title extremely long ({title_length} chars), truncating to 300 chars.")
+                logger.warning(f"   Original: \"{raw_title}\"")
+                truncated_title = raw_title[:300] + "..."
+                logger.warning(f"   Truncated: \"{truncated_title}\"")
+                final_title = truncated_title
+            elif title_length > 200:
+                logger.warning(f"⚠️ Bill title is long ({title_length} chars) but within acceptable range (≤300)")
+                logger.info(f"   Title: \"{raw_title}\"")
+                final_title = raw_title
+            else:
+                final_title = raw_title
+
+            bill_data = {
+                "bill_id": bill_id,
+                "title": final_title,
+                "status": derived_status_text,
+                "summary_tweet": summary.get("tweet", ""),
+                "summary_long": summary.get("long", ""),
+                "summary_overview": summary.get("overview", ""),
+                "summary_detailed": summary.get("detailed", ""),
+                "term_dictionary": term_dict_json,
+                # Ensure these are always populated for UI (avoid N/A)
+                "congress_session": str(selected_bill.get("congress", "") or "").strip(),
+                "date_introduced": selected_bill.get("date_introduced") or selected_bill.get("introduced_date") or "",
+                "source_url": selected_bill.get("source_url", ""),
+                "raw_latest_action": selected_bill.get("latest_action") or "",
+                "website_slug": generate_website_slug(selected_bill.get("title", ""), bill_id),
+                "tweet_posted": False,
+                "tracker_raw": tracker_raw_serialized,
+                "normalized_status": derived_normalized_status,
+                "teen_impact_score": teen_impact_score,
+            }
+            
+            # Warn about missing metadata to help debug future issues
+            if not bill_data.get("congress_session"):
+                logger.warning(f"⚠️ Bill {bill_id} missing congress_session - will display 'N/A' on site")
+            if not bill_data.get("date_introduced"):
+                logger.warning(f"⚠️ Bill {bill_id} missing date_introduced - will display 'N/A' on site")
+            
+            logger.info("💾 Inserting new bill into database...")
+            if not insert_bill(bill_data):
+                logger.error(f"❌ Failed to insert bill {bill_id}")
+                return 1
+            logger.info("✅ Bill inserted successfully")
+
+        # Ensure website_slug exists so the link is correct
+        if not bill_data.get("website_slug"):
+            slug = generate_website_slug(bill_data.get("title", ""), bill_id)
+            bill_data["website_slug"] = slug
+            logger.info(f"🔗 Set website_slug for {bill_id}: {slug}")
+
+        formatted_tweet = format_bill_tweet(bill_data)
+        logger.info(f"📝 Formatted tweet length: {len(formatted_tweet)} characters")
+
+        if dry_run:
+            logger.info("🔶 DRY-RUN MODE: Skipping tweet and DB update")
+            logger.info(f"🔶 Tweet content:\n{formatted_tweet}")
+            return 0
+
+        # Quality gate: validate tweet content before posting
+        is_valid, reason = validate_tweet_content(formatted_tweet, bill_data)
+        if not is_valid:
+            logger.error(f"🚫 Tweet content failed validation for {bill_id}: {reason}")
+            # Attempt one-shot summary regeneration when full_text is present
+            if bill_data.get("full_text") and len(bill_data.get("full_text", "")) >= 100:
+                logger.info(f"🔄 Attempting one-shot summary regeneration for {bill_id}")
+                try:
+                    # Regenerate summaries
+                    summary = summarize_bill_enhanced(bill_data)
+                    
+                    # Update bill_data with new summaries
+                    bill_data["summary_tweet"] = summary.get("tweet", "")
+                    bill_data["summary_overview"] = summary.get("overview", "")
+                    bill_data["summary_detailed"] = summary.get("detailed", "")
+                    bill_data["term_dictionary"] = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+                    bill_data["teen_impact_score"] = extract_teen_impact_score(summary.get("detailed", ""))
+                    
+                    # Re-format tweet with regenerated summaries
+                    formatted_tweet = format_bill_tweet(bill_data)
+                    logger.info(f"📝 Re-formatted tweet length: {len(formatted_tweet)} characters")
+                    
+                    # Re-validate tweet content
+                    is_valid, reason = validate_tweet_content(formatted_tweet, bill_data)
+                    if not is_valid:
+                        logger.error(f"🚫 Tweet content still failed validation after regeneration for {bill_id}: {reason}")
+                except Exception as e:
+                    logger.error(f"❌ Exception during summary regeneration: {e}")
+                    is_valid = False
+                    reason = f"Exception during regeneration: {e}"
+            else:
+                logger.info(f"⏭️  No full text available for regeneration for {bill_id}")
+            
+            # If still invalid or no full_text, mark bill problematic and continue scanning
+            if not is_valid:
+                # Mark problematic only in live mode
+                mark_bill_as_problematic(bill_id, f"Tweet content failed validation: {reason}")
+                logger.info("⛔ Skipping posting due to quality gate.")
+                return 1
+
+        # Check environment safety switch
+        strict_posting = os.getenv("STRICT_POSTING", "true").lower() == "true"
+        if not strict_posting:
+            logger.warning("🚨 STRICT_POSTING is disabled! Skipping actual posting.")
+            logger.info("🟡 DRY-RUN MODE: Would post tweet:")
+            logger.info(f"🔵 Tweet content:\n{formatted_tweet}")
+            return 0
+
+        logger.info("🚀 Posting tweet...")
+        success, tweet_url = post_tweet(formatted_tweet)
+
+        if success:
+            logger.info(f"✅ Tweet posted: {tweet_url}")
+            
+            # Post to Substack Notes
+            logger.info("🚀 Posting to Substack Notes...")
+            post_to_substack(formatted_tweet, tweet_url)
+            
+            logger.info("💾 Updating database with tweet information...")
+            if update_tweet_info(bill_id, tweet_url):
+                logger.info("✅ Database updated successfully")
+                
+                logger.info("🎉 Orchestrator completed successfully!")
+                return 0
+            else:
+                logger.error("❌ Database update failed. Bill will be marked as problematic.")
+                mark_bill_as_problematic(bill_id, "update_tweet_info() returned False")
+                return 1
+        else:
+            logger.error("❌ Failed to post tweet. The bill will be retried in the next run.")
+            return 1
+
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+        return 1
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="TeenCivics Orchestrator")
+    parser.add_argument("--dry-run", action="store_true", help="Run without posting to Twitter or updating DB")
+    args = parser.parse_args()
+    sys.exit(main(dry_run=args.dry_run))
