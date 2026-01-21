@@ -2763,3 +2763,23 @@ h1, h2, h3, h4, h5, h6 {
         gap: var(--spacing-md);
     }
 }
+/* Achievement Badge Styles */
+.creator-achievements {
+  margin-bottom: var(--spacing-md);
+}
+
+.achievement-badge {
+  display: inline-block;
+  background-color: #ffd700;
+  color: #3e2723;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  padding: 4px 12px;
+  border-radius: 99px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] .achievement-badge {
+  background-color: #ffca28;
+  color: #000;
+}

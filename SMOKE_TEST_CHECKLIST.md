@@ -1,4 +1,4 @@
-# TeenCivics CAC v1 - Manual Smoke Test Checklist
+# TeenCivics v1 - Manual Smoke Test Checklist
 
 ## Pre-Test Setup
 - [ ] Ensure `.env` file has all required environment variables
