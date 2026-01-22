@@ -2,8 +2,8 @@ name: Daily Database Backup
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # 2 AM UTC daily
-  workflow_dispatch:  # Manual trigger
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 
 jobs:
   backup:
@@ -11,14 +11,13 @@ jobs:
     steps:
       - name: Install PostgreSQL 17 client
         run: |
-          # Add PostgreSQL APT repository for version 17
           sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
           
       - name: Verify pg_dump version
-        run: pg_dump --version
+        run: /usr/lib/postgresql/17/bin/pg_dump --version
       
       - name: Create backup
         env:
@@ -26,7 +25,7 @@ jobs:
         run: |
           DATE=$(date +%Y-%m-%d)
           echo "Creating backup for $DATE..."
-          pg_dump "$DATABASE_URL" -F c -f backup-$DATE.dump
+          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" -F c -f backup-$DATE.dump
           ls -lh backup-$DATE.dump
           echo "Backup created successfully"
       
