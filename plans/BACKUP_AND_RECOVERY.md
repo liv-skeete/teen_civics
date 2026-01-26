@@ -1,6 +1,6 @@
 # Backup and Disaster Recovery Plan for TeenCivics
 
-**Last Updated:** 2026-01-21  
+**Last Updated:** 2026-01-22
 **Status:** Active Implementation
 
 ---
@@ -17,6 +17,13 @@ Complete these items this weekend to have a solid backup and monitoring setup:
 - [ ] **Test db-backup workflow** - Go to GitHub Actions → Daily Database Backup → Run workflow manually
 - [ ] **Verify backup artifact** - After workflow runs, download the artifact and check file size is reasonable
 - [ ] **Test local restore** (optional) - Download backup, try `pg_restore` locally to verify integrity
+
+### Local Standby Setup (Best Protection - With Dad's Help)
+
+- [ ] **Set up Docker container** on home server with PostgreSQL 17 + Flask app
+- [ ] **Configure nightly replication** script to pull from Railway
+- [ ] **Test failover** by pointing DNS to home server temporarily
+- [ ] **Document home server IP** in Cloudflare for quick DNS updates
 
 ---
 
@@ -95,12 +102,19 @@ We use a GitHub Actions workflow that runs `pg_dump` daily and stores backups as
 
 ### Backup Retention Summary
 
-| Tier | Location | Retention | Frequency |
-|------|----------|-----------|-----------|
-| Railway Daily | Railway | 6 days | Daily |
-| Railway Weekly | Railway | 1 month | Weekly |
-| Railway Monthly | Railway | 3 months | Monthly |
-| GitHub Artifact | GitHub | 30 days | Daily |
+| Tier | Location | Retention | Frequency | Independence |
+|------|----------|-----------|-----------|--------------|
+| Railway Daily | Railway | 6 days | Daily | Low - same provider |
+| Railway Weekly | Railway | 1 month | Weekly | Low - same provider |
+| Railway Monthly | Railway | 3 months | Monthly | Low - same provider |
+| GitHub Artifact | GitHub | 30 days | Daily | Medium - different provider |
+| **Local Standby** | Home Server | Unlimited | Nightly | **High - physical control** |
+
+**Your dad's approach (local standby) provides the highest level of protection** because:
+- You can't be locked out - it's your hardware
+- No cloud provider can delete or restrict access
+- Physical backups survive account compromises
+- Failover is instant (just DNS change)
 
 ### Manual Backup Procedure
 
@@ -142,6 +156,7 @@ pg_restore -d "$DATABASE_URL" --clean --if-exists backup-2026-01-21.dump
 | Application crash | 5 minutes | Railway auto-restarts |
 | Database corruption | 30 minutes | Restore from backup |
 | Railway temporary outage | 1-2 hours | Wait for Railway recovery |
+| **Local standby failover** | **5-10 minutes** | **Just DNS change (best option)** |
 | Need to migrate platforms | 2-4 hours | Deploy to Fly.io/Render |
 
 ### Recovery Point Objectives (RPO)
@@ -187,7 +202,81 @@ If Railway is down for more than 4 hours:
 
 2. **Update Cloudflare DNS** to point to Fly.io
 
-### Scenario 3: GitHub Repository Compromised
+### Scenario 3: Local Standby Failover (Recommended)
+
+Your dad's approach: Run a standby container at home with nightly database replication. Failover is a simple DNS change. This provides:
+
+- **Complete independence** from Railway and GitHub
+- **Local control** - can't be locked out of your own infrastructure
+- **Fast recovery** - just change DNS, no restore needed
+
+**Setup (with Dad's help):**
+
+1. **Create Docker container** on home server:
+   ```bash
+   # docker-compose.yml for standby
+   version: '3.8'
+   services:
+     web:
+       image: python:3.11
+       working_dir: /app
+       volumes:
+         - ./app:/app
+       command: gunicorn app:app -b 0.0.0.0:8000
+       ports:
+         - "8000:8000"
+       environment:
+         - DATABASE_URL=postgresql://user:pass@db:5432/teencivics
+       depends_on:
+         - db
+     
+     db:
+       image: postgres:17
+       volumes:
+         - pgdata:/var/lib/postgresql/data
+       environment:
+         - POSTGRES_DB=teencivics
+         - POSTGRES_USER=user
+         - POSTGRES_PASSWORD=pass
+   
+   volumes:
+     pgdata:
+   ```
+
+2. **Nightly replication script** (cron job):
+   ```bash
+   #!/bin/bash
+   # replicate_db.sh - runs nightly via cron
+   
+   DATE=$(date +%Y-%m-%d)
+   BACKUP_DIR="/home/backups/teencivics"
+   RAILWAY_DB_URL="your-railway-connection-string"
+   LOCAL_DB="postgresql://user:pass@localhost:5432/teencivics"
+   
+   # Dump from Railway
+   pg_dump "$RAILWAY_DB_URL" -F c -f "$BACKUP_DIR/backup-$DATE.dump"
+   
+   # Restore to local standby
+   pg_restore -d "$LOCAL_DB" --clean --if-exists "$BACKUP_DIR/backup-$DATE.dump"
+   
+   # Keep last 30 days of backups
+   find "$BACKUP_DIR" -name "*.dump" -mtime +30 -delete
+   
+   echo "Replication completed: $DATE"
+   ```
+
+3. **Failover procedure:**
+   - Log in to Cloudflare
+   - Change A record for teencivics.org to home server IP
+   - TTL is typically 5 minutes, so propagation is fast
+
+**Advantages over cloud-only:**
+- Works even if Railway account is compromised
+- Works even if GitHub account is compromised
+- Physical access to backups (can't be remotely deleted)
+- Zero egress costs for backup storage
+
+### Scenario 4: GitHub Repository Compromised
 
 1. Clone from your local machine (you have a copy)
 2. Or restore from any local developer's machine
@@ -342,5 +431,6 @@ All secrets are stored in GitHub Secrets and Railway Variables. Document names o
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.0 | 2026-01-22 | Added local standby with DNS failover (Dad's recommendation) |
 | 2.0 | 2026-01-21 | Updated with accurate Railway backup info, simplified workflows |
 | 1.0 | 2026-01-21 | Initial draft |

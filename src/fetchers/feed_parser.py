@@ -755,7 +755,7 @@ def parse_bill_texts_feed(limit: int = 10) -> List[Dict[str, Any]]:
         # Extract introduced date from the bill's main page HTML
         introduced_iso = _extract_introduced_date_from_bill_page(data.get("source_url", ""))
         if introduced_iso:
-            data["introduced_date"] = introduced_iso  # Use true introduced date from HTML
+            data["date_introduced"] = introduced_iso  # Use true introduced date from HTML
         else:
             # Do not silently substitute text_received_date without logging
             fallback = data.get("text_received_date")
@@ -764,7 +764,7 @@ def parse_bill_texts_feed(limit: int = 10) -> List[Dict[str, Any]]:
                     f"Introduced date not found for {data.get('bill_id')}, "
                     f"falling back to text_received_date={fallback}"
                 )
-                # We don't set introduced_date here; fetch_bills_from_feed will setdefault as a last resort
+                # We don't set date_introduced here; fetch_bills_from_feed will setdefault as a last resort
 
         bills.append(data)
 
