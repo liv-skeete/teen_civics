@@ -137,18 +137,17 @@ class BlueskyPublisher(BasePublisher):
         """
         Format a bill for Bluesky posting.
         
-        Strategy:
-        1. Try to match Twitter format exactly (with full slug URL) if it fits
-        2. If over limit, use shorter bill_id URL format
-        3. If still over, intelligently trim summary at sentence boundary
+        Mirrors the Twitter formatting logic exactly, with adjustments for:
+        - Bluesky's 300-char limit (vs Twitter's 280 effective with t.co)
+        - Bluesky doesn't shorten URLs, so we use bill_id format when needed
         
-        This ensures Bluesky posts match Twitter when possible, and degrade
-        gracefully when the 300-char limit requires trimming.
+        Uses same sentence-aware trimming as Twitter to avoid awkward cutoffs.
         """
         if not bill:
             bill = {}
-        
-        # Get summary text (prioritize tweet-length summary)
+
+        # Choose best available short summary; never emit placeholder text
+        # (Same logic as Twitter)
         summary_text = (
             bill.get("summary_tweet")
             or bill.get("summary_overview")
@@ -156,42 +155,44 @@ class BlueskyPublisher(BasePublisher):
             or bill.get("title")
         )
         
-        # Handle placeholder text
+        # Check if summary contains placeholder text
         if summary_text and "no summary available" in summary_text.lower():
             summary_text = None
         
-        # Fallback to constructed summary
+        # Fallback: synthesize from available fields
         if not summary_text:
             status_raw = (bill.get("normalized_status") or bill.get("status") or "").strip()
             status_disp = status_raw.replace("_", " ").title() if status_raw else "Introduced"
             title = (bill.get("title") or bill.get("short_title") or bill.get("bill_id") or "").strip()
             base = title if title else (bill.get("bill_id") or "This bill")
             summary_text = f"{base}. Status: {status_disp}."
-        
-        # Normalize whitespace and clean up
+
+        # Normalize whitespace and strip (same as Twitter)
         summary_text = (summary_text or "").replace("\n", " ").replace("\r", " ").strip()
+        
+        # Defensive cleanup (same as Twitter)
         summary_text = re.sub(r"\s#[\w_]+", "", summary_text)
         summary_text = re.sub(r"^[^\w]+", "", summary_text).strip()
         summary_text = re.sub(r"\s{2,}", " ", summary_text)
-        
-        original_summary = summary_text
-        
-        # Build post structure - try full URL first (matches Twitter)
+
+        # Build header (same format as Twitter)
         header = "🏛️ Today in Congress\n"
-        bill_id = bill.get("bill_id", "")
-        website_slug = bill.get("website_slug")
         
-        # Try with full slug URL first (matches Twitter format)
+        # Build footer with link
+        website_slug = bill.get("website_slug")
+        bill_id = bill.get("bill_id", "")
+        
+        # Try full slug URL first (matches Twitter exactly)
         if website_slug:
             full_link = f"https://teencivics.org/bill/{website_slug}"
-            full_footer = f"\n👉 See how this affects you: {full_link}"
-            test_post = f"{header}{summary_text}{full_footer}"
+            footer_text = "\n👉 See how this affects you: "
+            test_post = f"{header}{summary_text}{footer_text}{full_link}"
             
             if len(test_post) <= self.max_length:
-                logger.info(f"Bluesky: Using full slug URL, matches Twitter ({len(test_post)} chars)")
+                logger.info(f"Bluesky: Matches Twitter format ({len(test_post)} chars)")
                 return test_post
         
-        # Fall back to shorter bill_id URL
+        # Fall back to shorter URL format
         if bill_id:
             link = f"https://teencivics.org/bill/{bill_id}"
         elif website_slug:
@@ -199,67 +200,69 @@ class BlueskyPublisher(BasePublisher):
         else:
             link = "https://teencivics.org"
         
-        footer = f"\n👉 {link}"
+        footer_text = "\n👉 "
+        footer = f"{footer_text}{link}"
         
-        # Test if it fits without trimming
-        test_post = f"{header}{summary_text}{footer}"
-        if len(test_post) <= self.max_length:
-            logger.info(f"Bluesky: Using short URL format ({len(test_post)} chars)")
-            return test_post
+        # Calculate available space for summary
+        header_length = len(header)
+        footer_length = len(footer)
+        available_space = self.max_length - header_length - footer_length
         
-        # Need to trim summary - do it intelligently
-        available_space = self.max_length - len(header) - len(footer)
-        logger.info(f"Bluesky: Trimming summary from {len(summary_text)} to ~{available_space} chars")
+        # Ensure we have minimum 50 chars for summary
+        if available_space < 50:
+            logger.warning(f"Bluesky: Very limited space for summary: {available_space} chars")
+            available_space = max(50, available_space)
         
-        # Try to find a good sentence boundary
-        trimmed = None
-        for target_len in range(available_space, max(40, available_space - 30), -1):
-            candidate = summary_text[:target_len]
-            # Check for sentence endings
+        # Trim summary if needed (same logic as Twitter)
+        if len(summary_text) > available_space:
+            logger.info(f"Bluesky: Trimming summary from {len(summary_text)} to {available_space} chars")
+            
+            # Sentence-aware trimming
+            cut = summary_text[:available_space].rstrip()
+            
+            # Prefer cutting at sentence boundary if reasonably far into text
+            found_boundary = False
             for punct in [".", "!", "?"]:
-                idx = candidate.rfind(punct)
-                if idx >= 40:
-                    trimmed = candidate[:idx + 1]
+                idx = cut.rfind(punct)
+                if idx != -1 and idx >= 40:
+                    summary_text = cut[:idx + 1]
+                    found_boundary = True
                     break
-            if trimmed:
-                break
+            
+            if not found_boundary:
+                # Cut at last space and add ellipsis
+                sp = cut.rfind(" ")
+                if sp >= 40:
+                    cut = cut[:sp].rstrip()
+                if not cut.endswith((".", "!", "?")):
+                    cut += "..."
+                summary_text = cut[:available_space]
         
-        # If no good sentence boundary, cut at word boundary with ellipsis
-        if not trimmed:
-            candidate = summary_text[:available_space - 3].rstrip()
-            sp = candidate.rfind(" ")
-            if sp >= 40:
-                trimmed = candidate[:sp].rstrip() + "..."
-            else:
-                trimmed = candidate + "..."
-        
-        summary_text = trimmed
+        # Construct the post
         formatted_post = f"{header}{summary_text}{footer}"
         
-        # Final safety check - keep truncating until it fits
-        while len(formatted_post) > self.max_length:
-            overflow = len(formatted_post) - self.max_length
-            logger.warning(f"Bluesky: Post {len(formatted_post)} chars (over by {overflow}), truncating further")
+        # Final safety check (same as Twitter's emergency trim)
+        final_length = len(formatted_post)
+        
+        if final_length > self.max_length:
+            logger.warning(f"Bluesky: Post still too long ({final_length} chars). Emergency trim required.")
+            overflow = final_length - self.max_length + 5  # Add safety margin
             
-            # Calculate max allowed summary length
-            max_summary = self.max_length - len(header) - len(footer) - 3  # -3 for "..."
-            
-            if max_summary < 10:
-                # Emergency: header+footer alone exceed limit, use minimal
-                summary_text = summary_text[:50] + "..."
-                formatted_post = f"{header[:10]}{summary_text}\n👉 teencivics.org"
-                break
-            
-            # Truncate to max allowed
-            if len(summary_text) > max_summary:
-                summary_text = summary_text[:max_summary].rstrip()
-                # Find word boundary
-                sp = summary_text.rfind(" ")
-                if sp > 20:
-                    summary_text = summary_text[:sp].rstrip()
-                summary_text = summary_text + "..."
+            if len(summary_text) > overflow:
+                summary_text = summary_text[:-overflow].rstrip()
+                # Ensure text doesn't end with incomplete word
+                if " " in summary_text:
+                    summary_text = summary_text.rsplit(' ', 1)[0].rstrip()
+                if not summary_text.endswith((".", "!", "?")):
+                    summary_text += "..."
+                elif summary_text.endswith("."):
+                    summary_text = summary_text[:-1] + "..."
+            else:
+                # Summary too short - use minimal version
+                summary_text = summary_text[:50].rsplit(' ', 1)[0] + "..."
             
             formatted_post = f"{header}{summary_text}{footer}"
+            logger.info(f"Bluesky: After emergency trim: {len(formatted_post)} chars")
         
         logger.info(f"Bluesky: Final post length: {len(formatted_post)} chars")
         return formatted_post
