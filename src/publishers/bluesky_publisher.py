@@ -197,7 +197,8 @@ class BlueskyPublisher(BasePublisher):
         # Trim summary if needed
         if len(summary_text) > available_space:
             logger.info(f"Bluesky: Trimming summary from {len(summary_text)} to {available_space} chars")
-            cut = summary_text[:available_space].rstrip()
+            # Hard cut first, then find good break point
+            cut = summary_text[:available_space - 3].rstrip()  # Reserve 3 chars for "..."
             
             # Try to cut at sentence boundary
             for punct in [".", "!", "?"]:
@@ -210,11 +211,17 @@ class BlueskyPublisher(BasePublisher):
                 sp = cut.rfind(" ")
                 if sp >= 40:
                     cut = cut[:sp].rstrip()
-                if not cut.endswith((".", "!", "?")):
-                    cut = cut[:-3] + "..." if len(cut) > 3 else cut
-                summary_text = cut[:available_space]
+                summary_text = cut + "..."
         
         formatted_post = f"{header}{summary_text}{footer}"
+        
+        # Final safety check - hard truncate if still over limit
+        if len(formatted_post) > self.max_length:
+            overflow = len(formatted_post) - self.max_length
+            logger.warning(f"Bluesky: Post still {overflow} chars over limit, force-truncating")
+            # Recalculate with smaller summary
+            summary_text = summary_text[:len(summary_text) - overflow - 3].rstrip() + "..."
+            formatted_post = f"{header}{summary_text}{footer}"
         
         logger.info(f"Bluesky: Formatted post length: {len(formatted_post)} chars")
         

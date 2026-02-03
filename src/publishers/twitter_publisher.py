@@ -4,7 +4,9 @@ This module provides functionality to post formatted bill information to Twitter
 """
 
 import os
+import re
 import logging
+import hashlib
 from typing import Dict, Optional
 
 import tweepy
@@ -117,7 +119,6 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
 
     # Calculate effective length accounting for t.co URL shortening
     # Twitter shortens all URLs to 23 characters (t.co links)
-    import re
     url_pattern = r'https?://[^\s]+'
     urls = re.findall(url_pattern, text)
     effective_length = len(text)
