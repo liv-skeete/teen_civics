@@ -137,8 +137,13 @@ class BlueskyPublisher(BasePublisher):
         """
         Format a bill for Bluesky posting.
         
-        Bluesky allows 300 chars, slightly more than Twitter's 280.
-        We use a similar format but can include a bit more detail.
+        Strategy:
+        1. Try to match Twitter format exactly (with full slug URL) if it fits
+        2. If over limit, use shorter bill_id URL format
+        3. If still over, intelligently trim summary at sentence boundary
+        
+        This ensures Bluesky posts match Twitter when possible, and degrade
+        gracefully when the 300-char limit requires trimming.
         """
         if not bill:
             bill = {}
@@ -163,25 +168,31 @@ class BlueskyPublisher(BasePublisher):
             base = title if title else (bill.get("bill_id") or "This bill")
             summary_text = f"{base}. Status: {status_disp}."
         
-        # Normalize whitespace
+        # Normalize whitespace and clean up
         summary_text = (summary_text or "").replace("\n", " ").replace("\r", " ").strip()
-        
-        # Clean up hashtags and decorative characters
         summary_text = re.sub(r"\s#[\w_]+", "", summary_text)
         summary_text = re.sub(r"^[^\w]+", "", summary_text).strip()
         summary_text = re.sub(r"\s{2,}", " ", summary_text)
         
-        # Build post structure
-        header = "🏛️ Today in Congress\n"
+        original_summary = summary_text
         
-        # Get bill link - use short bill_id format to save characters
-        # Unlike Twitter, Bluesky doesn't shorten URLs via t.co
-        # So we use the compact bill_id format instead of the full slug
+        # Build post structure - try full URL first (matches Twitter)
+        header = "🏛️ Today in Congress\n"
         bill_id = bill.get("bill_id", "")
         website_slug = bill.get("website_slug")
         
+        # Try with full slug URL first (matches Twitter format)
+        if website_slug:
+            full_link = f"https://teencivics.org/bill/{website_slug}"
+            full_footer = f"\n👉 See how this affects you: {full_link}"
+            test_post = f"{header}{summary_text}{full_footer}"
+            
+            if len(test_post) <= self.max_length:
+                logger.info(f"Bluesky: Using full slug URL, matches Twitter ({len(test_post)} chars)")
+                return test_post
+        
+        # Fall back to shorter bill_id URL
         if bill_id:
-            # Use short format: /bill/hr171-119 instead of full slug
             link = f"https://teencivics.org/bill/{bill_id}"
         elif website_slug:
             link = f"https://teencivics.org/bill/{website_slug}"
@@ -190,41 +201,49 @@ class BlueskyPublisher(BasePublisher):
         
         footer = f"\n👉 {link}"
         
-        # Calculate available space for summary
-        # Unlike Twitter, Bluesky doesn't shorten URLs
+        # Test if it fits without trimming
+        test_post = f"{header}{summary_text}{footer}"
+        if len(test_post) <= self.max_length:
+            logger.info(f"Bluesky: Using short URL format ({len(test_post)} chars)")
+            return test_post
+        
+        # Need to trim summary - do it intelligently
         available_space = self.max_length - len(header) - len(footer)
+        logger.info(f"Bluesky: Trimming summary from {len(summary_text)} to ~{available_space} chars")
         
-        # Trim summary if needed
-        if len(summary_text) > available_space:
-            logger.info(f"Bluesky: Trimming summary from {len(summary_text)} to {available_space} chars")
-            # Hard cut first, then find good break point
-            cut = summary_text[:available_space - 3].rstrip()  # Reserve 3 chars for "..."
-            
-            # Try to cut at sentence boundary
+        # Try to find a good sentence boundary
+        trimmed = None
+        for target_len in range(available_space, max(40, available_space - 30), -1):
+            candidate = summary_text[:target_len]
+            # Check for sentence endings
             for punct in [".", "!", "?"]:
-                idx = cut.rfind(punct)
-                if idx != -1 and idx >= 40:
-                    summary_text = cut[:idx + 1]
+                idx = candidate.rfind(punct)
+                if idx >= 40:
+                    trimmed = candidate[:idx + 1]
                     break
-            else:
-                # Cut at last space and add ellipsis
-                sp = cut.rfind(" ")
-                if sp >= 40:
-                    cut = cut[:sp].rstrip()
-                summary_text = cut + "..."
+            if trimmed:
+                break
         
+        # If no good sentence boundary, cut at word boundary with ellipsis
+        if not trimmed:
+            candidate = summary_text[:available_space - 3].rstrip()
+            sp = candidate.rfind(" ")
+            if sp >= 40:
+                trimmed = candidate[:sp].rstrip() + "..."
+            else:
+                trimmed = candidate + "..."
+        
+        summary_text = trimmed
         formatted_post = f"{header}{summary_text}{footer}"
         
-        # Final safety check - hard truncate if still over limit
+        # Final safety check
         if len(formatted_post) > self.max_length:
             overflow = len(formatted_post) - self.max_length
-            logger.warning(f"Bluesky: Post still {overflow} chars over limit, force-truncating")
-            # Recalculate with smaller summary
+            logger.warning(f"Bluesky: Still {overflow} chars over, force-truncating")
             summary_text = summary_text[:len(summary_text) - overflow - 3].rstrip() + "..."
             formatted_post = f"{header}{summary_text}{footer}"
         
-        logger.info(f"Bluesky: Formatted post length: {len(formatted_post)} chars")
-        
+        logger.info(f"Bluesky: Final post length: {len(formatted_post)} chars")
         return formatted_post
     
     def post(self, text: str) -> Tuple[bool, Optional[str]]:
