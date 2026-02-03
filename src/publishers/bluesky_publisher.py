@@ -172,16 +172,23 @@ class BlueskyPublisher(BasePublisher):
         summary_text = re.sub(r"\s{2,}", " ", summary_text)
         
         # Build post structure
-        header = "🏛️ Today in Congress\n\n"
+        header = "🏛️ Today in Congress\n"
         
-        # Get bill link
+        # Get bill link - use short bill_id format to save characters
+        # Unlike Twitter, Bluesky doesn't shorten URLs via t.co
+        # So we use the compact bill_id format instead of the full slug
+        bill_id = bill.get("bill_id", "")
         website_slug = bill.get("website_slug")
-        if website_slug:
+        
+        if bill_id:
+            # Use short format: /bill/hr171-119 instead of full slug
+            link = f"https://teencivics.org/bill/{bill_id}"
+        elif website_slug:
             link = f"https://teencivics.org/bill/{website_slug}"
         else:
             link = "https://teencivics.org"
         
-        footer = f"\n\n👉 Learn more: {link}"
+        footer = f"\n👉 {link}"
         
         # Calculate available space for summary
         # Unlike Twitter, Bluesky doesn't shorten URLs

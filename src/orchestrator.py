@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Orchestrator script that combines bill fetching, summarization, and Twitter posting.
+Orchestrator script that combines bill fetching, summarization, and posting.
 Designed for daily automation via GitHub Actions.
 """
 
@@ -8,7 +8,7 @@ import os
 import sys
 import logging
 import json
-import requests
+import time as time_module  # For time.sleep()
 from typing import Dict, Any, Optional
 from datetime import datetime, time
 import pytz
@@ -33,283 +33,8 @@ from src.database.db import (
     select_and_lock_unposted_bill, has_posted_today, mark_bill_as_problematic
 )
 
-def post_to_substack(summary: str, tweet_url: str) -> bool:
-    """
-    Post the bill summary to Substack Notes with a link to the tweet.
-    
-    NOTE: Substack posting is currently disabled because Cloudflare blocks
-    automated access from datacenter IPs (like GitHub Actions). The code
-    remains here for future use if we find a workaround (e.g., residential
-    proxy, running locally, or if Substack releases a public API).
-    """
-    # Temporarily disabled - Cloudflare blocks GitHub Actions IPs
-    logger.info("ℹ️ Substack posting is currently disabled (Cloudflare blocking). Skipping.")
-    return False
-    
-    # Original implementation below (kept for future use)
-    try:
-        email = os.environ.get("SUBSTACK_EMAIL", "").strip()
-        password = os.environ.get("SUBSTACK_PASSWORD", "").strip()
-        
-        if not email or not password:
-            logger.warning("⚠️ SUBSTACK_EMAIL or SUBSTACK_PASSWORD missing. Skipping Substack post.")
-            return False
-
-        # Try Playwright first (works on headless servers like GitHub Actions)
-        try:
-            from playwright.sync_api import sync_playwright
-            logger.info("Using Playwright for Substack posting...")
-            return _post_to_substack_playwright(summary, tweet_url, email, password)
-        except ImportError:
-            logger.info("Playwright not available, falling back to cloudscraper...")
-        except Exception as e:
-            logger.warning(f"Playwright failed: {e}, falling back to cloudscraper...")
-
-        # Fallback to cloudscraper (works on local machines with browsers)
-        try:
-            import cloudscraper
-            import urllib.parse
-            cookie_sid = os.environ.get("SUBSTACK_SID", "").strip('"').strip("'")
-            if cookie_sid.startswith("s%3A"):
-                cookie_sid = urllib.parse.unquote(cookie_sid)
-            user_agent = os.environ.get("SUBSTACK_USER_AGENT", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").strip('"').strip("'")
-            if cookie_sid:
-                return _post_to_substack_cloudscraper(summary, tweet_url, cookie_sid, user_agent)
-            else:
-                logger.error("❌ Cloudscraper fallback requires SUBSTACK_SID cookie.")
-                return False
-        except ImportError:
-            logger.error("❌ Neither Playwright nor cloudscraper available. Cannot post to Substack.")
-            return False
-
-    except Exception as e:
-        logger.error(f"❌ Error posting to Substack: {e}", exc_info=True)
-        return False
-
-
-def _post_to_substack_playwright(summary: str, tweet_url: str, email: str, password: str) -> bool:
-    """
-    Post to Substack using Playwright with fresh login (handles Cloudflare on headless servers).
-    """
-    from playwright.sync_api import sync_playwright
-    
-    with sync_playwright() as p:
-        # Launch browser in headless mode
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080},
-            locale="en-US",
-        )
-        
-        page = context.new_page()
-        
-        try:
-            # Navigate to Substack sign-in page
-            logger.info("Navigating to Substack sign-in page...")
-            page.goto("https://substack.com/sign-in", wait_until="networkidle", timeout=60000)
-            
-            # Wait for Cloudflare challenge to complete (if any)
-            page.wait_for_timeout(3000)
-            
-            # Check if we're past Cloudflare
-            if "Just a moment" in page.title():
-                logger.info("Waiting for Cloudflare challenge to complete...")
-                page.wait_for_timeout(5000)
-            
-            # Click "Sign in with password" or similar link if it exists
-            try:
-                # Look for email input or "continue with email" option
-                signin_with_email = page.locator("text=Sign in with email")
-                if signin_with_email.count() > 0:
-                    signin_with_email.first.click()
-                    page.wait_for_timeout(1000)
-            except Exception:
-                pass  # May not exist, continue
-            
-            # Fill in email
-            logger.info(f"Entering email: {email[:3]}***")
-            email_input = page.locator('input[type="email"], input[name="email"], input[placeholder*="mail"]').first
-            email_input.wait_for(timeout=10000)
-            email_input.fill(email)
-            
-            # Click continue/next button
-            continue_btn = page.locator('button:has-text("Continue"), button:has-text("Next"), button[type="submit"]').first
-            continue_btn.click()
-            page.wait_for_timeout(2000)
-            
-            # Fill in password
-            logger.info("Entering password...")
-            password_input = page.locator('input[type="password"]').first
-            password_input.wait_for(timeout=10000)
-            password_input.fill(password)
-            
-            # Click sign in button
-            signin_btn = page.locator('button:has-text("Sign in"), button:has-text("Log in"), button[type="submit"]').first
-            signin_btn.click()
-            
-            # Wait for login to complete
-            logger.info("Waiting for login to complete...")
-            page.wait_for_timeout(5000)
-            
-            # Check if login was successful by looking for signs of being logged in
-            # Navigate to home to verify
-            page.goto("https://substack.com/", wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(2000)
-            
-            # Build the note content
-            note_content = []
-            for line in summary.split("\n"):
-                if line.strip():
-                    note_content.append({
-                        "type": "paragraph",
-                        "content": [{"type": "text", "text": line}]
-                    })
-
-            if tweet_url:
-                note_content.append({
-                    "type": "paragraph",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "💬 Discuss on X",
-                            "marks": [
-                                {
-                                    "type": "link",
-                                    "attrs": {
-                                        "href": tweet_url,
-                                        "title": "Discuss on X"
-                                    }
-                                }
-                            ]
-                        }
-                    ]
-                })
-
-            payload = {
-                "bodyJson": {
-                    "type": "doc",
-                    "attrs": {"schemaVersion": "v1"},
-                    "content": note_content
-                },
-                "tabId": "for-you"
-            }
-
-            logger.info("Posting note to Substack via Playwright...")
-            
-            # Use page.evaluate to make the fetch request with all cookies/headers
-            result = page.evaluate("""
-                async (payload) => {
-                    const response = await fetch('https://substack.com/api/v1/comment/feed', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(payload),
-                        credentials: 'include'
-                    });
-                    return {
-                        status: response.status,
-                        text: await response.text()
-                    };
-                }
-            """, payload)
-            
-            if result['status'] == 200:
-                logger.info("✅ Posted to Substack Notes successfully!")
-                return True
-            else:
-                logger.error(f"❌ Substack post failed: {result['status']} - {result['text'][:500]}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"❌ Playwright login/post failed: {e}", exc_info=True)
-            # Take a screenshot for debugging
-            try:
-                page.screenshot(path="/tmp/substack_error.png")
-                logger.info("Screenshot saved to /tmp/substack_error.png")
-            except Exception:
-                pass
-            return False
-        finally:
-            browser.close()
-
-
-def _post_to_substack_cloudscraper(summary: str, tweet_url: str, cookie_sid: str, user_agent: str) -> bool:
-    """
-    Post to Substack using cloudscraper (works on machines with browsers).
-    """
-    import cloudscraper
-    
-    session = cloudscraper.create_scraper(
-        browser={
-            'custom': user_agent,
-        }
-    )
-    
-    session.headers.update({
-        "User-Agent": user_agent,
-        "Referer": "https://substack.com/",
-        "Origin": "https://substack.com",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Connection": "keep-alive",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-    })
-
-    session.cookies.set("substack.sid", cookie_sid, domain=".substack.com")
-
-    # Format bill summary as Note content (ProseMirror JSON)
-    note_content = []
-    for line in summary.split("\n"):
-        if line.strip():
-            note_content.append({
-                "type": "paragraph",
-                "content": [{"type": "text", "text": line}]
-            })
-
-    if tweet_url:
-        note_content.append({
-            "type": "paragraph",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "💬 Discuss on X",
-                    "marks": [
-                        {
-                            "type": "link",
-                            "attrs": {
-                                "href": tweet_url,
-                                "title": "Discuss on X"
-                            }
-                        }
-                    ]
-                }
-            ]
-        })
-
-    logger.info("Posting note to Substack via cloudscraper...")
-    
-    note_response = session.post(
-        "https://substack.com/api/v1/comment/feed",
-        json={
-            "bodyJson": {
-                "type": "doc",
-                "attrs": {"schemaVersion": "v1"},
-                "content": note_content
-            },
-            "tabId": "for-you"
-        }
-    )
-
-    if note_response.status_code == 200:
-        logger.info("✅ Posted to Substack Notes successfully!")
-        return True
-    else:
-        logger.error(f"❌ Substack post failed: {note_response.status_code} - {note_response.text[:200]}")
-        return False
+# NOTE: Substack posting is disabled (Cloudflare blocks datacenter IPs).
+# Implementation archived in archives/orchestrator_pre_substack.py
 
 def snake_case(text: str) -> str:
     """Converts text to snake_case."""
@@ -603,7 +328,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             if any("full bill text" in field.lower() for field in summary_fields):
                 logger.error(f"❌ Summary contains 'full bill text' phrase for bill {bill_id}. Regenerating.")
                 # Try one more time with a retry mechanism
-                time.sleep(2)  # Small delay before retry
+                time_module.sleep(2)  # Small delay before retry
                 summary = summarize_bill_enhanced(selected_bill)
                 summary_fields = [summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")]
                 if any("full bill text" in field.lower() for field in summary_fields):
@@ -747,22 +472,19 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 bluesky = BlueskyPublisher()
                 if bluesky.is_configured():
                     logger.info("🦋 Posting to Bluesky...")
-                    # We reuse the formatted_tweet to ensure the post content exactly matches Twitter/X
-                    bsky_success, bsky_url = bluesky.post(formatted_tweet)
+                    # Use Bluesky's own format (shorter URLs for 300-char limit)
+                    bsky_post = bluesky.format_post(bill_data)
+                    bsky_success, bsky_url = bluesky.post(bsky_post)
                     if bsky_success:
                         logger.info(f"✅ Bluesky posted: {bsky_url}")
                     else:
-                        logger.warning(f"⚠️ Bluesky posting failed (non-fatal)")
+                        logger.warning("⚠️ Bluesky posting failed (non-fatal)")
                 else:
                     logger.info("ℹ️ Bluesky not configured, skipping")
             except ImportError:
                 logger.info("ℹ️ Bluesky publisher not available, skipping")
             except Exception as e:
                 logger.warning(f"⚠️ Bluesky posting error (non-fatal): {e}")
-            
-            # Post to Substack Notes
-            logger.info("🚀 Posting to Substack Notes...")
-            post_to_substack(formatted_tweet, tweet_url)
             
             logger.info("💾 Updating database with tweet information...")
             if update_tweet_info(bill_id, tweet_url):
