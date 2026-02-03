@@ -176,7 +176,7 @@ class BlueskyPublisher(BasePublisher):
         summary_text = re.sub(r"\s{2,}", " ", summary_text)
 
         # Build header (same format as Twitter)
-        header = "🏛️ Today in Congress\n"
+        header = "🏛️ Today in Congress\n\n"
         
         # Build footer with link
         website_slug = bill.get("website_slug")
@@ -185,7 +185,7 @@ class BlueskyPublisher(BasePublisher):
         # Try full slug URL first (matches Twitter exactly)
         if website_slug:
             full_link = f"https://teencivics.org/bill/{website_slug}"
-            footer_text = "\n👉 See how this affects you: "
+            footer_text = "\n\n👉 See how this affects you: "
             test_post = f"{header}{summary_text}{footer_text}{full_link}"
             
             if len(test_post) <= self.max_length:
@@ -200,7 +200,7 @@ class BlueskyPublisher(BasePublisher):
         else:
             link = "https://teencivics.org"
         
-        footer_text = "\n👉 "
+        footer_text = "\n\n👉 "
         footer = f"{footer_text}{link}"
         
         # Calculate available space for summary
@@ -263,7 +263,7 @@ class BlueskyPublisher(BasePublisher):
                 # Extreme case: even short summary won't fit with full link.
                 # Switch to archive link which is shorter/safer.
                 link = "https://teencivics.org/archive"
-                footer = f"\n👉 {link}"
+                footer = f"\n\n👉 {link}"
                 max_summary_len = self.max_length - len(header) - len(footer) - 3
                 
             # Perform safe truncation on summary text
