@@ -10,11 +10,11 @@ This project was created to help young people understand the legislative process
 
 Key features include:
 - Automated fetching of the most recent bills from the Congress.gov API.
-- AI-powered summarization using Claude AI for easy-to-understand content.
+- AI-powered summarization using Venice AI (Claude) for easy-to-understand content.
 - Teen Impact Score that estimates how much each bill affects teens.
-- Daily updates posted to X/Twitter via Tweepy.
+- Daily updates posted to X/Twitter and Bluesky.
 - A PostgreSQL database for robust data tracking and deduplication.
-- A public-facing website to display all tweeted bill summaries.
+- A public-facing website to display all bill summaries.
 
 ## Built With
 
@@ -24,8 +24,9 @@ This project is built with a modern Python stack:
 *   [Flask](https://flask.palletsprojects.com/) with Flask-Limiter and Flask-WTF for rate limiting and CSRF protection
 *   [PostgreSQL](https://www.postgresql.org/)
 *   [SQLAlchemy](https://www.sqlalchemy.org/)
-*   [Tweepy](https://www.tweepy.org/)
-*   [Anthropic API (Claude)](https://www.anthropic.com/)
+*   [Tweepy](https://www.tweepy.org/) for Twitter/X
+*   [atproto](https://atproto.blue/) for Bluesky
+*   [Venice AI](https://venice.ai/) (Claude-compatible API)
 *   [Congress.gov API](https://api.congress.gov/)
 *   [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) and [Playwright](https://playwright.dev/) for web scraping
 *   [Gunicorn](https://gunicorn.org/) for production WSGI serving

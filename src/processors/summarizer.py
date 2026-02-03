@@ -1,5 +1,6 @@
 import os
 import re
+import ast
 import json
 import time
 import logging
@@ -596,8 +597,6 @@ def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
 
 def _normalize_structured_text(value: Any) -> str:
     """Normalize structured text that may arrive as list or string."""
-    import ast
-    
     if isinstance(value, (list, tuple)):
         parts = [str(p).strip() for p in value if str(p).strip()]
         text = "\n".join(parts)
