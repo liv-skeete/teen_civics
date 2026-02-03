@@ -208,10 +208,17 @@ class BlueskyPublisher(BasePublisher):
         footer_length = len(footer)
         available_space = self.max_length - header_length - footer_length
         
-        # Ensure we have minimum 50 chars for summary
+        # If specific link leaves too little space, fallback to generic archive link
         if available_space < 50:
-            logger.warning(f"Bluesky: Very limited space for summary: {available_space} chars")
-            available_space = max(50, available_space)
+            logger.warning(f"Bluesky: Link too long, switching to archive link to save space.")
+            link = "https://teencivics.org/archive"
+            footer = f"{footer_text}{link}"
+            footer_length = len(footer)
+            available_space = self.max_length - header_length - footer_length
+            
+        # Ensure we have a sane minimum even after fallback
+        if available_space < 20:
+             available_space = 20
         
         # Trim summary if needed (same logic as Twitter)
         if len(summary_text) > available_space:
@@ -248,18 +255,26 @@ class BlueskyPublisher(BasePublisher):
             logger.warning(f"Bluesky: Post still too long ({final_length} chars). Emergency trim required.")
             overflow = final_length - self.max_length + 5  # Add safety margin
             
-            if len(summary_text) > overflow:
-                summary_text = summary_text[:-overflow].rstrip()
-                # Ensure text doesn't end with incomplete word
-                if " " in summary_text:
-                    summary_text = summary_text.rsplit(' ', 1)[0].rstrip()
-                if not summary_text.endswith((".", "!", "?")):
-                    summary_text += "..."
-                elif summary_text.endswith("."):
-                    summary_text = summary_text[:-1] + "..."
-            else:
-                # Summary too short - use minimal version
-                summary_text = summary_text[:50].rsplit(' ', 1)[0] + "..."
+            # Recalculate based on fixed components (header/footer) to ensure link preservation
+            # We truncate from summary_text, NOT the end of the string
+            max_summary_len = self.max_length - len(header) - len(footer) - 3 # -3 for ellipsis
+            
+            if max_summary_len < 10:
+                # Extreme case: even short summary won't fit with full link.
+                # Switch to archive link which is shorter/safer.
+                link = "https://teencivics.org/archive"
+                footer = f"\n👉 {link}"
+                max_summary_len = self.max_length - len(header) - len(footer) - 3
+                
+            # Perform safe truncation on summary text
+            summary_text = summary_text[:max_summary_len].rstrip()
+            
+            # Ensure clean word break
+            if " " in summary_text:
+                summary_text = summary_text.rsplit(' ', 1)[0].rstrip()
+            
+            if not summary_text.endswith((".", "!", "?")):
+                summary_text += "..."
             
             formatted_post = f"{header}{summary_text}{footer}"
             logger.info(f"Bluesky: After emergency trim: {len(formatted_post)} chars")
