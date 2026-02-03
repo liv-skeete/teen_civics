@@ -1490,6 +1490,75 @@ textarea:focus-visible {
     margin-top: var(--spacing-xl);
 }
 
+.error-search p {
+    margin-bottom: var(--spacing-md);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .error-search p,
+.dark-theme .error-search p {
+    color: var(--color-text-dark);
+}
+
+.error-search .search-form {
+    display: flex;
+    gap: var(--spacing-sm);
+    max-width: 500px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.error-search .search-input {
+    flex: 1;
+    min-width: 250px;
+    padding: var(--spacing-md);
+    border: 2px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    background-color: var(--color-white);
+    color: var(--color-brown-black);
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.error-search .search-input::placeholder {
+    color: var(--color-dark-gray);
+}
+
+.error-search .search-input:focus {
+    border-color: var(--color-navy);
+    outline: none;
+}
+
+/* Dark theme error search input */
+[data-theme="dark"] .error-search .search-input,
+.dark-theme .error-search .search-input {
+    background-color: var(--color-cards-dark);
+    color: var(--color-text-dark);
+    border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .error-search .search-input::placeholder,
+.dark-theme .error-search .search-input::placeholder {
+    color: #888;
+}
+
+[data-theme="dark"] .error-search .search-input:focus,
+.dark-theme .error-search .search-input:focus {
+    border-color: var(--color-accent-dark);
+}
+
+/* Dark theme error page headings */
+[data-theme="dark"] .error-content h1,
+.dark-theme .error-content h1 {
+    color: var(--color-accent-dark);
+}
+
+[data-theme="dark"] .error-content h2,
+.dark-theme .error-content h2 {
+    color: var(--color-text-dark);
+}
+
 /* Footer */
 .footer {
     background-color: var(--color-brown-black);
