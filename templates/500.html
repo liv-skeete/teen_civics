@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Server Error - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container error-container">
+    <div class="error-content">
+        <h1>500</h1>
+        <h2>Server Error</h2>
+        <p>Something went wrong on our end. We're working to fix it.</p>
+        <p>Please try again in a few moments.</p>
+        
+        <div class="error-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Go Home</a>
+            <a href="{{ url_for('archive') }}" class="btn btn-secondary">Browse Bills</a>
+            <a href="{{ url_for('contact') }}" class="btn btn-secondary">Contact Us</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
