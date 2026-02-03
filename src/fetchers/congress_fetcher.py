@@ -366,11 +366,12 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                 bill.setdefault('source_url', bill.get('text_url', ''))
 
                 # Introduced date source logging and fallback behavior
-                if bill.get('introduced_date'):
-                    logger.info(f"Introduced date for {bill.get('bill_id')} set from HTML: {bill.get('introduced_date')}")
+                # Note: Use 'date_introduced' consistently - this is what the API sets and what the database expects
+                if bill.get('date_introduced'):
+                    logger.info(f"Introduced date for {bill.get('bill_id')} set from API/HTML: {bill.get('date_introduced')}")
                 elif bill.get('text_received_date'):
-                    bill['introduced_date'] = bill['text_received_date']
-                    logger.info(f"Introduced date for {bill.get('bill_id')} fell back to text_received_date: {bill['introduced_date']}")
+                    bill['date_introduced'] = bill['text_received_date']
+                    logger.info(f"Introduced date for {bill.get('bill_id')} fell back to text_received_date: {bill['date_introduced']}")
                 else:
                     logger.info(f"No introduced date available for {bill.get('bill_id')}")
 
