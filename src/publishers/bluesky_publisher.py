@@ -236,11 +236,29 @@ class BlueskyPublisher(BasePublisher):
         summary_text = trimmed
         formatted_post = f"{header}{summary_text}{footer}"
         
-        # Final safety check
-        if len(formatted_post) > self.max_length:
+        # Final safety check - keep truncating until it fits
+        while len(formatted_post) > self.max_length:
             overflow = len(formatted_post) - self.max_length
-            logger.warning(f"Bluesky: Still {overflow} chars over, force-truncating")
-            summary_text = summary_text[:len(summary_text) - overflow - 3].rstrip() + "..."
+            logger.warning(f"Bluesky: Post {len(formatted_post)} chars (over by {overflow}), truncating further")
+            
+            # Calculate max allowed summary length
+            max_summary = self.max_length - len(header) - len(footer) - 3  # -3 for "..."
+            
+            if max_summary < 10:
+                # Emergency: header+footer alone exceed limit, use minimal
+                summary_text = summary_text[:50] + "..."
+                formatted_post = f"{header[:10]}{summary_text}\n👉 teencivics.org"
+                break
+            
+            # Truncate to max allowed
+            if len(summary_text) > max_summary:
+                summary_text = summary_text[:max_summary].rstrip()
+                # Find word boundary
+                sp = summary_text.rfind(" ")
+                if sp > 20:
+                    summary_text = summary_text[:sp].rstrip()
+                summary_text = summary_text + "..."
+            
             formatted_post = f"{header}{summary_text}{footer}"
         
         logger.info(f"Bluesky: Final post length: {len(formatted_post)} chars")
