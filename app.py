@@ -521,11 +521,15 @@ def debug_env():
 
 @app.route("/bill/<string:slug>")
 def bill_detail(slug: str):
+    from werkzeug.exceptions import HTTPException
     try:
         bill = get_bill_by_slug(slug)
         if not bill:
             abort(404)
         return render_template("bill.html", bill=bill)
+    except HTTPException:
+        # Re-raise HTTP exceptions (404, etc) as-is, don't convert to 500
+        raise
     except Exception as e:
         logger.error(f"Error loading bill with slug '{slug}': {e}", exc_info=True)
         abort(500)
