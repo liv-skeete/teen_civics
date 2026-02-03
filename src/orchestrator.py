@@ -747,7 +747,8 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 bluesky = BlueskyPublisher()
                 if bluesky.is_configured():
                     logger.info("🦋 Posting to Bluesky...")
-                    bsky_success, bsky_url = bluesky.publish_bill(bill_data)
+                    # We reuse the formatted_tweet to ensure the post content exactly matches Twitter/X
+                    bsky_success, bsky_url = bluesky.post(formatted_tweet)
                     if bsky_success:
                         logger.info(f"✅ Bluesky posted: {bsky_url}")
                     else:
