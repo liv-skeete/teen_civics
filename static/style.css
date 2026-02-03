@@ -1559,6 +1559,48 @@ textarea:focus-visible {
     color: var(--color-text-dark);
 }
 
+/* Dark theme error buttons alignment */
+[data-theme="dark"] .error-actions .btn-primary,
+.dark-theme .error-actions .btn-primary {
+    background-color: var(--color-accent-dark);
+    color: var(--color-background-dark);
+    border-color: var(--color-accent-dark);
+}
+
+[data-theme="dark"] .error-actions .btn-primary:hover,
+.dark-theme .error-actions .btn-primary:hover {
+    background-color: #5a8ccf;
+    border-color: #5a8ccf;
+    color: var(--color-white);
+}
+
+[data-theme="dark"] .error-actions .btn-secondary,
+.dark-theme .error-actions .btn-secondary {
+    background-color: var(--color-cards-dark);
+    color: var(--color-text-dark);
+    border: 1px solid var(--color-borders-dark);
+}
+
+[data-theme="dark"] .error-actions .btn-secondary:hover,
+.dark-theme .error-actions .btn-secondary:hover {
+    background-color: var(--color-borders-dark);
+    color: var(--color-white);
+    border-color: var(--color-text-dark);
+}
+
+/* Specific Search Form Dark Mode Enhancements */
+[data-theme="dark"] .error-search .btn-primary,
+.dark-theme .error-search .btn-primary {
+    background-color: var(--color-accent-dark);
+    color: var(--color-background-dark);
+}
+
+[data-theme="dark"] .error-search .btn-primary:hover,
+.dark-theme .error-search .btn-primary:hover {
+    background-color: #5a8ccf;
+    color: var(--color-white);
+}
+
 /* Footer */
 .footer {
     background-color: var(--color-brown-black);
