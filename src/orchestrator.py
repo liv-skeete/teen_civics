@@ -741,6 +741,24 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
         if success:
             logger.info(f"✅ Tweet posted: {tweet_url}")
             
+            # Post to Bluesky (if configured)
+            try:
+                from src.publishers.bluesky_publisher import BlueskyPublisher
+                bluesky = BlueskyPublisher()
+                if bluesky.is_configured():
+                    logger.info("🦋 Posting to Bluesky...")
+                    bsky_success, bsky_url = bluesky.publish_bill(bill_data)
+                    if bsky_success:
+                        logger.info(f"✅ Bluesky posted: {bsky_url}")
+                    else:
+                        logger.warning(f"⚠️ Bluesky posting failed (non-fatal)")
+                else:
+                    logger.info("ℹ️ Bluesky not configured, skipping")
+            except ImportError:
+                logger.info("ℹ️ Bluesky publisher not available, skipping")
+            except Exception as e:
+                logger.warning(f"⚠️ Bluesky posting error (non-fatal): {e}")
+            
             # Post to Substack Notes
             logger.info("🚀 Posting to Substack Notes...")
             post_to_substack(formatted_tweet, tweet_url)
