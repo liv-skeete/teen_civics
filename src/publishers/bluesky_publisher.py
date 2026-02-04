@@ -193,10 +193,11 @@ class BlueskyPublisher(BasePublisher):
                 return test_post
         
         # Fall back to shorter URL format
-        if bill_id:
-            link = f"https://teencivics.org/bill/{bill_id}"
-        elif website_slug:
+        if website_slug:
             link = f"https://teencivics.org/bill/{website_slug}"
+        elif bill_id:
+            # Fallback for old bills without slugs, or if slug generation failed
+            link = f"https://teencivics.org/bill/{bill_id}"
         else:
             link = "https://teencivics.org"
         
