@@ -540,11 +540,7 @@
   }
 
   // Add share dropdown init to bootstrap
-  const originalBootstrap = bootstrap;
-  bootstrap = function() {
-    originalBootstrap();
-    initializeShareDropdowns();
-  };
+  initializeShareDropdowns();
 
   // Optionally expose a tiny API for testing
   window.TeenCivics = Object.assign(window.TeenCivics || {}, {

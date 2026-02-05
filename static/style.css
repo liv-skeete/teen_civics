@@ -581,25 +581,26 @@ textarea:focus-visible {
 }
 
 .btn-share {
-    background-color: var(--color-light-gray);
-    color: var(--color-brown-black);
+    background-color: var(--color-navy);
+    color: var(--color-white);
 }
 
 .btn-share:hover {
-    background-color: var(--color-gray);
+    background-color: #283593;
+    color: var(--color-white);
 }
 
 /* Dark theme btn-share */
 [data-theme="dark"] .btn-share,
 .dark-theme .btn-share {
-    background-color: var(--color-cards-dark);
-    color: var(--color-text-dark);
-    border: 1px solid var(--color-borders-dark);
+    background-color: var(--color-accent-dark);
+    color: var(--color-background-dark);
 }
 
 [data-theme="dark"] .btn-share:hover,
 .dark-theme .btn-share:hover {
-    background-color: var(--color-borders-dark);
+    background-color: #5a8ccf;
+    color: var(--color-white);
 }
 
 /* Share Dropdown */
