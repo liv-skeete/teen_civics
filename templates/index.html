@@ -66,15 +66,15 @@
                         Share This Bill
                     </button>
                     <div class="share-options" role="menu" aria-label="Share options">
-                        <a href="https://twitter.com/intent/tweet?text={{ 'Check out this bill on @TeenCivics:\n\n' ~ bill.title ~ '\n\n'|urlencode }}{{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode }}"
+                        <a href="https://twitter.com/intent/tweet?text={{ ('Check out this bill on @TeenCivics: ' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True))|urlencode }}"
                            target="_blank" rel="noopener" class="share-option share-x" role="menuitem">
                             𝕏 Share on X
                         </a>
-                        <a href="https://bsky.app/intent/compose?text={{ 'Check out this bill on @teencivics.bsky.social:\n\n' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode }}"
+                        <a href="https://bsky.app/intent/compose?text={{ ('Check out this bill on @teencivics.bsky.social: ' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True))|urlencode }}"
                            target="_blank" rel="noopener" class="share-option share-bluesky" role="menuitem">
                             🦋 Share on Bluesky
                         </a>
-                        <a href="https://www.threads.net/intent/post?text={{ 'Check out this bill on @teen.civics:\n\n' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode }}"
+                        <a href="https://www.threads.net/intent/post?text={{ ('Check out this bill on @teen.civics: ' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True))|urlencode }}"
                            target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
                             🧵 Share on Threads
                         </a>
