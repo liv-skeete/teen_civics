@@ -92,6 +92,7 @@ from src.database.db import (
     count_search_tweeted_bills,
 )
 from src.processors.summarizer import summarize_title
+from src.utils.sponsor_formatter import format_sponsor_sentence
 
 # --- Request ID + security headers ---
 @app.before_request
@@ -304,6 +305,14 @@ def shorten_title_filter(title: str, max_length: int = 150) -> str:
     if len(title) <= max_length:
         return title
     return _truncate_title_at_word_boundary(title, max_length)
+
+@app.template_filter("format_sponsor_sentence")
+def format_sponsor_sentence_filter(raw_sponsor: str) -> str:
+    """
+    Format a raw sponsor string into a teen-friendly sentence.
+    E.g., "Rep. Estes, Ron [R-KS-4]" -> "Sponsored by Representative Ron Estes, a Republican from Kansas's 4th District."
+    """
+    return format_sponsor_sentence(raw_sponsor)
 
 def extract_teen_impact_score(summary: str) -> Optional[int]:
     if not summary:

@@ -111,6 +111,16 @@
                 </div>
                 <p class="total-votes">Total votes: <span class="votes-count">0</span></p>
             </div>
+            
+            <!-- Sponsor Section - Only visible after voting -->
+            <div class="sponsor-reveal" id="sponsor-reveal-{{ bill.bill_id }}" style="display: none;">
+                {% if bill.sponsor_name %}
+                <div class="sponsor-info">
+                    <p class="sponsor-sentence">{{ bill.sponsor_name|format_sponsor_sentence }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
             <div class="poll-message"></div>
         </div>
 
