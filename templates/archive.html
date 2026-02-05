@@ -15,12 +15,12 @@
         <form class="search-form" method="get" action="{{ url_for('archive') }}" id="archive-form">
             <!-- Top Row: Search Input and Buttons -->
             <div class="search-row">
-                <input 
-                    type="search" 
-                    class="search-input" 
-                    name="q" 
-                    value="{{ q or '' }}" 
-                    placeholder="Search by bill ID, title, or keywords" 
+                <input
+                    type="search"
+                    class="search-input"
+                    name="q"
+                    value="{{ q or '' }}"
+                    placeholder="Search by bill ID, title, sponsor, or keywords"
                     aria-label="Search bills"
                     autocomplete="off"
                     enterkeyhint="search"

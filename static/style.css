@@ -552,13 +552,13 @@ textarea:focus-visible {
 }
 
 .btn-twitter {
-    background-color: #1DA1F2;
+    background-color: #1081cf;
     color: #ffffff !important;
     text-decoration: none;
 }
 
 .btn-twitter:hover {
-    background-color: #1a91da;
+    background-color: #0c69a8;
     color: #ffffff !important;
     text-decoration: none;
 }
@@ -580,28 +580,41 @@ textarea:focus-visible {
     outline-color: #4a9eff;
 }
 
+/* Dark theme btn-twitter */
+[data-theme="dark"] .btn-twitter,
+.dark-theme .btn-twitter {
+    background-color: #40a9ff;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .btn-twitter:hover,
+.dark-theme .btn-twitter:hover {
+    background-color: #1890ff;
+    color: #ffffff !important;
+}
+
 .btn-share {
-    background-color: #1DA1F2;
+    background-color: #1081cf;
     color: #ffffff !important;
     border: none;
     text-decoration: none;
 }
 
 .btn-share:hover {
-    background-color: #1a91da;
+    background-color: #0c69a8;
     color: #ffffff;
 }
 
 /* Dark theme btn-share */
 [data-theme="dark"] .btn-share,
 .dark-theme .btn-share {
-    background-color: #1DA1F2;
+    background-color: #40a9ff;
     color: #ffffff;
 }
 
 [data-theme="dark"] .btn-share:hover,
 .dark-theme .btn-share:hover {
-    background-color: #1a91da;
+    background-color: #1890ff;
     color: #ffffff;
 }
 
@@ -1064,6 +1077,38 @@ a.share-option:link {
 .poll-message.error {
     background-color: #FFEBEE;
     color: var(--color-error);
+}
+
+/* Sponsor Reveal Section - shown after voting */
+.sponsor-reveal {
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-borders);
+}
+
+.sponsor-info {
+    font-size: var(--font-size-base);
+}
+
+.sponsor-name {
+    font-weight: 500;
+}
+
+.sponsor-party {
+    margin-left: var(--spacing-xs);
+}
+
+/* Party colors */
+.party-d {
+    color: #2563eb; /* Democrat blue */
+}
+
+.party-r {
+    color: #dc2626; /* Republican red */
+}
+
+.party-i {
+    color: #7c3aed; /* Independent purple */
 }
 
 /* Poll Preview (Archive Page) */

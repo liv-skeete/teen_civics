@@ -277,6 +277,17 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                             logger.info(f"✅ Set date_introduced for {bill.get('bill_id')} from API: {details['introducedDate']}")
                         else:
                             logger.warning(f"⚠️ No introducedDate available from API for {bill.get('bill_id')}")
+                    
+                    # Extract sponsor information from API response
+                    sponsors = details.get('sponsors', [])
+                    if sponsors and len(sponsors) > 0:
+                        primary_sponsor = sponsors[0]  # First sponsor is the primary sponsor
+                        bill['sponsor_name'] = primary_sponsor.get('fullName', '')
+                        bill['sponsor_party'] = primary_sponsor.get('party', '')
+                        bill['sponsor_state'] = primary_sponsor.get('state', '')
+                        logger.info(f"✅ Set sponsor for {bill.get('bill_id')}: {bill['sponsor_name']} ({bill['sponsor_party']}-{bill['sponsor_state']})")
+                    else:
+                        logger.debug(f"ℹ️ No sponsor data available from API for {bill.get('bill_id')}")
                 
                 # Override with more accurate scraped tracker if available
                 if bill.get('source_url') and scraped_trackers.get(bill['source_url']):

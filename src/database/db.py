@@ -159,8 +159,9 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     congress_session, date_introduced, date_processed, source_url,
                     website_slug, tags, tweet_url, tweet_posted,
                     text_source, text_version, text_received_date, processing_attempts, full_text,
-                    raw_latest_action, tracker_raw, normalized_status, teen_impact_score
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    raw_latest_action, tracker_raw, normalized_status, teen_impact_score,
+                    sponsor_name, sponsor_party, sponsor_state
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     bill_data.get('bill_id'),
                     bill_data.get('title'),
@@ -187,7 +188,10 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     bill_data.get('raw_latest_action'),
                     bill_data.get('tracker_raw'),
                     bill_data.get('normalized_status'),
-                    bill_data.get('teen_impact_score')
+                    bill_data.get('teen_impact_score'),
+                    bill_data.get('sponsor_name'),
+                    bill_data.get('sponsor_party'),
+                    bill_data.get('sponsor_state')
                 ))
         logger.info(f"Successfully inserted bill {bill_data.get('bill_id')}")
         return True
@@ -740,7 +744,8 @@ def _search_tweeted_bills_like(
                     params[param_name] = f'%{term}%'
                     like_clauses.append(f"""
                         (LOWER(COALESCE(title, '')) LIKE %({param_name})s OR
-                         LOWER(COALESCE(summary_long, '')) LIKE %({param_name})s)
+                         LOWER(COALESCE(summary_long, '')) LIKE %({param_name})s OR
+                         LOWER(COALESCE(sponsor_name, '')) LIKE %({param_name})s)
                     """)
                 
                 full_like_clause = " AND ".join(like_clauses)
@@ -938,7 +943,8 @@ def _count_search_tweeted_bills_like(phrases: List[str], tokens: List[str], stat
                     params[param_name] = f'%{term}%'
                     like_clauses.append(f"""
                         (LOWER(COALESCE(title, '')) LIKE %({param_name})s OR
-                         LOWER(COALESCE(summary_long, '')) LIKE %({param_name})s)
+                         LOWER(COALESCE(summary_long, '')) LIKE %({param_name})s OR
+                         LOWER(COALESCE(sponsor_name, '')) LIKE %({param_name})s)
                     """)
                 full_like_clause = " AND ".join(like_clauses)
                 # Check if status is 'introduced' to adjust the tweet_posted condition
@@ -1253,3 +1259,67 @@ def update_bill_teen_impact_score(bill_id: str, teen_impact_score: int) -> bool:
     except Exception as e:
         logger.error(f"Error updating teen impact score for bill {normalized_id}: {e}")
         return False
+
+
+def update_bill_sponsor(bill_id: str, sponsor_name: str, sponsor_party: str, sponsor_state: str) -> bool:
+    """
+    Update the sponsor information for a specific bill.
+    Used by the backfill script to populate sponsor data for existing bills.
+    
+    Args:
+        bill_id: The bill identifier (e.g., 'hr1234-119')
+        sponsor_name: Full name of the primary sponsor
+        sponsor_party: Party affiliation (D, R, I, etc.)
+        sponsor_state: State represented (CA, TX, NY, etc.)
+    
+    Returns:
+        bool: True if update succeeded, False otherwise
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE bills
+                    SET sponsor_name = %s,
+                        sponsor_party = %s,
+                        sponsor_state = %s
+                    WHERE bill_id = %s
+                    """,
+                    (sponsor_name, sponsor_party, sponsor_state, normalized_id),
+                )
+                return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error updating sponsor for bill {normalized_id}: {e}")
+        return False
+
+
+def get_bills_without_sponsor(limit: int = 100) -> List[Dict[str, Any]]:
+    """
+    Get bills that don't have sponsor information populated.
+    Used by the backfill script to find bills that need sponsor data.
+    
+    Args:
+        limit: Maximum number of bills to return
+    
+    Returns:
+        List of bill dictionaries with bill_id and congress_session
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute(
+                    """
+                    SELECT bill_id, congress_session
+                    FROM bills
+                    WHERE sponsor_name IS NULL OR sponsor_name = ''
+                    ORDER BY date_processed DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting bills without sponsor: {e}")
+        return []

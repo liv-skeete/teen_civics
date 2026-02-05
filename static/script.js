@@ -38,6 +38,17 @@
     return fetch(url, { ...options, headers, signal: controller.signal });
   }
 
+  // --- Sponsor Reveal ---
+  // Reveals sponsor information after user has voted on a bill
+  function checkAndRevealSponsor(billId) {
+    const voted = getStored(`voted_${billId}`);
+    const sponsorEl = document.getElementById(`sponsor-reveal-${billId}`);
+    
+    if (voted && sponsorEl) {
+      sponsorEl.style.display = 'block';
+    }
+  }
+
   // --- Poll widgets ---
   function initializePollWidgets() {
     const pollWidgets = $all(".poll-widget");
@@ -55,6 +66,7 @@
       const currentVote = getStored(`voted_${billId}`);
       if (currentVote) {
         highlightCurrentVote(options, currentVote);
+        checkAndRevealSponsor(billId);  // Reveal sponsor if already voted
       }
 
       // Attach click handlers once
@@ -117,6 +129,9 @@
 
       setStored(`voted_${billId}`, voteType);
       highlightCurrentVote(options, voteType);
+      
+      // Reveal sponsor after voting
+      checkAndRevealSponsor(billId);
 
       // After vote, refresh results exactly once
       fetchedOnce.delete(widget); // allow a fresh fetch

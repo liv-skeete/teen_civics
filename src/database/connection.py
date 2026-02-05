@@ -207,6 +207,9 @@ def init_db_tables() -> None:
                     poll_results_unsure INTEGER DEFAULT 0,
                     problematic BOOLEAN DEFAULT FALSE,
                     problem_reason TEXT,
+                    sponsor_name TEXT,
+                    sponsor_party TEXT,
+                    sponsor_state TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
@@ -217,6 +220,7 @@ def init_db_tables() -> None:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_date_processed ON bills (date_processed);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_website_slug ON bills (website_slug);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_tweet_posted ON bills (tweet_posted);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_sponsor_name ON bills (sponsor_name);")
 
                 # Trigger to auto-update updated_at
                 cursor.execute("""
