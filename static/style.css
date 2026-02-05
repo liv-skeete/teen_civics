@@ -589,6 +589,110 @@ textarea:focus-visible {
     background-color: var(--color-gray);
 }
 
+/* Dark theme btn-share */
+[data-theme="dark"] .btn-share,
+.dark-theme .btn-share {
+    background-color: var(--color-cards-dark);
+    color: var(--color-text-dark);
+    border: 1px solid var(--color-borders-dark);
+}
+
+[data-theme="dark"] .btn-share:hover,
+.dark-theme .btn-share:hover {
+    background-color: var(--color-borders-dark);
+}
+
+/* Share Dropdown */
+.share-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.share-options {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    min-width: 200px;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.share-options.show {
+    display: block;
+    animation: shareDropdownFadeIn 0.15s ease;
+}
+
+@keyframes shareDropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Dark theme share options */
+[data-theme="dark"] .share-options,
+.dark-theme .share-options {
+    background-color: var(--color-cards-dark);
+    border-color: var(--color-borders-dark);
+}
+
+.share-option {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: none;
+    border: none;
+    font-size: var(--font-size-md);
+    color: var(--color-text);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    text-align: left;
+}
+
+.share-option:hover {
+    background-color: var(--color-light-gray);
+}
+
+/* Dark theme share option hover */
+[data-theme="dark"] .share-option:hover,
+.dark-theme .share-option:hover {
+    background-color: rgba(107, 163, 232, 0.1);
+}
+
+/* Platform-specific colors on hover */
+.share-option.share-x:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.share-option.share-bluesky:hover {
+    background-color: rgba(0, 133, 255, 0.1);
+}
+
+.share-option.share-threads:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.share-option.share-copy:hover {
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+.share-option.share-copy.copied {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: var(--color-success);
+}
+
 .btn-small {
     padding: var(--spacing-xs) var(--spacing-md);
     font-size: var(--font-size-sm);

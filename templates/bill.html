@@ -71,11 +71,28 @@
                 <a href="{{ bill.bill_id|generate_congress_url(bill.congress_session) }}" target="_blank" rel="noopener" class="btn btn-primary">
                     Read Full Bill on Congress.gov
                 </a>
-                {% if bill.tweet_url %}
-                <a href="{{ bill.tweet_url }}" target="_blank" rel="noopener" class="btn btn-twitter">
-                    View on Twitter
-                </a>
-                {% endif %}
+                <div class="share-dropdown">
+                    <button class="btn btn-share" aria-expanded="false" aria-haspopup="true">
+                        📤 Share This Bill
+                    </button>
+                    <div class="share-options" role="menu" aria-label="Share options">
+                        <a href="https://twitter.com/intent/tweet?text={{ 'Check out this bill on @TeenCivics:\n\n' ~ bill.title ~ '\n\n'|urlencode }}{{ request.url|urlencode }}"
+                           target="_blank" rel="noopener" class="share-option share-x" role="menuitem">
+                            𝕏 Share on X
+                        </a>
+                        <a href="https://bsky.app/intent/compose?text={{ 'Check out this bill on @teencivics.bsky.social:\n\n' ~ bill.title ~ '\n\n' ~ request.url|urlencode }}"
+                           target="_blank" rel="noopener" class="share-option share-bluesky" role="menuitem">
+                            🦋 Share on Bluesky
+                        </a>
+                        <a href="https://www.threads.net/intent/post?text={{ 'Check out this bill on @teen.civics:\n\n' ~ bill.title ~ '\n\n' ~ request.url|urlencode }}"
+                           target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
+                            🧵 Share on Threads
+                        </a>
+                        <button class="share-option share-copy" role="menuitem" data-url="{{ request.url }}">
+                            🔗 Copy Link
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 

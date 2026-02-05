@@ -446,6 +446,106 @@
     bootstrap();
   }
 
+  // --- Share Dropdown ---
+  function initializeShareDropdowns() {
+    const shareDropdowns = $all(".share-dropdown");
+    
+    shareDropdowns.forEach((dropdown) => {
+      const button = dropdown.querySelector(".btn-share");
+      const options = dropdown.querySelector(".share-options");
+      const copyBtn = dropdown.querySelector(".share-copy");
+      
+      if (!button || !options) return;
+      
+      // Toggle dropdown on button click
+      button.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = options.classList.contains("show");
+        
+        // Close all other dropdowns first
+        $all(".share-options.show").forEach((o) => {
+          o.classList.remove("show");
+          o.closest(".share-dropdown")?.querySelector(".btn-share")?.setAttribute("aria-expanded", "false");
+        });
+        
+        if (!isOpen) {
+          options.classList.add("show");
+          button.setAttribute("aria-expanded", "true");
+        }
+      }, { passive: false });
+      
+      // Copy link functionality
+      if (copyBtn) {
+        copyBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const url = copyBtn.dataset.url || window.location.href;
+          
+          try {
+            await navigator.clipboard.writeText(url);
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = "✓ Copied!";
+            copyBtn.classList.add("copied");
+            
+            setTimeout(() => {
+              copyBtn.textContent = originalText;
+              copyBtn.classList.remove("copied");
+              options.classList.remove("show");
+              button.setAttribute("aria-expanded", "false");
+            }, 1500);
+          } catch (err) {
+            console.error("Failed to copy:", err);
+            // Fallback: select and copy
+            const textArea = document.createElement("textarea");
+            textArea.value = url;
+            textArea.style.position = "fixed";
+            textArea.style.opacity = "0";
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+              document.execCommand("copy");
+              copyBtn.textContent = "✓ Copied!";
+              setTimeout(() => {
+                copyBtn.textContent = "🔗 Copy Link";
+                options.classList.remove("show");
+              }, 1500);
+            } catch (e2) {
+              copyBtn.textContent = "❌ Failed";
+              setTimeout(() => { copyBtn.textContent = "🔗 Copy Link"; }, 1500);
+            }
+            document.body.removeChild(textArea);
+          }
+        }, { passive: false });
+      }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".share-dropdown")) {
+        $all(".share-options.show").forEach((o) => {
+          o.classList.remove("show");
+          o.closest(".share-dropdown")?.querySelector(".btn-share")?.setAttribute("aria-expanded", "false");
+        });
+      }
+    }, { passive: true });
+    
+    // Close on Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        $all(".share-options.show").forEach((o) => {
+          o.classList.remove("show");
+          o.closest(".share-dropdown")?.querySelector(".btn-share")?.setAttribute("aria-expanded", "false");
+        });
+      }
+    }, { passive: true });
+  }
+
+  // Add share dropdown init to bootstrap
+  const originalBootstrap = bootstrap;
+  bootstrap = function() {
+    originalBootstrap();
+    initializeShareDropdowns();
+  };
+
   // Optionally expose a tiny API for testing
   window.TeenCivics = Object.assign(window.TeenCivics || {}, {
     _debug: { fetchedOnce, resultsControllers },
