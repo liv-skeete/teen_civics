@@ -581,26 +581,31 @@ textarea:focus-visible {
 }
 
 .btn-share {
-    background-color: var(--color-navy);
-    color: var(--color-white);
+    background-color: transparent;
+    color: var(--color-navy);
+    border: 2px solid var(--color-navy);
+    font-weight: 500;
 }
 
 .btn-share:hover {
-    background-color: #283593;
+    background-color: var(--color-navy);
     color: var(--color-white);
+    border-color: var(--color-navy);
 }
 
 /* Dark theme btn-share */
 [data-theme="dark"] .btn-share,
 .dark-theme .btn-share {
-    background-color: var(--color-accent-dark);
-    color: var(--color-background-dark);
+    background-color: transparent;
+    color: var(--color-accent-dark);
+    border: 2px solid var(--color-accent-dark);
 }
 
 [data-theme="dark"] .btn-share:hover,
 .dark-theme .btn-share:hover {
-    background-color: #5a8ccf;
-    color: var(--color-white);
+    background-color: var(--color-accent-dark);
+    color: var(--color-background-dark);
+    border-color: var(--color-accent-dark);
 }
 
 /* Share Dropdown */
