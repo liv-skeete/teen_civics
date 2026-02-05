@@ -89,6 +89,7 @@
         <!-- Poll Widget -->
         <div class="poll-widget" data-bill-id="{{ bill.bill_id }}">
             <h3>What do you think about this bill?</h3>
+            <p class="poll-subtitle">Vote to see who sponsored it!</p>
             <div class="poll-options">
                 <button class="poll-option" data-vote="yes">
                     👍 Yes, support it
@@ -97,6 +98,7 @@
                     👎 No, oppose it
                 </button>
             </div>
+            <div class="poll-message"></div>
             <div class="poll-results" style="display: none;" aria-live="polite">
                 <h4>Community Results</h4>
                 <div class="result-bar">
@@ -120,8 +122,6 @@
                 </div>
                 {% endif %}
             </div>
-            
-            <div class="poll-message"></div>
         </div>
 
         <!-- Bill metadata moved to bottom -->

@@ -1198,6 +1198,56 @@ a.share-option:link {
     font-size: var(--font-size-sm);
 }
 
+/* Poll subtitle - "Vote to see who sponsored it!" */
+.poll-subtitle {
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-md);
+    font-style: italic;
+}
+
+/* Poll results content wrapper (used in archive vote-to-unlock) */
+.poll-preview .poll-results-content {
+    margin-top: 0;
+}
+
+/* Vote-to-unlock overlay for archive page */
+.vote-to-unlock-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-lg);
+    background: linear-gradient(135deg, var(--color-light-gray) 0%, var(--color-gray) 100%);
+    border-radius: var(--border-radius);
+    text-align: center;
+    min-height: 100px;
+}
+
+.vote-to-unlock-message {
+    color: var(--color-brown-black);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    margin-bottom: var(--spacing-md);
+}
+
+/* Dark theme support for vote-to-unlock */
+[data-theme="dark"] .poll-subtitle,
+.dark-theme .poll-subtitle {
+    color: var(--color-text);
+    opacity: 0.8;
+}
+
+[data-theme="dark"] .vote-to-unlock-overlay,
+.dark-theme .vote-to-unlock-overlay {
+    background: linear-gradient(135deg, var(--color-cards-dark) 0%, var(--color-borders-dark) 100%);
+}
+
+[data-theme="dark"] .vote-to-unlock-message,
+.dark-theme .vote-to-unlock-message {
+    color: var(--color-text);
+}
+
 /* ========================================
    ARCHIVE PAGE STYLES - COMPLETE & FIXED
    ======================================== */

@@ -234,6 +234,34 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             logger.info("💾 Using existing summaries from database")
             bill_data = selected_bill_data
 
+            # Backfill sponsor data if missing in DB but available from fresh API
+            db_sponsor = (selected_bill_data.get("sponsor_name") or "").strip()
+            api_sponsor = (selected_bill.get("sponsor_name") or "").strip()
+            if not db_sponsor and api_sponsor:
+                logger.info(f"📝 Backfilling missing sponsor data for {bill_id}: {api_sponsor}")
+                try:
+                    from src.database.db import db_connect
+                    with db_connect() as conn:
+                        with conn.cursor() as cursor:
+                            cursor.execute('''
+                                UPDATE bills
+                                SET sponsor_name = %s, sponsor_party = %s, sponsor_state = %s
+                                WHERE bill_id = %s
+                            ''', (
+                                selected_bill.get("sponsor_name", ""),
+                                selected_bill.get("sponsor_party", ""),
+                                selected_bill.get("sponsor_state", ""),
+                                bill_id
+                            ))
+                            conn.commit()
+                            logger.info(f"✅ Sponsor data backfilled for {bill_id}")
+                            # Update local bill_data as well
+                            bill_data["sponsor_name"] = selected_bill.get("sponsor_name", "")
+                            bill_data["sponsor_party"] = selected_bill.get("sponsor_party", "")
+                            bill_data["sponsor_state"] = selected_bill.get("sponsor_state", "")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to backfill sponsor data for {bill_id}: {e}")
+
             # Decide whether to regenerate summaries based on DB content
             summary_tweet_existing = (bill_data.get("summary_tweet") or "").strip()
             needs_summary = (len(summary_tweet_existing) < 20) or ("no summary available" in summary_tweet_existing.lower())
@@ -384,6 +412,10 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 "tracker_raw": tracker_raw_serialized,
                 "normalized_status": derived_normalized_status,
                 "teen_impact_score": teen_impact_score,
+                # Sponsor data from API
+                "sponsor_name": selected_bill.get("sponsor_name", ""),
+                "sponsor_party": selected_bill.get("sponsor_party", ""),
+                "sponsor_state": selected_bill.get("sponsor_state", ""),
             }
             
             # Warn about missing metadata to help debug future issues

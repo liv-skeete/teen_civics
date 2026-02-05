@@ -153,13 +153,22 @@
                 </div>
 
                 {% if bill.poll_results_yes is defined or bill.poll_results_no is defined %}
-                <div class="poll-preview">
+                <div class="poll-preview" data-bill-id="{{ bill.bill_id }}">
                     <h4>Community Poll</h4>
+                    <p class="poll-subtitle">Vote to see who sponsored this bill!</p>
+                    
+                    <!-- Vote to unlock overlay (shown when user hasn't voted) -->
+                    <div class="vote-to-unlock-overlay">
+                        <p class="vote-to-unlock-message">Vote on this bill to see the poll results!</p>
+                        <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}" class="btn btn-primary btn-small">Vote Now</a>
+                    </div>
+                    
+                    <!-- Poll results (hidden until user votes) -->
                     {% set total_votes = (bill.poll_results_yes or 0) + (bill.poll_results_no or 0) %}
                     {% if total_votes > 0 %}
                         {% set yes_percentage = ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) %}
                         {% set no_percentage = ((bill.poll_results_no or 0) / total_votes * 100)|round(1) %}
-                        <div class="poll-results" style="--yes-width: {{ yes_percentage }}%; --no-width: {{ no_percentage }}%;">
+                        <div class="poll-results-content" style="display: none; --yes-width: {{ yes_percentage }}%; --no-width: {{ no_percentage }}%;">
                             <div class="poll-option">
                                 <span class="poll-label">Yes</span>
                                 <div class="poll-bar">
@@ -177,7 +186,9 @@
                             <p class="poll-total">{{ total_votes }} total vote{{ 's' if total_votes != 1 else '' }}</p>
                         </div>
                     {% else %}
-                        <p class="no-votes">No votes yet</p>
+                        <div class="poll-results-content" style="display: none;">
+                            <p class="no-votes">No votes yet</p>
+                        </div>
                     {% endif %}
                 </div>
                 {% endif %}

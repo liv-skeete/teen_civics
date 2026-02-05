@@ -504,6 +504,20 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
             logger.warning(f"⚠️ No introducedDate in API response for {bill_type}{bill_number}-{congress}")
             logger.debug(f"Available keys in bill_data: {list(bill_data.keys())}")
         
+        # Extract sponsor data from API response
+        sponsor_name = ''
+        sponsor_party = ''
+        sponsor_state = ''
+        sponsors = bill_data.get('sponsors', [])
+        if sponsors and len(sponsors) > 0:
+            primary_sponsor = sponsors[0]
+            sponsor_name = primary_sponsor.get('fullName', '')
+            sponsor_party = primary_sponsor.get('party', '')
+            sponsor_state = primary_sponsor.get('state', '')
+            logger.info(f"✅ Extracted sponsor for {bill_type}{bill_number}-{congress}: {sponsor_name} ({sponsor_party}-{sponsor_state})")
+        else:
+            logger.debug(f"ℹ️ No sponsor data available from API for {bill_type}{bill_number}-{congress}")
+        
         enriched_bills.append({
             'bill_id': f"{bill_type}{bill_number}-{congress}",
             'title': bill_data.get('title'),
@@ -515,7 +529,10 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
             'latest_action_date': (bill_data.get('latestAction') or {}).get('actionDate'),
             'tracker': tracker_data,
             'full_text': full_text,
-            'text_source': text_source
+            'text_source': text_source,
+            'sponsor_name': sponsor_name,
+            'sponsor_party': sponsor_party,
+            'sponsor_state': sponsor_state
         })
         if len(enriched_bills) >= limit:
             break

@@ -336,6 +336,32 @@
     });
   }
 
+  // --- Archive poll preview vote-to-unlock ---
+  // Shows/hides poll results based on whether user has voted on each bill
+  function initArchiveVoteToUnlock() {
+    const pollPreviews = $all(".poll-preview[data-bill-id]");
+    pollPreviews.forEach((preview) => {
+      const billId = preview.dataset.billId;
+      if (!billId) return;
+
+      const overlay = preview.querySelector(".vote-to-unlock-overlay");
+      const resultsContent = preview.querySelector(".poll-results-content");
+
+      if (!overlay || !resultsContent) return;
+
+      const hasVoted = getStored(`voted_${billId}`);
+      if (hasVoted) {
+        // User has voted - show results, hide overlay
+        overlay.style.display = "none";
+        resultsContent.style.display = "block";
+      } else {
+        // User has not voted - show overlay, hide results
+        overlay.style.display = "flex";
+        resultsContent.style.display = "none";
+      }
+    });
+  }
+
   // --- Archive filtering and sorting ---
   function initializeBillFiltering() {
     const filterSelect = document.getElementById("status-filter");
@@ -434,6 +460,7 @@
     initializePollWidgets();
     setupMobileNavigation();
     initArchiveMiniResults();
+    initArchiveVoteToUnlock();
     initializeBillFiltering();
 
     // Fetch results once per widget if user has a stored vote
