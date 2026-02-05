@@ -657,11 +657,27 @@ textarea:focus-visible {
     background: none;
     border: none;
     font-size: var(--font-size-md);
-    color: var(--color-text);
-    text-decoration: none;
+    color: var(--color-text) !important;
+    text-decoration: none !important;
     cursor: pointer;
     transition: background-color var(--transition-fast);
     text-align: left;
+}
+
+a.share-option,
+a.share-option:visited,
+a.share-option:link {
+    color: var(--color-text) !important;
+    text-decoration: none !important;
+}
+
+[data-theme="dark"] a.share-option,
+[data-theme="dark"] a.share-option:visited,
+[data-theme="dark"] a.share-option:link,
+.dark-theme a.share-option,
+.dark-theme a.share-option:visited,
+.dark-theme a.share-option:link {
+    color: var(--color-text) !important;
 }
 
 .share-option:hover {
