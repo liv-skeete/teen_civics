@@ -585,7 +585,7 @@ textarea:focus-visible {
     color: #ffffff !important;
     border: none;
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .btn-share:hover {
