@@ -518,6 +518,25 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             except Exception as e:
                 logger.warning(f"⚠️ Bluesky posting error (non-fatal): {e}")
             
+            # Post to Threads (if configured)
+            try:
+                from src.publishers.threads_publisher import ThreadsPublisher
+                threads = ThreadsPublisher()
+                if threads.is_configured():
+                    logger.info("🧵 Posting to Threads...")
+                    threads_post = threads.format_post(bill_data)
+                    threads_success, threads_url = threads.post(threads_post)
+                    if threads_success:
+                        logger.info(f"✅ Threads posted: {threads_url}")
+                    else:
+                        logger.warning("⚠️ Threads posting failed (non-fatal)")
+                else:
+                    logger.info("ℹ️ Threads not configured, skipping")
+            except ImportError:
+                logger.info("ℹ️ Threads publisher not available, skipping")
+            except Exception as e:
+                logger.warning(f"⚠️ Threads posting error (non-fatal): {e}")
+            
             logger.info("💾 Updating database with tweet information...")
             if update_tweet_info(bill_id, tweet_url):
                 logger.info("✅ Database updated successfully")
