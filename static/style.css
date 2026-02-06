@@ -2014,11 +2014,18 @@ a.share-option:link {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr;
   gap: var(--spacing-lg);
-  max-width: 1200px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 0 var(--spacing-md);
+}
+
+/* Large screens: 3-column layout for stats grid */
+@media (min-width: 992px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .stat-card {
@@ -2923,10 +2930,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (max-width: 992px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
   .creator-card .creator-profile {
     grid-template-columns: 1fr 1fr;
   }
@@ -2983,33 +2986,7 @@ h1, h2, h3, h4, h5, h6 {
    ======================================== */
 
 /* 1. Mobile dropdown menu dark mode styling */
-/* 2. Stats grid responsive improvements */
-@media (max-width: 768px) {
-    .stats-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
-        padding: var(--spacing-sm);
-    }
-    
-    .stat-card {
-        width: 100%;
-        padding: var(--spacing-md);
-    }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-lg);
-    }
-}
-
-@media (min-width: 1025px) {
-    .stats-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
+/* 2. Stats grid - now always single column, responsive breakpoints removed */
 
 /* 3. Creator section layout fixes for mobile/tablet/desktop */
 @media (max-width: 768px) {
