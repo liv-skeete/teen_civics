@@ -2,38 +2,42 @@
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-TeenCivics makes government accessible for young people by posting daily plain-English summaries of congressional bills from Congress.gov.
+**TeenCivics** makes government accessible for young people by posting daily plain-English summaries of congressional bills from Congress.gov.
+
+🌐 **Live site**: [teencivics.org](https://teencivics.org)
 
 ## About The Project
 
-This project was created to help young people understand the legislative process and stay informed about the bills being considered in the U.S. Congress. By providing clear, concise summaries of complex legislation, TeenCivics aims to foster civic engagement and make government more transparent for the next generation of voters.
+TeenCivics was created to help young people understand the legislative process and stay informed about the bills being considered in the U.S. Congress. By providing clear, concise summaries of complex legislation, TeenCivics aims to foster civic engagement and make government more transparent for the next generation of voters.
 
-Key features include:
-- Automated fetching of the most recent bills from the Congress.gov API.
-- AI-powered summarization using Venice AI (Claude) for easy-to-understand content.
-- Teen Impact Score that estimates how much each bill affects teens.
-- Daily updates posted to X/Twitter and Bluesky.
-- A PostgreSQL database for robust data tracking and deduplication.
-- A public-facing website to display all bill summaries.
+### Features
+
+- **Daily Bill Summaries** — Automated fetching and AI-powered summarization of the most recent bills from Congress.gov, written in plain language for teens (ages 13-19).
+- **Teen Impact Score** — Each bill gets a 0-10 score estimating how directly it affects teenagers, with a rubric distinguishing direct, indirect, and symbolic impacts.
+- **Multi-Platform Social Posting** — Daily updates automatically posted to X/Twitter, Bluesky, and Threads.
+- **Community Polls** — Vote on bills to share your opinion and see how others voted.
+- **Sponsor Reveal** — Vote on a bill to unlock information about who sponsored it.
+- **Bill Archive** — Browse, search, and filter all previously summarized bills with full-text search and sponsor search.
+- **Dark Mode** — Full dark/light theme support with system preference detection.
+- **Civic Resources** — Curated links to voter registration, contacting representatives, and understanding government.
+- **Term Dictionary** — Links to congressional glossaries for unfamiliar legislative terminology.
+- **Responsive Design** — Mobile-friendly layout for all pages.
+- **SEO Optimized** — Open Graph and Twitter Card meta tags for rich social previews.
 
 ## Built With
 
-This project is built with a modern Python stack:
-
 *   [Python 3.10+](https://www.python.org/)
 *   [Flask](https://flask.palletsprojects.com/) with Flask-Limiter and Flask-WTF for rate limiting and CSRF protection
-*   [PostgreSQL](https://www.postgresql.org/)
-*   [SQLAlchemy](https://www.sqlalchemy.org/)
-*   [Tweepy](https://www.tweepy.org/) for Twitter/X
-*   [atproto](https://atproto.blue/) for Bluesky
-*   [Venice AI](https://venice.ai/) (Claude-compatible API)
-*   [Congress.gov API](https://api.congress.gov/)
-*   [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) and [Playwright](https://playwright.dev/) for web scraping
+*   [PostgreSQL](https://www.postgresql.org/) with connection pooling
+*   [Venice AI](https://venice.ai/) (Claude-compatible API) for bill summarization
+*   [Congress.gov API](https://api.congress.gov/) for bill data
+*   [Tweepy](https://www.tweepy.org/) for X/Twitter posting
+*   [atproto](https://atproto.blue/) for Bluesky posting
+*   Meta Threads Graph API for Threads posting
+*   [Playwright](https://playwright.dev/) for web scraping bill text and tracker data
 *   [Gunicorn](https://gunicorn.org/) for production WSGI serving
 
 ## Getting Started
-
-To get a local copy up and running, follow these simple steps.
 
 ### Prerequisites
 
@@ -62,123 +66,91 @@ To get a local copy up and running, follow these simple steps.
         ```sh
         cp .env.example .env
         ```
-    -   Add your API keys and database URL to the `.env` file. You will need keys for:
-        *   Congress.gov API (`CONGRESS_API_KEY`)
-        *   Anthropic API (`ANTHROPIC_API_KEY`)
-        *   Twitter/X API (`TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`)
-        *   Your PostgreSQL `DATABASE_URL`
-        *   Optional: `GA_MEASUREMENT_ID` for Google Analytics
-        *   Optional: `SUMMARIZER_MODEL` to specify Claude model (defaults to claude-sonnet-4-5)
+    -   Add your API keys and database URL to the `.env` file. Required keys:
+        *   `CONGRESS_API_KEY` — Congress.gov API
+        *   `VENICE_API_KEY` — Venice AI (Claude-compatible)
+        *   `DATABASE_URL` — PostgreSQL connection string
+        *   `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET` — X/Twitter API
+        *   `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` — Bluesky AT Protocol
+        *   `THREADS_USER_ID`, `THREADS_ACCESS_TOKEN` — Meta Threads API
+    -   Optional:
+        *   `GA_MEASUREMENT_ID` — Google Analytics
+        *   `SUMMARIZER_MODEL` — AI model (defaults to `claude-sonnet-45`)
 
 5.  **Initialize the database**
     The database schema is created automatically on the first run.
 
 ## Usage
 
-There are two main components to this application: the web server and the bill processing orchestrator.
-
 1.  **Run the web application**
     ```sh
     python app.py
     ```
-    Navigate to `http://127.0.0.1:5000` in your browser to see the website.
+    Navigate to `http://127.0.0.1:5000` in your browser.
 
-2.  **Run the orchestrator**
-    This script fetches, summarizes, and posts new bills.
+2.  **Run the orchestrator** (fetch → summarize → store → post)
     ```sh
     python src/orchestrator.py
     ```
 
-## Contributing
-
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-Please see [`CONTRIBUTING.md`](CONTRIBUTING.md:1) for detailed guidelines on how to get started.
+3.  **Dry run** (no posting, no DB updates)
+    ```sh
+    python src/orchestrator.py --dry-run
+    ```
 
 ## Deployment
 
-TeenCivics is deployed on Railway.app using Gunicorn as the WSGI server with a production-optimized configuration. The application is served with automatic SSL through Railway's built-in reverse proxy and load balancing.
-
-## Custom Domain
-
-The application is accessible at [teencivics.org](https://teencivics.org) with SSL provided by Cloudflare.
-
-## Production Architecture
+TeenCivics is deployed on [Railway.app](https://railway.app) with the following architecture:
 
 - **Platform**: Railway.app with 512MB RAM, 1 vCPU instance
 - **Web Server**: Gunicorn with 2 workers optimized for memory constraints
-- **Process Management**: Managed by Railway's process orchestration
 - **Database**: PostgreSQL with SSL connections and connection pooling
-- **SSL**: Automatic HTTPS with Cloudflare integration
-- **Monitoring**: Built-in Railway logging and metrics
+- **SSL**: Automatic HTTPS via Cloudflare
+- **Domain**: [teencivics.org](https://teencivics.org)
 
-For deployment instructions, see [DEPLOYMENT_RAILWAY.md](DEPLOYMENT_RAILWAY.md). Legacy AWS deployment instructions are in [`DEPLOYMENT.md`](DEPLOYMENT.md:1).
-
-## License
-
-Distributed under the MIT License. See [`LICENSE`](LICENSE:1) for more information.
-
-## Contact
-
-Olivia (Liv) Skeete - [@TeenCivics](https://twitter.com/TeenCivics) - liv@di.st
-
-Project Link: [https://github.com/liv-skeete/teen_civics](https://github.com/liv-skeete/teen_civics)
-
----
-
-## Teen Impact Score
-
-TeenCivics includes a Teen Impact Score that estimates how directly and significantly a bill affects teenagers. The score is derived from bill topic areas, scope, enforcement, and proximity to youth programs and schools. It is displayed on the site alongside summaries to help teens quickly gauge relevance.
-
-Developer tools:
-- Regenerate any missing scores:
-  - python [scripts/regenerate_missing_teen_impact_scores.py](scripts/regenerate_missing_teen_impact_scores.py:1)
-- Tests (if present) live under [tests/](tests)
-
-## Security and Secrets
-
-This repo follows a strict "No secrets in source" policy. See [SECURITY.md](SECURITY.md).
-
-- Load credentials at runtime via [load_env()](src/load_env.py:6)
-- CI blocks leaks using a repo scanner:
-  - Run locally before committing:
-    - python [scripts/secret_scan.py](scripts/secret_scan.py:1)
+For deployment instructions, see [DEPLOYMENT_RAILWAY.md](DEPLOYMENT_RAILWAY.md).
 
 ## CI and Automation
 
-- Daily posting workflow: [.github/workflows/daily.yml](.github/workflows/daily.yml:1)
-  - Runs twice daily (9:00 AM ET and 10:30 PM ET)
-  - Uses GitHub Actions Secrets (masked in logs)
-  - Performs secret scanning early to block leaks
-  - Uses Playwright for bill text extraction with fallback to API
-- Test workflow: [.github/workflows/test-orchestrator.yml](.github/workflows/test-orchestrator.yml:1)
-- Weekly digest workflow (disabled): [.github/workflows/weekly.yml](.github/workflows/weekly.yml:1)
+- **Daily posting**: [.github/workflows/daily.yml](.github/workflows/daily.yml) — Runs twice daily (9:00 AM ET morning scan, 10:30 PM ET evening scan). Fetches new bills, generates summaries, and posts to X/Twitter, Bluesky, and Threads.
+- **Database backup**: [.github/workflows/db-backup.yml](.github/workflows/db-backup.yml)
+- **Security scanning**: [.github/workflows/security-scan.yml](.github/workflows/security-scan.yml)
+- **Test orchestrator**: [.github/workflows/test-orchestrator.yml](.github/workflows/test-orchestrator.yml)
 
-## Production Readiness Checklist
+## Security
 
-- Secrets are not logged or embedded in code
-  - Environment dumping removed from orchestrator
-- Secret scanning enforced in CI
-- Database connections use SSL by default via [init_connection_pool()](src/database/connection.py:73)
-- Duplicate tweet prevention enabled via [has_posted_today()](src/database/db.py:103)
-- Idempotent tweet updates and row-level locking to avoid race conditions
+This repo follows a strict "No secrets in source" policy. See [SECURITY.md](SECURITY.md).
 
-## Local Development
+- Credentials loaded at runtime via environment variables
+- CI blocks leaks using a repo scanner: `python scripts/secret_scan.py`
+- Database connections use SSL by default
+- Duplicate post prevention and row-level locking to avoid race conditions
 
-- Web app: python [app.py](app.py:1) then open http://127.0.0.1:5000
-- Orchestrator (fetch → summarize → store → tweet): python [src/orchestrator.py](src/orchestrator.py:1)
-- Secret scan: python [scripts/secret_scan.py](scripts/secret_scan.py:1)
-- Run tests: `pytest tests/`
-- Optional: install pre-commit and add a hook to run secret_scan before each commit
-- For development with browser automation: Playwright is used for bill text extraction (installed automatically in CI)
+## Teen Impact Score
 
-## Future Improvements (TODO)
+Each bill receives a Teen Impact Score (0-10) that estimates how directly and significantly a bill affects teenagers:
 
-The following enhancements are planned for future versions:
+| Score | Category | Example |
+|-------|----------|---------|
+| 8-10 | Direct impact on teen daily life | School funding, youth programs, age-related restrictions |
+| 5-7 | Indirect impact via family/community | Tax credits to parents, healthcare, infrastructure |
+| 2-4 | Symbolic/awareness without material impact | Awareness months, commemorative resolutions |
+| 0-1 | Minimal/no teen connection | Highly specialized industry regulations |
 
-- **Weekly Digest**: Implement weekly summary feature (workflow exists but functionality not yet complete)
-- **Documentation**: Add architecture diagram and status badge to README
-- **SEO**: Implement structured data markup (JSON-LD) and canonical URLs
-- **Accessibility**: Remove emoji from summaries for screen reader compatibility
-- **Monitoring**: Set up full monitoring stack with error tracking and performance metrics
-- **CI/CD**: Add GitHub Actions concurrency controls to prevent overlapping workflows
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
+
+## Contact
+
+Olivia (Liv) Skeete
+
+- **Website**: [teencivics.org](https://teencivics.org)
+- **X/Twitter**: [@TeenCivics](https://twitter.com/TeenCivics)
+- **Bluesky**: [@teencivics.bsky.social](https://bsky.app/profile/teencivics.bsky.social)
+- **Threads**: [@teen.civics](https://www.threads.net/@teen.civics)
+- **GitHub**: [liv-skeete/teen_civics](https://github.com/liv-skeete/teen_civics)
