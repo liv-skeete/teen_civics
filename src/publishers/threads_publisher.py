@@ -5,6 +5,7 @@ Implements the BasePublisher interface for multi-platform support.
 
 import os
 import re
+import time
 import requests
 import logging
 from typing import Dict, Tuple, Optional
@@ -195,8 +196,13 @@ class ThreadsPublisher(BasePublisher):
             container_id = self._create_media_container(text)
             if not container_id:
                 return False, None
+            
+            # Step 2: Wait for container to be ready (Meta requires processing time)
+            if not self._wait_for_container(container_id):
+                logger.error("Threads: Container never became ready for publishing")
+                return False, None
                 
-            # Step 2: Publish Container
+            # Step 3: Publish Container
             return self._publish_container(container_id)
             
         except Exception as e:
@@ -225,6 +231,60 @@ class ThreadsPublisher(BasePublisher):
             if hasattr(e, 'response') and e.response is not None:
                 logger.error(f"Threads: Response content: {e.response.text}")
             return None
+
+    def _wait_for_container(self, container_id: str, max_wait: int = 30, poll_interval: int = 3) -> bool:
+        """
+        Poll the container status until it's ready for publishing.
+        
+        The Threads API requires processing time between creating a media
+        container and publishing it. This method polls the status endpoint
+        to confirm the container is in FINISHED state before proceeding.
+        
+        Args:
+            container_id: The media container ID to check
+            max_wait: Maximum seconds to wait (default: 30)
+            poll_interval: Seconds between status checks (default: 3)
+            
+        Returns:
+            True if container is ready, False if timed out or errored
+        """
+        url = f"{self.BASE_URL}/{container_id}"
+        params = {
+            "fields": "status",
+            "access_token": self._access_token
+        }
+        
+        elapsed = 0
+        while elapsed < max_wait:
+            try:
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                status = data.get("status", "UNKNOWN")
+                
+                logger.info(f"Threads: Container {container_id} status: {status} (waited {elapsed}s)")
+                
+                if status == "FINISHED":
+                    return True
+                elif status == "ERROR":
+                    logger.error(f"Threads: Container {container_id} entered ERROR state")
+                    return False
+                elif status in ("IN_PROGRESS", "PUBLISHED"):
+                    # IN_PROGRESS: still processing, keep waiting
+                    # PUBLISHED: shouldn't happen here but treat as ready
+                    if status == "PUBLISHED":
+                        return True
+                else:
+                    logger.warning(f"Threads: Unknown container status '{status}', will retry")
+                    
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Threads: Error checking container status: {e}")
+            
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+        
+        logger.error(f"Threads: Container {container_id} not ready after {max_wait}s")
+        return False
 
     def _publish_container(self, container_id: str) -> Tuple[bool, Optional[str]]:
         """Publishes a created media container."""
