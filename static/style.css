@@ -1023,6 +1023,13 @@ a.share-option:link {
     flex-shrink: 0;
     flex-grow: 0;
     min-width: 0;
+    overflow: hidden;
+}
+
+/* Hide label when bar is empty (0% width) */
+.result-fill[style*="width: 0%"] .result-label,
+.result-fill[style*="width:0%"] .result-label {
+    display: none;
 }
 
 .yes-fill {
@@ -1164,14 +1171,17 @@ a.share-option:link {
 .poll-preview .poll-fill {
     height: 100%;
     transition: width 0.3s ease;
+    width: 0%; /* Default to empty - JavaScript or CSS vars will set the actual width */
 }
 
 .poll-preview .yes-fill {
     background: linear-gradient(90deg, #4CAF50, #66BB6A);
+    width: var(--yes-width, 0%);
 }
 
 .poll-preview .no-fill {
     background: linear-gradient(90deg, #f44336, #ef5350);
+    width: var(--no-width, 0%);
 }
 
 .poll-preview .poll-percentage {

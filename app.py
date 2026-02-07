@@ -250,6 +250,9 @@ def format_detailed_html_filter(text: str) -> Markup:
     if not text:
         return Markup("")
     text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    # Strip markdown bold markers (**text** -> text)
+    import re as _re
+    text = _re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     lines = text.split("\n")
     html_parts = []
     in_list = False

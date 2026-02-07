@@ -90,7 +90,8 @@ def _build_enhanced_system_prompt() -> str:
         "- For simple resolutions: 150-250 words\n"
         "- ALWAYS include the emoji signposts - they are REQUIRED.\n"
         "- Use bullet points for scannability.\n"
-        "- Each bullet: 1-2 sentences maximum.\n\n"
+        "- Each bullet: 1-2 sentences maximum.\n"
+        "- DO NOT use **bold** markdown formatting in your output - plain text only.\n\n"
         
         "**REQUIRED section structure (EXACT order, EXACT emojis):**\n\n"
         
