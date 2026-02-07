@@ -40,8 +40,10 @@ class ThreadsPublisher(BasePublisher):
     BASE_URL = "https://graph.threads.net/v1.0"
     
     def __init__(self):
-        self._user_id = THREADS_USER_ID
-        self._access_token = THREADS_ACCESS_TOKEN
+        # Read credentials at instantiation time (not module import time)
+        # This ensures env vars set by GitHub Actions are picked up
+        self._user_id = os.getenv('THREADS_USER_ID')
+        self._access_token = os.getenv('THREADS_ACCESS_TOKEN')
     
     @property
     def platform_name(self) -> str:
@@ -53,9 +55,31 @@ class ThreadsPublisher(BasePublisher):
     
     def is_configured(self) -> bool:
         """Check if Threads credentials are present."""
-        if not self._user_id or not self._access_token:
-            logger.warning("Threads: Missing THREADS_USER_ID or THREADS_ACCESS_TOKEN")
+        # Re-read from environment in case they were set after __init__
+        user_id = self._user_id or os.getenv('THREADS_USER_ID')
+        access_token = self._access_token or os.getenv('THREADS_ACCESS_TOKEN')
+        
+        # Update instance variables if found
+        if user_id:
+            self._user_id = user_id
+        if access_token:
+            self._access_token = access_token
+        
+        # Detailed logging for debugging
+        has_user_id = bool(self._user_id)
+        has_token = bool(self._access_token)
+        
+        if not has_user_id and not has_token:
+            logger.warning("Threads: Both THREADS_USER_ID and THREADS_ACCESS_TOKEN are missing")
             return False
+        elif not has_user_id:
+            logger.warning("Threads: THREADS_USER_ID is missing (token is present)")
+            return False
+        elif not has_token:
+            logger.warning("Threads: THREADS_ACCESS_TOKEN is missing (user_id is present)")
+            return False
+        
+        logger.info(f"Threads: Credentials configured (user_id={self._user_id[:8]}...)")
         return True
     
     def format_post(self, bill: Dict) -> str:
