@@ -366,7 +366,7 @@ sudo -u postgres psql teencivics < backup_20240101.sql
 
 - **Lightsail instance**: $5-10/month (depending on size)
 - **Domain name**: $10-15/year
-- **API costs**: Variable (Congress.gov is free, Anthropic has usage-based pricing)
+- **API costs**: Variable (Congress.gov is free, Venice.ai has usage-based pricing)
 
 Total estimated cost: ~$10-20/month plus API usage.
 

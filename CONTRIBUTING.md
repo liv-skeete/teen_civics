@@ -37,7 +37,7 @@ This project and everyone participating in it is governed by the [TeenCivics Cod
 
 - Python 3.8 or higher
 - PostgreSQL database (or use SQLite for local development)
-- API keys for Congress.gov, Anthropic (Claude), and Twitter
+- API keys for Congress.gov, Venice.ai (for AI summarization), and Twitter
 
 ### Installation
 

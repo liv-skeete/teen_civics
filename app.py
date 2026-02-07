@@ -550,6 +550,10 @@ def bill_detail(slug: str):
 def about():
     return render_template("about.html")
 
+@app.route("/grants")
+def grants():
+    return render_template("grants.html")
+
 @app.route("/contact")
 def contact():
     return render_template("contact.html")

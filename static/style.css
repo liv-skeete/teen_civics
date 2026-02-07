@@ -1556,6 +1556,7 @@ a.share-option:link {
 /* Resources */
 .resources-header {
     text-align: center;
+    padding-top: var(--spacing-md);
     margin-bottom: var(--spacing-xl);
 }
 
@@ -2012,9 +2013,10 @@ a.share-option:link {
 
 /* Statistics Section */
 .stats-section {
-  padding: var(--spacing-xl) 0;
+  padding: var(--spacing-xl) 0 var(--spacing-sm) 0;
   background-color: var(--color-beige);
 }
+
 
 .stats-section h2 {
   text-align: center;
@@ -2076,7 +2078,11 @@ a.share-option:link {
     gap: var(--spacing-xl);
     max-width: 1000px;
     margin: 0 auto;
-    padding: var(--spacing-lg) 0;
+    padding: var(--spacing-sm) 0 var(--spacing-lg) 0;
+}
+
+.grants-grid-container {
+    max-width: 1200px;
 }
 
 .about-card {
@@ -2991,6 +2997,7 @@ h1, h2, h3, h4, h5, h6 {
         page-break-inside: avoid;
     }
 }
+
 /* ========================================
    MOBILE UI FIXES - Added 2025-11-12
    ======================================== */

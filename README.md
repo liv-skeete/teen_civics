@@ -29,7 +29,7 @@ TeenCivics was created to help young people understand the legislative process a
 *   [Python 3.10+](https://www.python.org/)
 *   [Flask](https://flask.palletsprojects.com/) with Flask-Limiter and Flask-WTF for rate limiting and CSRF protection
 *   [PostgreSQL](https://www.postgresql.org/) with connection pooling
-*   [Venice AI](https://venice.ai/) (Claude-compatible API) for bill summarization
+*   [Venice AI](https://venice.ai/) (Claude Sonnet 4.5) for bill summarization
 *   [Congress.gov API](https://api.congress.gov/) for bill data
 *   [Tweepy](https://www.tweepy.org/) for X/Twitter posting
 *   [atproto](https://atproto.blue/) for Bluesky posting

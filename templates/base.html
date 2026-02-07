@@ -127,6 +127,7 @@
         <a href="{{ url_for('archive') }}" class="nav-link" {% if request.endpoint == 'archive' %}aria-current="page"{% endif %}>Archive</a>
         <a href="{{ url_for('resources') }}" class="nav-link" {% if request.endpoint == 'resources' %}aria-current="page"{% endif %}>Resources</a>
         <a href="{{ url_for('about') }}" class="nav-link" {% if request.endpoint == 'about' %}aria-current="page"{% endif %}>About</a>
+        <a href="{{ url_for('grants') }}" class="nav-link" {% if request.endpoint == 'grants' %}aria-current="page"{% endif %}>Grants</a>
         <a href="{{ url_for('contact') }}" class="nav-link" {% if request.endpoint == 'contact' %}aria-current="page"{% endif %}>Contact</a>
       </div>
       <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-menu">
@@ -154,6 +155,7 @@
         <a href="{{ url_for('archive') }}">Bill Archive</a>
         <a href="{{ url_for('resources') }}">Resources</a>
         <a href="{{ url_for('about') }}">About</a>
+        <a href="{{ url_for('grants') }}">Grants</a>
       </div>
       <div class="footer-section">
         <h4>Connect</h4>

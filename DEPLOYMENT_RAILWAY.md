@@ -268,7 +268,7 @@ pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
 ### API Costs
 
 - **Congress.gov API**: Free (no rate limits)
-- **Anthropic API**: Usage-based pricing for Claude
+- **Venice.ai API**: Usage-based pricing (for AI summarization)
 - **Twitter API**: Free for posting (rate limits apply)
 
 ### Cost Optimization

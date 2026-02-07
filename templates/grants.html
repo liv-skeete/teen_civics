@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Grants - TeenCivics{% endblock %}
+{% block meta_description %}Support civic education for the next generation. TeenCivics is a nonprofit fully reliant on grants and institutional support to operate.{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+  <div class="container">
+    <h1>Grants &amp; Funding</h1>
+    <p class="hero-subtitle">Support civic education for the next generation</p>
+  </div>
+</div>
+
+<section class="stats-section">
+  <h2>Why Civic Education Matters</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3 class="stat-headline">📉 Youth Civic Scores Slide</h3>
+      <p class="stat-text">Just 22% of eighth graders scored proficient in civics on the 2024 National Assessment of Educational Progress, dropping from 24% in 2018.</p>
+      <span class="stat-source">(NAEP, 2024)</span>
+    </div>
+
+    <div class="stat-card">
+      <h3 class="stat-headline">🚨 Misinformation Hits Gen Z</h3>
+      <p class="stat-text">Nearly 60% of teens have encountered political misinformation online in the past year, affecting their understanding of civic issues.</p>
+      <span class="stat-source">(Common Sense Media, 2024)</span>
+    </div>
+    
+    <div class="stat-card">
+      <h3 class="stat-headline">🙄 Rising Government Distrust</h3>
+      <p class="stat-text">Only 17% of Americans aged 18–29 say they trust the federal government to "do what is right" most of the time.</p>
+      <span class="stat-source">(Pew Research, 2024)</span>
+    </div>
+  </div>
+</section>
+
+<div class="container">
+  <div class="about-grid grants-grid-container">
+    <section class="about-card">
+      <h2>Our Funding Model</h2>
+      <div class="about-text">
+        <p>TeenCivics is a public good with no other sources of income. We don't run ads, sell data, or gate content behind paywalls. We are fully reliant on grants and institutional support to operate. Funding goes directly to API costs, hosting, AI inference, and scaling TeenCivics to inform citizens everywhere. TeenCivics is a registered nonprofit with 501(c)(3) status pending. For grant inquiries or partnership proposals, reach out below.</p>
+      </div>
+    </section>
+
+    <section class="about-card" style="text-align: center;">
+      <h2>Get in Touch</h2>
+      <p style="margin-bottom: var(--spacing-lg);">For grant inquiries, partnership proposals, or institutional support:</p>
+      <a href="mailto:contact@teencivics.org" class="btn btn-primary">contact@teencivics.org</a>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}{% endblock %}
