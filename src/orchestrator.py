@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status
 from src.processors.summarizer import summarize_bill_enhanced
 from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content
+from src.publishers.facebook_publisher import FacebookPublisher
 from src.database.db import (
     bill_already_posted, get_bill_by_id, insert_bill, update_tweet_info,
     generate_website_slug, init_db, normalize_bill_id,
@@ -290,21 +291,20 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     mark_bill_as_problematic(bill_id, "Summary contains 'full bill text' phrase after regen")
                     return 1
 
-                term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+                term_dict_json = ""
                 teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
                 logger.info(f"⭐️ Extracted Teen Impact Score (regen): {teen_impact_score}")
 
                 # Persist regenerated summaries
                 try:
                     from src.database.db import update_bill_summaries as _ubs
-                    if _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", ""), term_dict_json):
+                    if _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")):
                         # Merge updated fields locally for tweet formatting
                         bill_data.update({
                             "summary_tweet": summary.get("tweet", ""),
                             "summary_long": summary.get("long", ""),
                             "summary_overview": summary.get("overview", ""),
                             "summary_detailed": summary.get("detailed", ""),
-                            "term_dictionary": term_dict_json,
                             "teen_impact_score": teen_impact_score,
                             "normalized_status": selected_bill.get("normalized_status"),
                             "status": selected_bill.get("status"),
@@ -328,7 +328,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
 
             # Ensure bill has full text before summarization
             _ft = selected_bill.get("full_text") or ""
-            _ts = selected_bill.get("text_source", "none")
+            _ts = "api"
             _ft_len = len(_ft.strip())
             try:
                 _ft_preview = _ft[:120].replace("\n", " ").replace("\r", " ")
@@ -364,17 +364,10 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     mark_bill_as_problematic(bill_id, "Summary contains 'full bill text' phrase after retry")
                     return 1
             
-            term_dict_json = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
+            term_dict_json = ""
 
             teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
             logger.info(f"⭐️ Extracted Teen Impact Score: {teen_impact_score}")
-            
-            tracker_raw_serialized = None
-            if tracker_data:
-                try:
-                    tracker_raw_serialized = json.dumps(tracker_data)
-                except (TypeError, ValueError) as e:
-                    logger.warning(f"Failed to serialize tracker_data for bill {bill_id}: {e}")
             
             # Title length validation and truncation
             raw_title = selected_bill.get("title", "")
@@ -401,15 +394,12 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 "summary_long": summary.get("long", ""),
                 "summary_overview": summary.get("overview", ""),
                 "summary_detailed": summary.get("detailed", ""),
-                "term_dictionary": term_dict_json,
                 # Ensure these are always populated for UI (avoid N/A)
                 "congress_session": str(selected_bill.get("congress", "") or "").strip(),
                 "date_introduced": selected_bill.get("date_introduced") or selected_bill.get("introduced_date") or "",
                 "source_url": selected_bill.get("source_url", ""),
-                "raw_latest_action": selected_bill.get("latest_action") or "",
                 "website_slug": generate_website_slug(selected_bill.get("title", ""), bill_id),
-                "tweet_posted": False,
-                "tracker_raw": tracker_raw_serialized,
+                "published": False,
                 "normalized_status": derived_normalized_status,
                 "teen_impact_score": teen_impact_score,
                 # Sponsor data from API
@@ -459,7 +449,6 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     bill_data["summary_tweet"] = summary.get("tweet", "")
                     bill_data["summary_overview"] = summary.get("overview", "")
                     bill_data["summary_detailed"] = summary.get("detailed", "")
-                    bill_data["term_dictionary"] = json.dumps(summary.get("term_dictionary", []), ensure_ascii=False, separators=(',', ':'))
                     bill_data["teen_impact_score"] = extract_teen_impact_score(summary.get("detailed", ""))
                     
                     # Re-format tweet with regenerated summaries
@@ -536,6 +525,24 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 logger.info("ℹ️ Threads publisher not available, skipping")
             except Exception as e:
                 logger.warning(f"⚠️ Threads posting error (non-fatal): {e}")
+
+            # Post to Facebook (if configured)
+            try:
+                facebook = FacebookPublisher()
+                if facebook.is_configured():
+                    logger.info("📘 Posting to Facebook...")
+                    facebook_post = facebook.format_post(bill_data)
+                    facebook_success, facebook_url = facebook.post(facebook_post)
+                    if facebook_success:
+                        logger.info(f"✅ Facebook posted: {facebook_url}")
+                    else:
+                        logger.warning("⚠️ Facebook posting failed (non-fatal)")
+                else:
+                    logger.info("ℹ️ Facebook not configured, skipping")
+            except ImportError:
+                logger.info("ℹ️ Facebook publisher not available, skipping")
+            except Exception as e:
+                logger.warning(f"⚠️ Facebook posting error (non-fatal): {e}")
             
             logger.info("💾 Updating database with tweet information...")
             if update_tweet_info(bill_id, tweet_url):
