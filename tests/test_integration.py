@@ -66,7 +66,7 @@ class TestIntegrationWorkflow(unittest.TestCase):
         self.assertEqual(insert_args['bill_id'], 'hr1234-118')
         self.assertEqual(insert_args['summary_tweet'], mock_summary['tweet'])
         self.assertEqual(insert_args['summary_long'], mock_summary['long'])
-        self.assertFalse(insert_args['tweet_posted'])
+        self.assertFalse(insert_args['published'])
         
         # Verify tweet posting
         mock_post.assert_called_once()
@@ -113,8 +113,7 @@ class TestIntegrationWorkflow(unittest.TestCase):
             'source_url': 'https://congress.gov/hr5678',
             'website_slug': 'existing-unposted-bill-hr5678-118',
             'tags': '',
-            'tweet_posted': False,
-            'tweet_url': None
+            'published': False
         }
         
         # Set up mocks
@@ -166,7 +165,7 @@ class TestIntegrationWorkflow(unittest.TestCase):
         existing_bill = {
             'bill_id': 'hr9999-118',
             'title': 'Already Posted Bill',
-            'tweet_posted': True
+            'published': True
         }
         
         # Set up mocks

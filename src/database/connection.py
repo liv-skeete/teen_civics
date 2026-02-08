@@ -189,27 +189,30 @@ def init_db_tables() -> None:
                     title TEXT NOT NULL,
                     short_title TEXT,
                     status TEXT,
+                    normalized_status TEXT,
                     summary_tweet TEXT NOT NULL,
                     summary_long TEXT NOT NULL,
                     summary_overview TEXT,
                     summary_detailed TEXT,
-                    term_dictionary TEXT,
                     congress_session TEXT,
                     date_introduced TEXT,
                     date_processed TIMESTAMP NOT NULL,
-                    tweet_posted BOOLEAN DEFAULT FALSE,
-                    tweet_url TEXT,
+                    published BOOLEAN DEFAULT FALSE,
                     source_url TEXT NOT NULL,
                     website_slug TEXT,
                     tags TEXT,
+                    full_text TEXT,
+                    fts_vector TSVECTOR,
                     poll_results_yes INTEGER DEFAULT 0,
                     poll_results_no INTEGER DEFAULT 0,
-                    poll_results_unsure INTEGER DEFAULT 0,
                     problematic BOOLEAN DEFAULT FALSE,
                     problem_reason TEXT,
+                    teen_impact_score INTEGER,
                     sponsor_name TEXT,
                     sponsor_party TEXT,
                     sponsor_state TEXT,
+                    last_edited_at TEXT,
+                    last_edited_by TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
@@ -219,8 +222,19 @@ def init_db_tables() -> None:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_bill_id ON bills (bill_id);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_date_processed ON bills (date_processed);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_website_slug ON bills (website_slug);")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_tweet_posted ON bills (tweet_posted);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_sponsor_name ON bills (sponsor_name);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_fts_vector ON bills USING GIN (fts_vector);")
+
+                cursor.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'bills'
+                """)
+                bill_columns = {row[0] for row in cursor.fetchall()}
+                if "published" in bill_columns:
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_published ON bills (published);")
+                elif "tweet_posted" in bill_columns:
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_tweet_posted ON bills (tweet_posted);")
 
                 # Trigger to auto-update updated_at
                 cursor.execute("""

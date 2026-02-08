@@ -116,7 +116,7 @@ def verify_fts_update():
                     cursor.execute("""
                         SELECT COUNT(*) FROM bills
                         WHERE fts_vector @@ websearch_to_tsquery('english', 'estes')
-                        AND tweet_posted = TRUE
+                        AND published = TRUE
                     """)
                     fts_count = cursor.fetchone()[0]
                     logger.info(f"\n📊 FTS search for 'estes': {fts_count} results")
@@ -124,7 +124,7 @@ def verify_fts_update():
                     cursor.execute("""
                         SELECT COUNT(*) FROM bills
                         WHERE LOWER(sponsor_name) LIKE '%estes%'
-                        AND tweet_posted = TRUE
+                        AND published = TRUE
                     """)
                     like_count = cursor.fetchone()[0]
                     logger.info(f"📊 LIKE search for 'estes': {like_count} results")

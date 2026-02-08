@@ -26,17 +26,17 @@ class TestDatabaseQueries(unittest.TestCase):
         mock_bill = {
             'bill_id': 'hr1234-118',
             'title': 'Test Bill',
-            'tweet_posted': True,
+            'published': True,
             'date_processed': '2025-01-15T12:00:00Z'
         }
         mock_cursor.fetchone.return_value = mock_bill
         
         result = get_latest_tweeted_bill()
         
-        # Verify the query includes tweet_posted = TRUE and ordering
+        # Verify the query includes published = TRUE and ordering
         mock_cursor.execute.assert_called_once()
         sql_query = mock_cursor.execute.call_args[0][0]
-        self.assertIn("tweet_posted = TRUE", sql_query)
+        self.assertIn("published = TRUE", sql_query)
         self.assertIn("ORDER BY date_processed DESC", sql_query)
         self.assertIn("LIMIT 1", sql_query)
         self.assertEqual(result, mock_bill)
@@ -51,17 +51,17 @@ class TestDatabaseQueries(unittest.TestCase):
         
         # Mock tweeted bills
         mock_bills = [
-            {'bill_id': 'hr1234-118', 'tweet_posted': True},
-            {'bill_id': 's5678-118', 'tweet_posted': True}
+            {'bill_id': 'hr1234-118', 'published': True},
+            {'bill_id': 's5678-118', 'published': True}
         ]
         mock_cursor.fetchall.return_value = mock_bills
         
         result = get_all_tweeted_bills(limit=10)
         
-        # Verify the query includes tweet_posted = TRUE and ordering
+        # Verify the query includes published = TRUE and ordering
         mock_cursor.execute.assert_called_once()
         sql_query = mock_cursor.execute.call_args[0][0]
-        self.assertIn("tweet_posted = TRUE", sql_query)
+        self.assertIn("published = TRUE", sql_query)
         self.assertIn("ORDER BY date_processed DESC", sql_query)
         self.assertIn("LIMIT %s", sql_query)
         self.assertEqual(result, mock_bills)
@@ -225,7 +225,7 @@ class TestSearchQueries(unittest.TestCase):
             ]
             for row in self.seed_data:
                 cursor.execute("""
-                INSERT INTO bills (id, bill_id, title, summary_long, tweet_posted, date_processed)
+                INSERT INTO bills (id, bill_id, title, summary_long, published, date_processed)
                 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """, (row[0], row[1], row[2], row[3], row[4]))
             conn.commit()

@@ -116,7 +116,7 @@ class TestOrchestratorDuplicatePrevention(unittest.TestCase):
             mock_cursor.execute.assert_called_once()
             sql_query = mock_cursor.execute.call_args[0][0]
             self.assertIn("problematic IS NULL OR problematic = FALSE", sql_query)
-            self.assertIn("tweet_posted = FALSE", sql_query)
+        self.assertIn("published = FALSE", sql_query)
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ def _build_enhanced_system_prompt() -> str:
     """
     return (
         "You are a careful, non-partisan summarizer for civic education targeting teens aged 13-19.\n"
-        "**Your output must be STRICT JSON with four keys: `overview`, `detailed`, `term_dictionary`, and `tweet`. No code fences. No extra text.**\n\n"
+        "**Your output must be STRICT JSON with three keys: `overview`, `detailed`, and `tweet`. No code fences. No extra text.**\n\n"
         
         "**CRITICAL: If full bill text is not provided, you MUST return an empty JSON object. Do NOT attempt to summarize without the full bill text.**\n\n"
         
@@ -309,13 +309,6 @@ def _build_enhanced_system_prompt() -> str:
         "  - Focus on practical implications, not political spin\n"
         "  - Conversational but factual tone\n\n"
         
-        "**term_dictionary (glossary):**\n"
-        "- Array of objects with 'term' and 'definition' keys\n"
-        "- Include appropriations, riders, acronyms, specialized policy terms that appear in the summary\n"
-        "- Keep definitions SHORT and teen-friendly (10-20 words max)\n"
-        "- Example: [{'term': 'appropriations', 'definition': 'Money Congress allocates for specific government spending'}]\n"
-        "- Example: [{'term': 'reauthorization', 'definition': 'Extending an existing program that was set to expire'}]\n\n"
-        
         "**tweet (engaging summary for X/Twitter):**\n"
         "- Target: Teens aged 13-19. Use language they find engaging.\n"
         "- Length: <=200 characters that grabs attention while remaining factual\n"
@@ -345,7 +338,7 @@ def _build_enhanced_system_prompt() -> str:
         "- All required emoji headers present in correct order?\n\n"
         
         "**Output format (strict JSON):**\n"
-        '{"overview": "...", "detailed": "...", "term_dictionary": [...], "tweet": "..."}\n'
+        '{"overview": "...", "detailed": "...", "tweet": "..."}\n'
     )
 
 def _build_user_prompt(bill: Dict[str, Any]) -> str:
@@ -383,7 +376,7 @@ def _build_user_prompt(bill: Dict[str, Any]) -> str:
     user_prompt = (
         "Summarize the following bill object under the constraints above.\n"
         f"{'**IMPORTANT: Full bill text provided below. Extract specific provisions, deadlines, and requirements.**' if bill.get('full_text') else ''}\n"
-        "Return ONLY a strict JSON object with keys 'overview', 'detailed', 'term_dictionary', and 'tweet'.\n"
+        "Return ONLY a strict JSON object with keys 'overview', 'detailed', and 'tweet'.\n"
         f"Bill JSON:\n{bill_json}{full_text_section}"
     )
     
@@ -504,9 +497,6 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
                 r'"detailed"\s*:\s*"([^"]*(?:\\.[^"]*)*)"',
                 r'detailed:\s*(.*?)(?="[a-z_]+"\s*:|$)',
             ],
-            'term_dictionary': [
-                r'"term_dictionary"\s*:\s*(\[[^\]]*\])',
-            ],
             'tweet': [
                 r'"tweet"\s*:\s*"([^"]*)"',
                 r'tweet:\s*([^\n]+)',
@@ -518,8 +508,7 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
                 match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
                 if match:
                     content = match.group(1).strip()
-                    if field != 'term_dictionary':
-                        content = content.replace('\\n', '\n').replace('\\"', '"')
+                    content = content.replace('\\n', '\n').replace('\\"', '"')
                     result[field] = content
                     break
         
@@ -527,7 +516,6 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
             logger.info(f"Field extraction successful: {list(result.keys())}")
             result.setdefault('overview', '')
             result.setdefault('detailed', '')
-            result.setdefault('term_dictionary', '[]')
             result.setdefault('tweet', '')
             return result
         
@@ -536,7 +524,6 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
         return {
             "overview": "",
             "detailed": "",
-            "term_dictionary": "[]",
             "tweet": text[:200] if text else ""
         }
 
@@ -752,9 +739,9 @@ def _generate_from_metadata_model(client: OpenAI, bill: Dict[str, Any]) -> Dict[
     
     system = _build_enhanced_system_prompt()
     user = (
-        "Full bill text not available. Using ONLY bill metadata below, generate ALL four fields.\n"
+        "Full bill text not available. Using ONLY bill metadata below, generate ALL three fields.\n"
         "Do NOT leave any field empty. No speculation beyond what metadata states.\n"
-        "Return ONLY strict JSON: 'overview', 'detailed', 'term_dictionary', 'tweet'\n"
+        "Return ONLY strict JSON: 'overview', 'detailed', 'tweet'\n"
         f"Bill metadata: {json.dumps(bill_meta, ensure_ascii=False)}"
     )
     
@@ -861,16 +848,9 @@ def _synthesize_from_metadata_py(bill: Dict[str, Any]) -> Dict[str, Any]:
     
     detailed = "\n".join(lines)
     
-    # Build term dictionary
-    td = []
-    if bill_type == "SRES":
-        td.append({"term": "simple resolution", 
-                  "definition": "Expresses one chamber's position; not law"})
-    
     return {
         "overview": overview,
         "detailed": detailed,
-        "term_dictionary": td
     }
 
 def _deduplicate_headers_and_scores(text: str) -> str:
@@ -977,10 +957,6 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     
     logger.info(f"Lengths - overview: {len(overview)}, detailed: {len(detailed)}")
     
-    # Normalize term dictionary
-    term_dictionary_obj: List[Dict[str, str]] = []
-    _merge_term_dictionary(term_dictionary_obj, parsed.get("term_dictionary", []))
-    
     # Process tweet
     tweet_raw = str(parsed.get("tweet", "")).strip()
     tweet = _coherent_tighten_tweet(client, tweet_raw, bill, limit=200)
@@ -991,7 +967,6 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         return {
             "overview": "",
             "detailed": "",
-            "term_dictionary": "[]",
             "tweet": ""
         }
     
@@ -1008,9 +983,6 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         if len(scores) != 1:
             logger.warning(f"Found {len(scores)} teen impact scores, expected 1")
     
-    # Serialize term dictionary
-    term_dictionary = json.dumps(term_dictionary_obj, ensure_ascii=False)
-    
     elapsed = time.monotonic() - start
     logger.info(f"Summary complete in {elapsed:.2f}s")
     
@@ -1022,7 +994,6 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     return {
         "overview": overview,
         "detailed": detailed,
-        "term_dictionary": term_dictionary,
         "tweet": tweet
     }
 def summarize_title(bill_title: str) -> str:

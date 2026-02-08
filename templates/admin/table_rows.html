@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}{{ table_name }} - Table Browser - Admin - TeenCivics{% endblock %}
+{% block meta_description %}TeenCivics Admin - Browsing {{ table_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin.css', v='2026-02-08-v1') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="admin-header">
+    <h2>📄 {{ table_name }}</h2>
+    <div class="admin-header-actions">
+      <a href="{{ url_for('admin_tables') }}" class="btn btn-secondary">← Tables</a>
+      <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Dashboard</a>
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
+    </div>
+  </div>
+
+  {% if schema %}
+  <details class="admin-schema-details">
+    <summary>Schema ({{ schema|length }} columns)</summary>
+    <div class="admin-schema-grid">
+      {% for col in schema %}
+      <div class="admin-schema-item">
+        <span class="admin-schema-name">{{ col.column_name }}</span>
+        <span class="admin-schema-type">{{ col.data_type }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  <div class="admin-table-info">
+    <span>Page {{ page }} of {{ total_pages }} ({{ total_rows }} total rows)</span>
+  </div>
+
+  <div class="admin-table-wrapper">
+    <table class="admin-table admin-table-browse">
+      <thead>
+        <tr>
+          {% for col in columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          {% for col in columns %}
+          <td class="admin-cell-truncate" title="{{ row[col]|string if row[col] is not none else '' }}">
+            {{ row[col]|string|truncate(80, True) if row[col] is not none else '' }}
+          </td>
+          {% endfor %}
+          <td>
+            {% if row.get('id') is not none %}
+            <a href="{{ url_for('admin_edit_row', table_name=table_name, row_id=row['id']) }}" class="btn btn-small btn-primary">Edit</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ columns|length + 1 }}" class="admin-empty">No rows found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    {% if page > 1 %}
+    <a href="{{ url_for('admin_table_rows', table_name=table_name, page=page-1, per_page=per_page) }}" class="page-link">← Previous</a>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+      {% if p == page %}
+      <span class="page-link current">{{ p }}</span>
+      {% elif p <= 3 or p > total_pages - 3 or (p >= page - 2 and p <= page + 2) %}
+      <a href="{{ url_for('admin_table_rows', table_name=table_name, page=p, per_page=per_page) }}" class="page-link">{{ p }}</a>
+      {% elif p == 4 or p == total_pages - 3 %}
+      <span class="page-link">…</span>
+      {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+    <a href="{{ url_for('admin_table_rows', table_name=table_name, page=page+1, per_page=per_page) }}" class="page-link">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

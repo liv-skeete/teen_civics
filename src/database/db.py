@@ -81,20 +81,20 @@ def bill_exists(bill_id: str) -> bool:
 
 def bill_already_posted(bill_id: str) -> bool:
     """
-    Return True if the bill exists AND has already been posted to Twitter/X.
+    Return True if the bill exists AND has already been published.
     Automatically normalizes the bill_id before querying.
 
     Args:
         bill_id: The unique bill identifier from Congress.gov
 
     Returns:
-        bool: True if a row exists with tweet_posted = TRUE, False otherwise
+        bool: True if a row exists with published = TRUE, False otherwise
     """
     normalized_id = normalize_bill_id(bill_id)
     try:
         with db_connect() as conn:
             with conn.cursor() as cursor:
-                cursor.execute('SELECT 1 FROM bills WHERE bill_id = %s AND tweet_posted = TRUE', (normalized_id,))
+                cursor.execute('SELECT 1 FROM bills WHERE bill_id = %s AND published = TRUE', (normalized_id,))
                 return cursor.fetchone() is not None
     except Exception as e:
         logger.error(f"Error checking if bill already posted: {e}")
@@ -102,28 +102,28 @@ def bill_already_posted(bill_id: str) -> bool:
 
 def has_posted_today() -> bool:
     """
-    Check if any bill has been posted to Twitter/X in the last 24 hours.
+    Check if any bill has been published in the last 24 hours.
     This is used to prevent duplicate posts when running multiple daily scans.
     
     Returns:
-        bool: True if a tweet was posted in the last 24 hours, False otherwise
+        bool: True if a bill was published in the last 24 hours, False otherwise
     """
     try:
         with db_connect() as conn:
             with conn.cursor() as cursor:
-                # Check for any bills posted in the last 24 hours
-                # Using updated_at which is set when tweet_posted is updated to TRUE
+                # Check for any bills published in the last 24 hours
+                # Using updated_at which is set when published is updated to TRUE
                 cursor.execute('''
                 SELECT 1 FROM bills
-                WHERE tweet_posted = TRUE
+                WHERE published = TRUE
                 AND date_processed >= NOW() - INTERVAL '24 hours'
                 LIMIT 1
                 ''')
                 result = cursor.fetchone() is not None
                 if result:
-                    logger.info("✅ Found tweet posted in last 24 hours - skipping duplicate post")
+                    logger.info("✅ Found bill published in last 24 hours - skipping duplicate post")
                 else:
-                    logger.info("📭 No tweets posted in last 24 hours - proceeding with scan")
+                    logger.info("📭 No bills published in last 24 hours - proceeding with scan")
                 return result
     except Exception as e:
         logger.error(f"Error checking if posted today: {e}")
@@ -139,7 +139,7 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
         with db_connect() as conn:
             with conn.cursor() as cursor:
                 current_time = datetime.now().isoformat()
-                tweet_posted = bool(bill_data.get('tweet_posted', False))
+                published = bool(bill_data.get('published', False))
                 website_slug = bill_data.get('website_slug')
                 logger.info(f"Inserting bill with slug: {website_slug}")
 
@@ -155,13 +155,12 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                 cursor.execute('''
                 INSERT INTO bills (
                     bill_id, title, short_title, status, summary_tweet, summary_long,
-                    summary_overview, summary_detailed, term_dictionary,
+                    summary_overview, summary_detailed,
                     congress_session, date_introduced, date_processed, source_url,
-                    website_slug, tags, tweet_url, tweet_posted,
-                    text_source, text_version, text_received_date, processing_attempts, full_text,
-                    raw_latest_action, tracker_raw, normalized_status, teen_impact_score,
+                    website_slug, tags, published, full_text,
+                    normalized_status, teen_impact_score,
                     sponsor_name, sponsor_party, sponsor_state
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     bill_data.get('bill_id'),
                     bill_data.get('title'),
@@ -171,22 +170,14 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     bill_data.get('summary_long'),
                     bill_data.get('summary_overview'),
                     bill_data.get('summary_detailed'),
-                    bill_data.get('term_dictionary'),
                     bill_data.get('congress_session'),
                     bill_data.get('date_introduced'),
                     current_time,
                     bill_data.get('source_url'),
                     bill_data.get('website_slug'),
                     bill_data.get('tags'),
-                    bill_data.get('tweet_url'),
-                    tweet_posted,
-                    bill_data.get('text_source', 'feed'),
-                    bill_data.get('text_version', 'Introduced'),
-                    bill_data.get('text_received_date'),
-                    bill_data.get('processing_attempts', 0),
+                    published,
                     bill_data.get('full_text', ''),
-                    bill_data.get('raw_latest_action'),
-                    bill_data.get('tracker_raw'),
                     bill_data.get('normalized_status'),
                     bill_data.get('teen_impact_score'),
                     bill_data.get('sponsor_name'),
@@ -204,23 +195,26 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
 
 def update_tweet_info(bill_id: str, tweet_url: str) -> bool:
     """
-    Update a bill record with tweet information after successful posting.
-    Also bump date_processed so the website surfaces the newly tweeted bill.
+    Mark a bill as published after successful posting to social platforms.
+    Also bumps date_processed so the website surfaces the newly published bill.
     Automatically normalizes the bill_id before updating.
     
     This operation is atomic and idempotent - will return True if the bill
-    is already marked as tweeted with the same tweet_url.
+    is already marked as published.
     
     Uses row-level locking to prevent race conditions.
+    
+    Note: tweet_url parameter is kept for API compat but is no longer stored
+    (the tweet_url column has been dropped).
     """
     normalized_id = normalize_bill_id(bill_id)
     try:
         with db_connect() as conn:
             with conn.cursor() as cursor:
                 # Use SELECT FOR UPDATE to lock the row and prevent race conditions
-                logger.debug(f"Acquiring lock on bill {normalized_id} for tweet update")
+                logger.debug(f"Acquiring lock on bill {normalized_id} for publish update")
                 cursor.execute('''
-                SELECT tweet_posted, tweet_url FROM bills
+                SELECT published FROM bills
                 WHERE bill_id = %s
                 FOR UPDATE
                 ''', (normalized_id,))
@@ -230,37 +224,31 @@ def update_tweet_info(bill_id: str, tweet_url: str) -> bool:
                     logger.error(f"Bill {normalized_id} not found in database")
                     return False
                 
-                current_posted, current_url = result
+                current_published = result[0]
                 
-                # Check if already tweeted with same URL (idempotent)
-                if current_posted and current_url == tweet_url:
-                    logger.info(f"Bill {normalized_id} already tweeted with matching URL (idempotent success)")
+                # Check if already published (idempotent)
+                if current_published:
+                    logger.info(f"Bill {normalized_id} already published (idempotent success)")
                     return True
                 
-                # Check if already tweeted with different URL (error condition)
-                if current_posted and current_url != tweet_url:
-                    logger.error(f"Bill {normalized_id} already tweeted with different URL: {current_url} vs {tweet_url}")
-                    return False
-                
                 # Update the bill (we have the lock, so this is safe)
-                logger.debug(f"Updating tweet info for bill {normalized_id}")
+                logger.debug(f"Marking bill {normalized_id} as published")
                 cursor.execute('''
                 UPDATE bills
-                SET tweet_url = %s,
-                    tweet_posted = TRUE,
+                SET published = TRUE,
                     date_processed = CURRENT_TIMESTAMP
                 WHERE bill_id = %s
-                ''', (tweet_url, normalized_id))
+                ''', (normalized_id,))
                 
                 if cursor.rowcount == 1:
-                    logger.info(f"Successfully updated tweet info for bill {normalized_id}")
+                    logger.info(f"Successfully marked bill {normalized_id} as published")
                     return True
                 else:
                     logger.error(f"Failed to update bill {normalized_id}: no rows affected")
                     return False
                 
     except Exception as e:
-        logger.error(f"Error updating tweet info for {normalized_id}: {e}")
+        logger.error(f"Error updating publish status for {normalized_id}: {e}")
         return False
 
 
@@ -388,21 +376,24 @@ def get_latest_bill() -> Optional[Dict[str, Any]]:
 
 def get_latest_tweeted_bill() -> Optional[Dict[str, Any]]:
     """
-    Retrieve the most recently processed bill that has been tweeted (for homepage).
+    Retrieve the most recently processed bill that has been published (for homepage).
     """
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 cursor.execute('''
                 SELECT * FROM bills
-                WHERE tweet_posted = TRUE
+                WHERE published = TRUE
                 ORDER BY date_processed DESC
                 LIMIT 1
                 ''')
                 row = cursor.fetchone()
                 return dict(row) if row else None
     except Exception as e:
-        logger.error(f"Error retrieving latest tweeted bill: {e}")
+        logger.error(f"Error retrieving latest published bill: {e}")
+
+# Alias for backwards compatibility
+get_latest_published_bill = get_latest_tweeted_bill
 def get_bill_by_slug(slug: str) -> Optional[Dict[str, Any]]:
     """
     Retrieve a specific bill by its website_slug.
@@ -424,8 +415,8 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[st
     
     Args:
         bill_id: The bill identifier
-        vote_type: Either 'yes', 'no', or 'unsure'
-        previous_vote: The user's previous vote if changing their vote (either 'yes', 'no', or 'unsure')
+        vote_type: Either 'yes' or 'no'
+        previous_vote: The user's previous vote if changing their vote (either 'yes' or 'no')
     
     Returns:
         bool: True if update was successful, False otherwise
@@ -449,12 +440,6 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[st
                         SET poll_results_no = GREATEST(0, COALESCE(poll_results_no, 0) - 1)
                         WHERE bill_id = %s
                         ''', (normalized_id,))
-                    elif previous_vote_lower == 'unsure':
-                        cursor.execute('''
-                        UPDATE bills
-                        SET poll_results_unsure = GREATEST(0, COALESCE(poll_results_unsure, 0) - 1)
-                        WHERE bill_id = %s
-                        ''', (normalized_id,))
                 
                 # Increment the new vote count
                 vote_type_lower = vote_type.lower()
@@ -468,12 +453,6 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[st
                     cursor.execute('''
                     UPDATE bills
                     SET poll_results_no = COALESCE(poll_results_no, 0) + 1
-                    WHERE bill_id = %s
-                    ''', (normalized_id,))
-                elif vote_type_lower == 'unsure':
-                    cursor.execute('''
-                    UPDATE bills
-                    SET poll_results_unsure = COALESCE(poll_results_unsure, 0) + 1
                     WHERE bill_id = %s
                     ''', (normalized_id,))
                 else:
@@ -493,21 +472,24 @@ def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[st
 
 def get_all_tweeted_bills(limit: int = 100) -> List[Dict[str, Any]]:
     """
-    Retrieve all bills that have been tweeted, sorted by most recent first (for archive).
+    Retrieve all bills that have been published, sorted by most recent first (for archive).
     """
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 cursor.execute('''
                 SELECT * FROM bills
-                WHERE tweet_posted = TRUE
+                WHERE published = TRUE
                 ORDER BY date_processed DESC
                 LIMIT %s
                 ''', (limit,))
                 return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
-        logger.error(f"Error retrieving tweeted bills: {e}")
+        logger.error(f"Error retrieving published bills: {e}")
         return []
+
+# Alias for backwards compatibility
+get_all_published_bills = get_all_tweeted_bills
 
 # --- Archive Search Functions ---
 
@@ -751,15 +733,15 @@ def _search_tweeted_bills_like(
                 full_like_clause = " AND ".join(like_clauses)
                 params.update({'limit': page_size, 'offset': offset})
 
-                # Check if status is 'introduced' to adjust the tweet_posted condition
-                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                # Check if status is 'introduced' to adjust the published condition
+                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
 
                 # Build ORDER BY clause using helper for consistency
                 order_clause = build_order_clause(sort_by_impact)
 
                 query = f"""
                     SELECT * FROM bills
-                    WHERE {tweet_posted_condition}
+                    WHERE {published_condition}
                     AND ({full_like_clause})
                     {status_clause}
                     {date_clause}
@@ -799,15 +781,15 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                     status_clause, params = build_status_filter(status)
                     params.update({'limit': page_size, 'offset': offset})
-                    # Check if status is 'introduced' to adjust the tweet_posted condition
-                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                    # Check if status is 'introduced' to adjust the published condition
+                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
 
                     # Build ORDER BY clause using helper for consistency
                     order_clause = build_order_clause(sort_by_impact)
 
                     query = f"""
                         SELECT * FROM bills
-                        WHERE {tweet_posted_condition}
+                        WHERE {published_condition}
                         {status_clause}
                         {order_clause}
                         LIMIT %(limit)s OFFSET %(offset)s
@@ -830,15 +812,15 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update({'exact_id': cleaned_q.lower(), 'limit': page_size, 'offset': offset})
                     params.update(date_params)
-                    # Check if status is 'introduced' to adjust the tweet_posted condition
-                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                    # Check if status is 'introduced' to adjust the published condition
+                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
 
                     # Build ORDER BY clause using helper for consistency
                     order_clause = build_order_clause(sort_by_impact)
 
                     cursor.execute(f"""
                         SELECT * FROM bills
-                        WHERE {tweet_posted_condition}
+                        WHERE {published_condition}
                         AND LOWER(bill_id) = %(exact_id)s
                         {status_clause}
                         {date_clause}
@@ -861,15 +843,15 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update({'limit': page_size, 'offset': offset})
                     params.update(date_params)
-                    # Check if status is 'introduced' to adjust the tweet_posted condition
-                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                    # Check if status is 'introduced' to adjust the published condition
+                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
 
                     # Build ORDER BY clause using helper for consistency
                     order_clause = build_order_clause(sort_by_impact)
 
                     cursor.execute(f"""
                         SELECT * FROM bills
-                        WHERE {tweet_posted_condition}
+                        WHERE {published_condition}
                         {status_clause}
                         {date_clause}
                         {order_clause}
@@ -894,8 +876,8 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                 params.update(date_params)
                 
                 # The tsvector column 'fts_vector' should be created via migration script
-                # Check if status is 'introduced' to adjust the tweet_posted condition
-                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                # Check if status is 'introduced' to adjust the published condition
+                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
 
                 # Build ORDER BY: if sorting by impact, override FTS rank with impact
                 # When sorting by impact score, NULL/0 values are placed last
@@ -907,7 +889,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                 query = f"""
                     SELECT *, ts_rank_cd(fts_vector, websearch_to_tsquery('english', %(fts_query)s)) as rank
                     FROM bills
-                    WHERE {tweet_posted_condition}
+                    WHERE {published_condition}
                     AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
                     {status_clause}
                     {date_clause}
@@ -947,11 +929,11 @@ def _count_search_tweeted_bills_like(phrases: List[str], tokens: List[str], stat
                          LOWER(COALESCE(sponsor_name, '')) LIKE %({param_name})s)
                     """)
                 full_like_clause = " AND ".join(like_clauses)
-                # Check if status is 'introduced' to adjust the tweet_posted condition
-                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                # Check if status is 'introduced' to adjust the published condition
+                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
                 query = f"""
                     SELECT COUNT(*) FROM bills
-                    WHERE {tweet_posted_condition} AND ({full_like_clause}) {status_clause} {date_clause}
+                    WHERE {published_condition} AND ({full_like_clause}) {status_clause} {date_clause}
                 """
                 cursor.execute(query, params)
                 return (cursor.fetchone() or [0])[0]
@@ -975,11 +957,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
             with db_connect() as conn:
                 with conn.cursor() as cursor:
                     status_clause, params = build_status_filter(status)
-                    # Check if status is 'introduced' to adjust the tweet_posted condition
-                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                    # Check if status is 'introduced' to adjust the published condition
+                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
                     query = f"""
                         SELECT COUNT(*) FROM bills
-                        WHERE {tweet_posted_condition}
+                        WHERE {published_condition}
                         {status_clause}
                     """
                     cursor.execute(query, params)
@@ -999,11 +981,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update({'exact_id': cleaned_q.lower()})
                     params.update(date_params)
-                    # Check if status is 'introduced' to adjust the tweet_posted condition
-                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                    # Check if status is 'introduced' to adjust the published condition
+                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
                     cursor.execute(f"""
                         SELECT COUNT(*) FROM bills
-                        WHERE {tweet_posted_condition}
+                        WHERE {published_condition}
                         AND LOWER(bill_id) = %(exact_id)s
                         {status_clause}
                         {date_clause}
@@ -1023,11 +1005,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                     status_clause, params = build_status_filter(status)
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update(date_params)
-                    # Check if status is 'introduced' to adjust the tweet_posted condition
-                    tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                    # Check if status is 'introduced' to adjust the published condition
+                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
                     cursor.execute(f"""
                         SELECT COUNT(*) FROM bills
-                        WHERE {tweet_posted_condition}
+                        WHERE {published_condition}
                         {status_clause}
                         {date_clause}
                     """, params)
@@ -1048,11 +1030,11 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                 date_clause, date_params = build_date_filter(start_date, end_date)
                 params.update({'fts_query': fts_query_str})
                 params.update(date_params)
-                # Check if status is 'introduced' to adjust the tweet_posted condition
-                tweet_posted_condition = "tweet_posted = TRUE" if status != 'introduced' else "1=1"
+                # Check if status is 'introduced' to adjust the published condition
+                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
                 query = f"""
                     SELECT COUNT(*) FROM bills
-                    WHERE {tweet_posted_condition}
+                    WHERE {published_condition}
                     AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
                     {status_clause}
                     {date_clause}
@@ -1081,7 +1063,7 @@ def select_and_lock_unposted_bill() -> Optional[Dict[str, Any]]:
                 # If the row is already locked, SKIP LOCKED ensures we don't wait.
                 cursor.execute('''
                     SELECT * FROM bills
-                    WHERE tweet_posted = FALSE
+                    WHERE published = FALSE
                     AND (problematic IS NULL OR problematic = FALSE)
                     ORDER BY date_introduced DESC
                     LIMIT 1
@@ -1170,7 +1152,7 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
                     INSERT INTO bills (
                         bill_id, title, summary_tweet, summary_long, status,
                         date_processed, source_url, website_slug, problematic,
-                        problem_reason, tweet_posted
+                        problem_reason, published
                     )
                     VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, TRUE, %s, FALSE)
                     ON CONFLICT (bill_id)
@@ -1190,9 +1172,10 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
 
 # Duplicate mark_bill_as_problematic removed (merged into single implementation above)
 
-def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str) -> bool:
+def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str = "") -> bool:
     """
     Update the summaries for a specific bill.
+    Note: term_dictionary parameter is kept for API compat but is no longer stored.
     """
     normalized_id = normalize_bill_id(bill_id)
     try:
@@ -1202,10 +1185,9 @@ def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str
                 UPDATE bills
                 SET summary_overview = %s,
                     summary_detailed = %s,
-                    summary_tweet = %s,
-                    term_dictionary = %s
+                    summary_tweet = %s
                 WHERE bill_id = %s
-                ''', (overview, detailed, tweet, term_dictionary, normalized_id))
+                ''', (overview, detailed, tweet, normalized_id))
                 if cursor.rowcount == 1:
                     logger.info(f"Successfully updated summaries for bill {normalized_id}")
                     return True
@@ -1216,9 +1198,10 @@ def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str
         logger.error(f"Error updating summaries for bill {normalized_id}: {e}")
         return False
 
-def update_bill_full_text(bill_id: str, full_text: str, text_format: str) -> bool:
+def update_bill_full_text(bill_id: str, full_text: str, text_format: str = "") -> bool:
     """
     Update the full text for a specific bill.
+    Note: text_format parameter is kept for API compat but is no longer stored.
     """
     normalized_id = normalize_bill_id(bill_id)
     try:
@@ -1226,10 +1209,9 @@ def update_bill_full_text(bill_id: str, full_text: str, text_format: str) -> boo
             with conn.cursor() as cursor:
                 cursor.execute('''
                 UPDATE bills
-                SET full_text = %s,
-                    text_format = %s
+                SET full_text = %s
                 WHERE bill_id = %s
-                ''', (full_text, text_format, normalized_id))
+                ''', (full_text, normalized_id))
                 if cursor.rowcount == 1:
                     logger.info(f"Successfully updated full text for bill {normalized_id}")
                     return True

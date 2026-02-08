@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Bills Management - Admin - TeenCivics{% endblock %}
+{% block meta_description %}TeenCivics Admin - Bills Management{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin.css', v='2026-02-08-v1') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="admin-header">
+    <h2>📋 Bills Management</h2>
+    <div class="admin-header-actions">
+      <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Dashboard</a>
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
+    </div>
+  </div>
+
+  <!-- Search and Filter -->
+  <div class="admin-search-section">
+    <form method="GET" action="{{ url_for('admin_bills') }}" class="admin-search-form">
+      <div class="admin-search-row">
+        <input type="text" name="q" value="{{ q }}" placeholder="Search by bill ID or title…"
+               class="admin-input admin-search-input">
+        <select name="status" class="admin-input admin-filter-select">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+          <option value="introduced" {% if status_filter == 'introduced' %}selected{% endif %}>Introduced</option>
+          <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+          <option value="passed_house" {% if status_filter == 'passed_house' %}selected{% endif %}>Passed House</option>
+          <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
+          <option value="became_law" {% if status_filter == 'became_law' %}selected{% endif %}>Became Law</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Search</button>
+        {% if q or status_filter != 'all' %}
+        <a href="{{ url_for('admin_bills') }}" class="btn btn-secondary">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <div class="admin-table-info">
+    <span>{{ total_bills }} bills found — Page {{ page }} of {{ total_pages }}</span>
+  </div>
+
+  <div class="admin-table-wrapper">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Bill ID</th>
+          <th>Title</th>
+          <th>Status</th>
+          <th>Last Edited</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bill in bills %}
+        <tr>
+          <td class="admin-bill-id">{{ bill.bill_id }}</td>
+          <td class="admin-cell-truncate" title="{{ bill.title }}">
+            {{ bill.title|truncate(70, True) }}
+          </td>
+          <td>
+            <span class="bill-status {{ (bill.normalized_status or bill.status or 'unknown')|lower|replace('_', '-')|replace(' ', '-') }}">
+              {{ (bill.normalized_status or bill.status or 'Unknown')|replace('_', ' ')|title }}
+            </span>
+          </td>
+          <td class="admin-date-cell">
+            {{ bill.last_edited_at|format_datetime_simple if bill.last_edited_at else '—' }}
+          </td>
+          <td class="admin-actions-cell">
+            <a href="{{ url_for('admin_bill_summary', bill_id=bill.bill_id) }}" class="btn btn-small btn-primary">Summary</a>
+            <a href="{{ url_for('admin_edit_row', table_name='bills', row_id=bill.id) }}" class="btn btn-small btn-secondary">Edit All</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="admin-empty">No bills found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    {% if page > 1 %}
+    <a href="{{ url_for('admin_bills', page=page-1, q=q, status=status_filter) }}" class="page-link">← Previous</a>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+      {% if p == page %}
+      <span class="page-link current">{{ p }}</span>
+      {% elif p <= 3 or p > total_pages - 3 or (p >= page - 2 and p <= page + 2) %}
+      <a href="{{ url_for('admin_bills', page=p, q=q, status=status_filter) }}" class="page-link">{{ p }}</a>
+      {% elif p == 4 or p == total_pages - 3 %}
+      <span class="page-link">…</span>
+      {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+    <a href="{{ url_for('admin_bills', page=page+1, q=q, status=status_filter) }}" class="page-link">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

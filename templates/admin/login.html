@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login - TeenCivics{% endblock %}
+{% block meta_description %}TeenCivics Admin Login{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin.css', v='2026-02-08-v1') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin-login-container">
+  <div class="admin-login-card">
+    <h2>🔐 Admin Login</h2>
+    <p class="admin-login-subtitle">Enter the admin password to continue.</p>
+
+    {% if error %}
+    <div class="admin-alert admin-alert-error">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('admin_login') }}" class="admin-login-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="admin-form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required autofocus
+               placeholder="Enter admin password"
+               class="admin-input">
+      </div>
+      <button type="submit" class="btn btn-primary admin-login-btn">Log In</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

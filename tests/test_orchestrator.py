@@ -85,7 +85,7 @@ class TestOrchestratorBillSelection(unittest.TestCase):
             'bill_id': 'hr123-118',
             'title': 'Test Bill',
             'summary_tweet': 'Existing tweet summary',
-            'tweet_posted': False
+            'published': False
         }
         
         # Mock API responses
@@ -128,7 +128,7 @@ class TestOrchestratorBillSelection(unittest.TestCase):
             'bill_id': 'hr123-118',
             'title': 'Test Bill',
             'summary_tweet': 'Existing tweet summary',
-            'tweet_posted': True
+            'published': True
         }
         
         # Mock API responses
@@ -171,7 +171,7 @@ class TestOrchestratorBillSelection(unittest.TestCase):
             'bill_id': 'hr123-118',
             'title': 'Test Bill',
             'summary_tweet': 'Existing tweet summary',
-            'tweet_posted': True
+            'published': True
         }
         
         # Mock unposted bill from DB
@@ -179,7 +179,7 @@ class TestOrchestratorBillSelection(unittest.TestCase):
             'bill_id': 'hr456-118',
             'title': 'Older Unposted Bill',
             'summary_tweet': 'Unposted tweet summary',
-            'tweet_posted': False
+            'published': False
         }
         
         # Mock API responses

@@ -46,7 +46,7 @@ class TestOrchestratorEnhanced(unittest.TestCase):
         
         # First bill already tweeted
         mock_get_bill.side_effect = [
-            {'bill_id': 'hr123-118', 'tweet_posted': True},  # First bill already tweeted
+            {'bill_id': 'hr123-118', 'published': True},  # First bill already tweeted
             None  # Second bill doesn't exist in DB (needs processing)
         ]
         
@@ -101,14 +101,14 @@ class TestOrchestratorEnhanced(unittest.TestCase):
         
         # Mock database responses
         mock_get_recent.return_value = mock_bills
-        mock_get_bill.return_value = {'tweet_posted': True}  # All bills already tweeted
+        mock_get_bill.return_value = {'published': True}  # All bills already tweeted
         
         # Mock unposted bill from DB
         mock_unposted = {
             'bill_id': 'hr789-118',
             'title': 'DB Unposted Bill',
             'summary_tweet': 'Existing tweet summary',
-            'tweet_posted': False
+            'published': False
         }
         mock_get_unposted.return_value = mock_unposted
         
@@ -144,7 +144,7 @@ class TestOrchestratorEnhanced(unittest.TestCase):
         
         # Mock database responses
         mock_get_recent.return_value = mock_bills
-        mock_get_bill.return_value = {'tweet_posted': True}  # All bills already tweeted
+        mock_get_bill.return_value = {'published': True}  # All bills already tweeted
         mock_get_unposted.return_value = None  # No unposted bills in DB
         
         # Run orchestrator
@@ -197,7 +197,7 @@ class TestOrchestratorEnhanced(unittest.TestCase):
         # Mock get_bill_by_id to return different data after update (simulating race condition)
         mock_get_bill.side_effect = [
             None,  # First call - bill doesn't exist
-            {'tweet_posted': False, 'tweet_url': None}  # Second call - update didn't stick
+            {'published': False}  # Second call - update didn't stick
         ]
         
         # Run orchestrator

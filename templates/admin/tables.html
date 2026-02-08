@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Table Browser - Admin - TeenCivics{% endblock %}
+{% block meta_description %}TeenCivics Admin Table Browser{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin.css', v='2026-02-08-v1') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="admin-header">
+    <h2>🗄️ Table Browser</h2>
+    <div class="admin-header-actions">
+      <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Dashboard</a>
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
+    </div>
+  </div>
+
+  <div class="admin-table-list">
+    {% for table in tables %}
+    <a href="{{ url_for('admin_table_rows', table_name=table) }}" class="admin-table-item">
+      <span class="admin-table-icon">📄</span>
+      <span class="admin-table-name">{{ table }}</span>
+      <span class="admin-table-arrow">→</span>
+    </a>
+    {% else %}
+    <p class="admin-empty">No tables found in the database.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

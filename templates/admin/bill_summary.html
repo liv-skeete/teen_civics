@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Summary - {{ bill.bill_id }} - Admin - TeenCivics{% endblock %}
+{% block meta_description %}TeenCivics Admin - Edit Bill Summary{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin.css', v='2026-02-08-v1') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="admin-header">
+    <h2>📝 Summary Editor — {{ bill.bill_id }}</h2>
+    <div class="admin-header-actions">
+      <a href="{{ url_for('admin_bills') }}" class="btn btn-secondary">← Bills</a>
+      <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Dashboard</a>
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
+    </div>
+  </div>
+
+  <div class="admin-bill-title-bar">
+    <h3>{{ bill.title }}</h3>
+    {% if bill.last_edited_at %}
+    <p class="admin-last-edited">Last edited: {{ bill.last_edited_at|format_datetime_simple }} by {{ bill.last_edited_by or 'Unknown' }}</p>
+    {% endif %}
+  </div>
+
+  <form id="bill-summary-form" class="admin-summary-form"
+        data-table="bills" data-row-id="{{ bill.id }}" data-bill-id="{{ bill.bill_id }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="admin-summary-grid">
+      <!-- Summary Overview -->
+      <div class="admin-form-group admin-form-group-wide">
+        <label for="field-summary_overview">Summary Overview</label>
+        <textarea id="field-summary_overview" name="summary_overview"
+                  class="admin-input admin-textarea" rows="4"
+                  placeholder="Brief overview of the bill…">{{ bill.summary_overview or '' }}</textarea>
+      </div>
+
+      <!-- Summary Detailed -->
+      <div class="admin-form-group admin-form-group-wide">
+        <label for="field-summary_detailed">Summary Detailed</label>
+        <textarea id="field-summary_detailed" name="summary_detailed"
+                  class="admin-input admin-textarea admin-textarea-lg" rows="10"
+                  placeholder="Detailed bill summary (markdown-friendly)…">{{ bill.summary_detailed or '' }}</textarea>
+      </div>
+
+      <!-- Why It Matters / Summary Long -->
+      <div class="admin-form-group admin-form-group-wide">
+        <label for="field-summary_long">Why It Matters (summary_long)</label>
+        <textarea id="field-summary_long" name="summary_long"
+                  class="admin-input admin-textarea" rows="6"
+                  placeholder="Why this bill matters…">{{ bill.summary_long or '' }}</textarea>
+      </div>
+
+      <!-- Teen Impact Score -->
+      <div class="admin-form-group">
+        <label for="field-teen_impact_score">Teen Impact Score (0-10)</label>
+        <input type="number" id="field-teen_impact_score" name="teen_impact_score"
+               value="{{ bill.teen_impact_score if bill.teen_impact_score is not none else '' }}"
+               min="0" max="10" class="admin-input">
+      </div>
+
+      <!-- Status -->
+      <div class="admin-form-group">
+        <label for="field-status">Status</label>
+        <input type="text" id="field-status" name="status"
+               value="{{ bill.status or '' }}" class="admin-input">
+      </div>
+
+      <!-- Normalized Status -->
+      <div class="admin-form-group">
+        <label for="field-normalized_status">Normalized Status</label>
+        <select id="field-normalized_status" name="normalized_status" class="admin-input">
+          <option value="" {% if not bill.normalized_status %}selected{% endif %}>—</option>
+          <option value="introduced" {% if bill.normalized_status == 'introduced' %}selected{% endif %}>Introduced</option>
+          <option value="referred_to_committee" {% if bill.normalized_status == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
+          <option value="committee_consideration" {% if bill.normalized_status == 'committee_consideration' %}selected{% endif %}>Committee Consideration</option>
+          <option value="reported_by_committee" {% if bill.normalized_status == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
+          <option value="passed_house" {% if bill.normalized_status == 'passed_house' %}selected{% endif %}>Passed House</option>
+          <option value="passed_senate" {% if bill.normalized_status == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
+          <option value="agreed_to_in_house" {% if bill.normalized_status == 'agreed_to_in_house' %}selected{% endif %}>Agreed to in House</option>
+          <option value="agreed_to_in_senate" {% if bill.normalized_status == 'agreed_to_in_senate' %}selected{% endif %}>Agreed to in Senate</option>
+          <option value="became_law" {% if bill.normalized_status == 'became_law' %}selected{% endif %}>Became Law</option>
+          <option value="vetoed" {% if bill.normalized_status == 'vetoed' %}selected{% endif %}>Vetoed</option>
+          <option value="failed_house" {% if bill.normalized_status == 'failed_house' %}selected{% endif %}>Failed House</option>
+          <option value="failed_senate" {% if bill.normalized_status == 'failed_senate' %}selected{% endif %}>Failed Senate</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="admin-form-actions">
+      <button type="button" class="btn btn-primary" onclick="AdminApp.handleBillSummarySave()">💾 Save Changes</button>
+      <a href="{{ url_for('admin_bills') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="admin-modal" style="display: none;">
+  <div class="admin-modal-backdrop" onclick="AdminApp.hideConfirmModal()"></div>
+  <div class="admin-modal-content">
+    <h3>Confirm Changes</h3>
+    <p id="confirm-modal-message">Are you sure you want to save these changes?</p>
+    <div class="admin-modal-actions">
+      <button class="btn btn-primary" id="confirm-modal-yes">Yes, Save</button>
+      <button class="btn btn-secondary" onclick="AdminApp.hideConfirmModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" class="admin-toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{{ url_for('static', filename='admin.js', v='2026-02-08-v1') }}"></script>
+{% endblock %}

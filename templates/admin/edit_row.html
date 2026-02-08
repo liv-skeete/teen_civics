@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Row - {{ table_name }} - Admin - TeenCivics{% endblock %}
+{% block meta_description %}TeenCivics Admin - Edit Row in {{ table_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='admin.css', v='2026-02-08-v1') }}">
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+  <div class="admin-header">
+    <h2>✏️ Edit Row #{{ row_id }} in {{ table_name }}</h2>
+    <div class="admin-header-actions">
+      <a href="{{ url_for('admin_table_rows', table_name=table_name) }}" class="btn btn-secondary">← Back to {{ table_name }}</a>
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
+    </div>
+  </div>
+
+  <form id="edit-row-form" class="admin-edit-form"
+        data-table="{{ table_name }}" data-row-id="{{ row_id }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% for col in schema %}
+    <div class="admin-form-group">
+      <label for="field-{{ col.column_name }}">
+        {{ col.column_name }}
+        <span class="admin-field-type">{{ col.data_type }}</span>
+      </label>
+      {% set val = row[col.column_name] if row[col.column_name] is not none else '' %}
+      {% if col.data_type in ['text', 'character varying'] and val|string|length > 200 %}
+      <textarea id="field-{{ col.column_name }}" name="{{ col.column_name }}"
+                class="admin-input admin-textarea" rows="6">{{ val }}</textarea>
+      {% elif col.data_type == 'boolean' %}
+      <select id="field-{{ col.column_name }}" name="{{ col.column_name }}" class="admin-input">
+        <option value="true" {% if val %}selected{% endif %}>True</option>
+        <option value="false" {% if not val %}selected{% endif %}>False</option>
+      </select>
+      {% elif col.data_type == 'integer' %}
+      <input type="number" id="field-{{ col.column_name }}" name="{{ col.column_name }}"
+             value="{{ val }}" class="admin-input">
+      {% else %}
+      <input type="text" id="field-{{ col.column_name }}" name="{{ col.column_name }}"
+             value="{{ val }}" class="admin-input">
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="admin-form-actions">
+      <button type="button" class="btn btn-primary" onclick="AdminApp.handleSave()">💾 Save Changes</button>
+      <a href="{{ url_for('admin_table_rows', table_name=table_name) }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="admin-modal" style="display: none;">
+  <div class="admin-modal-backdrop" onclick="AdminApp.hideConfirmModal()"></div>
+  <div class="admin-modal-content">
+    <h3>Confirm Changes</h3>
+    <p id="confirm-modal-message">Are you sure you want to save these changes?</p>
+    <div class="admin-modal-actions">
+      <button class="btn btn-primary" id="confirm-modal-yes">Yes, Save</button>
+      <button class="btn btn-secondary" onclick="AdminApp.hideConfirmModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" class="admin-toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{{ url_for('static', filename='admin.js', v='2026-02-08-v1') }}"></script>
+{% endblock %}

@@ -25,7 +25,7 @@ class TestAppRoutes(unittest.TestCase):
         mock_bill = {
             'bill_id': 'hr1234-118',
             'title': 'Test Tweeted Bill',
-            'tweet_posted': True
+            'published': True
         }
         mock_get_latest.return_value = mock_bill
         
@@ -40,8 +40,8 @@ class TestAppRoutes(unittest.TestCase):
         """Test that archive uses get_all_tweeted_bills instead of get_all_bills."""
         # Mock tweeted bills
         mock_bills = [
-            {'bill_id': 'hr1234-118', 'title': 'Test Bill 1', 'tweet_posted': True},
-            {'bill_id': 's5678-118', 'title': 'Test Bill 2', 'tweet_posted': True}
+            {'bill_id': 'hr1234-118', 'title': 'Test Bill 1', 'published': True},
+            {'bill_id': 's5678-118', 'title': 'Test Bill 2', 'published': True}
         ]
         mock_get_tweeted.return_value = mock_bills
         
@@ -132,7 +132,7 @@ class TestArchiveSearch(unittest.TestCase):
             ]
             for row in self.seed_data:
                 cursor.execute("""
-                INSERT INTO bills (id, bill_id, title, summary_long, tweet_posted, status, date_processed, website_slug)
+                INSERT INTO bills (id, bill_id, title, summary_long, published, status, date_processed, website_slug)
                 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
                 """, (row[0], row[1], row[2], row[3], row[4], row[5], f"{row[1]}-slug"))
             conn.commit()
@@ -164,7 +164,7 @@ class TestArchiveSearch(unittest.TestCase):
             cursor = conn.cursor()
             for i in range(10):
                 cursor.execute("""
-                INSERT INTO bills (id, bill_id, title, summary_long, tweet_posted, status, date_processed, website_slug)
+                INSERT INTO bills (id, bill_id, title, summary_long, published, status, date_processed, website_slug)
                 VALUES (?, ?, ?, ?, 1, 'introduced', CURRENT_TIMESTAMP, ?)
                 """, (10 + i, f'hr{1000+i}', f'Pagination test bill {i}', 'environment keyword', f'hr{1000+i}-slug'))
             conn.commit()
