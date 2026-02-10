@@ -133,6 +133,11 @@
       // Reveal sponsor after voting
       checkAndRevealSponsor(billId);
 
+      // Show Tell Your Rep button (if tell-rep.js is loaded)
+      if (window.TeenCivics && window.TeenCivics.showTellRepButton) {
+        window.TeenCivics.showTellRepButton(billId);
+      }
+
       // After vote, refresh results exactly once
       fetchedOnce.delete(widget); // allow a fresh fetch
       fetchOnceResults(billId, widget);
@@ -428,6 +433,35 @@
     billsGrid.appendChild(frag);
   }
 
+  // --- Server vote sync ---
+  // Restores votes from the server (via voter_id cookie) into localStorage.
+  // This ensures that if localStorage was cleared, previously recorded votes
+  // are restored before poll widgets initialize.
+  async function syncVotesFromServer() {
+    try {
+      const response = await fetch("/api/my-votes", {
+        credentials: "same-origin",           // send voter_id cookie
+        headers: { "Cache-Control": "no-store" }
+      });
+      if (!response.ok) return;               // silently skip on HTTP errors
+
+      const data = await response.json();
+      const votes = data && data.votes;
+      if (!votes || typeof votes !== "object") return;
+
+      for (const [billId, voteType] of Object.entries(votes)) {
+        // Only backfill — never overwrite an existing localStorage vote
+        if (!getStored("voted_" + billId)) {
+          setStored("voted_" + billId, voteType);
+          log("syncVotesFromServer: restored", billId, "→", voteType);
+        }
+      }
+    } catch (_) {
+      // Network error, CORS issue, JSON parse failure, etc.
+      // Proceed silently — localStorage-only behaviour is the fallback.
+    }
+  }
+
   // --- Helpers ---
   function debounce(func, wait) {
     let timeout;
@@ -453,9 +487,13 @@
 
   // --- One-time bootstrap ---
   let bootstrapped = false;
-  function bootstrap() {
+  async function bootstrap() {
     if (bootstrapped) return; // idempotent if script gets included twice
     bootstrapped = true;
+
+    // Restore any server-side votes into localStorage before initialising widgets.
+    // This is fault-tolerant: if the request fails, we proceed with localStorage only.
+    await syncVotesFromServer();
 
     initializePollWidgets();
     setupMobileNavigation();

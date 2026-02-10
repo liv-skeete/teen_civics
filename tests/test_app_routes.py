@@ -192,3 +192,91 @@ class TestArchiveSearch(unittest.TestCase):
         self.assertIn(b'value="environment"', response.data)
         # Check that the status filter is selected
         self.assertIn(b'<option value="introduced" selected>', response.data)
+
+
+# --- Vote Persistence Route Tests ---
+
+class TestVoteRoutes(unittest.TestCase):
+    """Tests for the vote persistence endpoints: POST /api/vote and GET /api/my-votes."""
+
+    def setUp(self):
+        self.app = app.test_client()
+        self.app.testing = True
+
+    @patch('app.record_individual_vote')
+    @patch('app.update_poll_results', return_value=True)
+    def test_vote_sets_voter_cookie(self, mock_update_poll, mock_record_vote):
+        """POST to /api/vote with valid data sets a voter_id cookie on the response."""
+        response = self.app.post(
+            '/api/vote',
+            json={"bill_id": "hr1234-119", "vote_type": "yes"},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        # The response should set a voter_id cookie
+        set_cookie_headers = [
+            h[1] for h in response.headers if h[0].lower() == 'set-cookie'
+        ]
+        cookie_str = '; '.join(set_cookie_headers)
+        self.assertIn('voter_id=', cookie_str)
+
+    @patch('app.record_individual_vote')
+    @patch('app.update_poll_results', return_value=True)
+    def test_vote_records_individual_vote(self, mock_update_poll, mock_record_vote):
+        """POST to /api/vote calls record_individual_vote with correct args."""
+        response = self.app.post(
+            '/api/vote',
+            json={"bill_id": "hr1234-119", "vote_type": "no"},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        # record_individual_vote must have been called exactly once
+        mock_record_vote.assert_called_once()
+        call_args = mock_record_vote.call_args[0]
+        # call_args: (voter_id, bill_id, vote_type)
+        self.assertTrue(len(call_args[0]) > 0, "voter_id should be non-empty")
+        self.assertEqual(call_args[1], "hr1234-119")
+        self.assertEqual(call_args[2], "no")
+
+    @patch('app.record_individual_vote')
+    @patch('app.update_poll_results', return_value=True)
+    def test_vote_uses_existing_voter_cookie(self, mock_update_poll, mock_record_vote):
+        """POST to /api/vote with an existing voter_id cookie reuses the same voter_id."""
+        existing_voter_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        self.app.set_cookie("voter_id", existing_voter_id, domain="localhost")
+        response = self.app.post(
+            '/api/vote',
+            json={"bill_id": "s999-119", "vote_type": "yes"},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_record_vote.assert_called_once()
+        used_voter_id = mock_record_vote.call_args[0][0]
+        self.assertEqual(used_voter_id, existing_voter_id)
+
+    def test_my_votes_returns_empty_without_cookie(self):
+        """GET /api/my-votes without a voter_id cookie returns empty votes dict."""
+        response = self.app.get('/api/my-votes')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data, {"votes": {}})
+
+    @patch('app.get_voter_votes')
+    def test_my_votes_returns_votes_with_cookie(self, mock_get_votes):
+        """GET /api/my-votes with a voter_id cookie returns the voter's votes."""
+        mock_get_votes.return_value = [
+            {"bill_id": "hr1234-119", "vote_type": "yes"},
+            {"bill_id": "s999-119", "vote_type": "no"},
+        ]
+        voter_id = "11111111-2222-3333-4444-555555555555"
+        self.app.set_cookie("voter_id", voter_id, domain="localhost")
+        response = self.app.get('/api/my-votes')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data, {
+            "votes": {
+                "hr1234-119": "yes",
+                "s999-119": "no",
+            }
+        })
+        mock_get_votes.assert_called_once_with(voter_id)

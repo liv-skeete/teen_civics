@@ -1,49 +1,34 @@
 import pytest
 import os
-import importlib
+from unittest.mock import patch, MagicMock
+
 
 @pytest.fixture(scope='session', autouse=True)
 def setup_test_environment():
-    """Set up a temporary in-memory SQLite database for the entire test session."""
-    db_path = "test_suite.db"
-    os.environ['DATABASE_URL'] = f'sqlite:///{db_path}'
+    """
+    Set up a mock database environment for the test session.
 
-    # Reload modules to use the test DB
-    from src.database import db
-    from src.database import connection
-    import app as app_module
+    All test cases use unittest.mock.patch to mock their database calls,
+    so we only need to prevent the real PostgreSQL pool from initialising
+    during module imports.  We do this by:
+      1. Setting a dummy DATABASE_URL so code that reads the env var
+         doesn't raise "not configured" errors.
+      2. Patching the connection-pool initialiser and postgres_connect
+         so no real TCP connection is attempted.
+    """
+    # Dummy URL that is never actually connected to
+    os.environ.setdefault('DATABASE_URL', 'postgresql://test:test@localhost:5432/testdb')
 
-    importlib.reload(connection)
-    importlib.reload(db)
-    importlib.reload(app_module)
+    # Patch the pool init and connect so importing app/db modules is safe
+    with patch('src.database.connection.init_connection_pool'), \
+         patch('src.database.connection.postgres_connect') as mock_pg:
+        # Make postgres_connect usable as a context manager that yields a MagicMock
+        mock_conn = MagicMock()
+        mock_pg.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_pg.return_value.__exit__ = MagicMock(return_value=False)
 
-    # Initialize schema
-    connection.init_db_tables()
+        yield
 
-    # Manually create FTS table for SQLite
-    try:
-        with db.db_connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS bills_fts USING fts5(
-                title, 
-                summary_long, 
-                content='bills', 
-                content_rowid='id'
-            );
-            """)
-            cursor.execute("""
-            CREATE TRIGGER IF NOT EXISTS bills_after_insert AFTER INSERT ON bills BEGIN
-                INSERT INTO bills_fts(rowid, title, summary_long) 
-                VALUES (new.id, new.title, new.summary_long);
-            END;
-            """)
-    except Exception as e:
-        print(f"Could not create FTS table in conftest: {e}")
-
-    yield
-
-    # Teardown: remove the test database file
-    if os.path.exists(db_path):
-        os.remove(db_path)
-    del os.environ['DATABASE_URL']
+    # Cleanup
+    if os.environ.get('DATABASE_URL') == 'postgresql://test:test@localhost:5432/testdb':
+        del os.environ['DATABASE_URL']

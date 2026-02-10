@@ -10,7 +10,7 @@ import os
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.database.db import get_latest_tweeted_bill, get_all_tweeted_bills, update_tweet_info
+from src.database.db import get_latest_tweeted_bill, get_all_tweeted_bills, update_tweet_info, record_individual_vote, get_voter_votes
 
 class TestDatabaseQueries(unittest.TestCase):
     
@@ -287,3 +287,92 @@ class TestSearchQueries(unittest.TestCase):
         results_keyword = self.db.search_tweeted_bills('energy', 'all', 1, 10)
         self.assertEqual(len(results_keyword), 1)
         self.assertEqual(results_keyword[0]['bill_id'], 's456')
+
+
+# --- Individual Vote Persistence Tests (mocked) ---
+
+class TestVotePersistence(unittest.TestCase):
+    """Tests for record_individual_vote and get_voter_votes using mocked DB connections."""
+
+    @patch('src.database.db.db_connect')
+    def test_record_individual_vote_new(self, mock_connect):
+        """Test recording a new vote executes the upsert query and returns True."""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+
+        result = record_individual_vote('voter-aaa', 'hr1234-119', 'yes')
+
+        self.assertTrue(result)
+        mock_cursor.execute.assert_called_once()
+        sql = mock_cursor.execute.call_args[0][0]
+        self.assertIn('INSERT INTO votes', sql)
+        self.assertIn('ON CONFLICT', sql)
+        params = mock_cursor.execute.call_args[0][1]
+        self.assertEqual(params, ('voter-aaa', 'hr1234-119', 'yes'))
+
+    @patch('src.database.db.db_connect')
+    def test_record_individual_vote_upsert(self, mock_connect):
+        """Test that recording a vote for the same voter+bill updates via upsert."""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+
+        # First vote
+        result1 = record_individual_vote('voter-bbb', 'hr999-119', 'yes')
+        self.assertTrue(result1)
+
+        # Second vote on the same bill (simulating upsert)
+        result2 = record_individual_vote('voter-bbb', 'hr999-119', 'no')
+        self.assertTrue(result2)
+
+        # Both calls should use the upsert SQL with ON CONFLICT
+        self.assertEqual(mock_cursor.execute.call_count, 2)
+        for call in mock_cursor.execute.call_args_list:
+            sql = call[0][0]
+            self.assertIn('ON CONFLICT (voter_id, bill_id)', sql)
+            self.assertIn('DO UPDATE SET', sql)
+
+    @patch('src.database.db.db_connect')
+    def test_get_voter_votes_empty(self, mock_connect):
+        """Test getting votes for a voter with no votes returns an empty list."""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = []
+
+        result = get_voter_votes('voter-empty')
+
+        self.assertEqual(result, [])
+        mock_cursor.execute.assert_called_once()
+        sql = mock_cursor.execute.call_args[0][0]
+        self.assertIn('SELECT', sql)
+        self.assertIn('FROM votes', sql)
+        self.assertIn('WHERE voter_id', sql)
+
+    @patch('src.database.db.db_connect')
+    def test_get_voter_votes_returns_all(self, mock_connect):
+        """Test getting votes returns all votes for the voter in the expected format."""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+        # Simulate DictCursor rows
+        mock_cursor.fetchall.return_value = [
+            {"bill_id": "hr1234-119", "vote_type": "yes"},
+            {"bill_id": "s999-119", "vote_type": "no"},
+            {"bill_id": "hr5678-119", "vote_type": "unsure"},
+        ]
+
+        result = get_voter_votes('voter-ccc')
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], {"bill_id": "hr1234-119", "vote_type": "yes"})
+        self.assertEqual(result[1], {"bill_id": "s999-119", "vote_type": "no"})
+        self.assertEqual(result[2], {"bill_id": "hr5678-119", "vote_type": "unsure"})
+        # Verify the query passed the correct voter_id
+        params = mock_cursor.execute.call_args[0][1]
+        self.assertEqual(params, ('voter-ccc',))

@@ -255,6 +255,21 @@ def init_db_tables() -> None:
                     EXECUTE FUNCTION update_updated_at_column();
                 """)
 
+                # Votes table for individual vote tracking
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS votes (
+                    id SERIAL PRIMARY KEY,
+                    voter_id VARCHAR(36) NOT NULL,
+                    bill_id VARCHAR(50) NOT NULL,
+                    vote_type VARCHAR(10) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(voter_id, bill_id)
+                );
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_votes_voter_id ON votes(voter_id);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_votes_bill_id ON votes(bill_id);")
+
         logger.info("Database tables initialized successfully.")
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}")

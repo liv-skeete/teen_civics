@@ -1,0 +1,667 @@
+/* ===========================================
+   Tell Your Rep — Post-Vote Email Module
+   Matches TeenCivics design system
+   =========================================== */
+
+/* --- Button that appears after voting --- */
+.tell-rep-trigger {
+    display: none;
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-borders);
+    text-align: center;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.tell-rep-trigger.visible {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.btn-tell-rep {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-xl);
+    background-color: var(--color-accent);
+    color: var(--color-white) !important;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+    text-decoration: none;
+}
+
+.btn-tell-rep:hover {
+    background-color: #283593;
+    transform: translateY(-1px);
+    color: var(--color-white) !important;
+}
+
+.btn-tell-rep:active {
+    transform: translateY(0);
+}
+
+[data-theme="dark"] .btn-tell-rep,
+.dark-theme .btn-tell-rep {
+    background-color: var(--color-accent);
+}
+
+[data-theme="dark"] .btn-tell-rep:hover,
+.dark-theme .btn-tell-rep:hover {
+    background-color: #5a8ccf;
+}
+
+.btn-tell-rep .btn-icon {
+    font-size: 1.2em;
+}
+
+/* --- Main Tell Your Rep Section --- */
+.tell-rep-section {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background-color: var(--color-white);
+    border-radius: var(--border-radius-lg);
+    border: 2px solid var(--color-accent);
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.5s ease, opacity 0.4s ease, padding 0.4s ease;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.tell-rep-section.expanded {
+    max-height: 2000px;
+    opacity: 1;
+    padding: var(--spacing-lg);
+}
+
+[data-theme="dark"] .tell-rep-section,
+.dark-theme .tell-rep-section {
+    background-color: var(--color-cards);
+    border-color: var(--color-accent);
+}
+
+.tell-rep-section h4 {
+    color: var(--color-accent);
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-lg);
+}
+
+.tell-rep-subtitle {
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+[data-theme="dark"] .tell-rep-subtitle,
+.dark-theme .tell-rep-subtitle {
+    color: var(--color-text);
+    opacity: 0.8;
+}
+
+/* --- ZIP Code Input --- */
+.zip-lookup-group {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: flex-start;
+    margin-bottom: var(--spacing-lg);
+}
+
+.zip-input-wrapper {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.zip-input {
+    width: 140px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-right: 36px;
+    border: 2px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-family: var(--font-family);
+    min-height: 44px;
+    transition: border-color var(--transition-fast);
+    -moz-appearance: textfield;
+}
+
+.zip-input::-webkit-outer-spin-button,
+.zip-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.zip-input:focus {
+    border-color: var(--color-accent);
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+.zip-input.valid {
+    border-color: var(--color-success);
+}
+
+.zip-input.invalid {
+    border-color: var(--color-error);
+}
+
+[data-theme="dark"] .zip-input,
+.dark-theme .zip-input {
+    background-color: var(--color-cards-dark);
+    color: var(--color-text);
+    border-color: var(--color-borders-dark);
+}
+
+[data-theme="dark"] .zip-input:focus,
+.dark-theme .zip-input:focus {
+    border-color: var(--color-accent);
+    outline-color: var(--color-accent);
+}
+
+.zip-validation-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.zip-validation-icon.show {
+    opacity: 1;
+}
+
+.zip-validation-icon.valid {
+    color: var(--color-success);
+}
+
+.zip-validation-icon.invalid {
+    color: var(--color-error);
+}
+
+.btn-find-rep {
+    min-height: 44px;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* --- Loading Spinner --- */
+.tell-rep-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-xl);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .tell-rep-loading,
+.dark-theme .tell-rep-loading {
+    color: var(--color-text);
+}
+
+.spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--color-borders);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: tellRepSpin 0.8s linear infinite;
+}
+
+@keyframes tellRepSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* --- Error Message --- */
+.tell-rep-error {
+    padding: var(--spacing-md);
+    background-color: #FFEBEE;
+    color: var(--color-error);
+    border-radius: var(--border-radius);
+    border-left: 4px solid var(--color-error);
+    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+}
+
+[data-theme="dark"] .tell-rep-error,
+.dark-theme .tell-rep-error {
+    background-color: rgba(244, 67, 54, 0.15);
+}
+
+/* --- Rep Card --- */
+.rep-card {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background-color: var(--color-light-gray);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-lg);
+}
+
+[data-theme="dark"] .rep-card,
+.dark-theme .rep-card {
+    background-color: var(--color-borders-dark);
+}
+
+.rep-photo {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid var(--color-accent);
+    background-color: var(--color-borders);
+}
+
+.rep-photo-placeholder {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--color-accent);
+    color: var(--color-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.rep-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.rep-name {
+    font-weight: 600;
+    font-size: var(--font-size-lg);
+    color: var(--color-text);
+    margin-bottom: 2px;
+}
+
+.rep-district {
+    font-size: var(--font-size-sm);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .rep-district,
+.dark-theme .rep-district {
+    color: var(--color-text);
+    opacity: 0.7;
+}
+
+.rep-role-badge {
+    display: inline-block;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: var(--color-accent);
+    color: var(--color-white);
+    margin-top: 4px;
+}
+
+/* --- Multi-District Cards --- */
+.multi-district-notice {
+    padding: var(--spacing-md);
+    background-color: #FFF3E0;
+    border-left: 4px solid var(--color-warning);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--color-brown-black);
+}
+
+[data-theme="dark"] .multi-district-notice,
+.dark-theme .multi-district-notice {
+    background-color: rgba(255, 152, 0, 0.15);
+    color: var(--color-text);
+}
+
+.rep-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.rep-card-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-dark-gray);
+    margin-bottom: var(--spacing-xs);
+}
+
+[data-theme="dark"] .rep-card-label,
+.dark-theme .rep-card-label {
+    color: var(--color-text);
+    opacity: 0.7;
+}
+
+/* --- Email Editor --- */
+.email-editor-section {
+    margin-top: var(--spacing-lg);
+}
+
+.email-editor-section h4 {
+    font-size: var(--font-size-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.email-subject {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family);
+    margin-bottom: var(--spacing-sm);
+    background-color: var(--color-light-gray);
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .email-subject,
+.dark-theme .email-subject {
+    background-color: var(--color-borders-dark);
+    border-color: var(--color-borders-dark);
+    color: var(--color-text);
+}
+
+.email-body-textarea {
+    width: 100%;
+    min-height: 300px;
+    padding: var(--spacing-md);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-family: var(--font-family);
+    line-height: 1.6;
+    resize: vertical;
+    color: var(--color-text);
+    background-color: var(--color-white);
+}
+
+[data-theme="dark"] .email-body-textarea,
+.dark-theme .email-body-textarea {
+    background-color: var(--color-cards-dark);
+    border-color: var(--color-borders-dark);
+    color: var(--color-text);
+}
+
+.email-body-textarea:focus,
+.email-subject:focus {
+    border-color: var(--color-accent);
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+/* --- Contact Form Fallback --- */
+.contact-fallback {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background-color: var(--color-light-gray);
+    border-radius: var(--border-radius);
+    text-align: center;
+}
+
+[data-theme="dark"] .contact-fallback,
+.dark-theme .contact-fallback {
+    background-color: var(--color-borders-dark);
+}
+
+.contact-fallback p {
+    margin-bottom: var(--spacing-md);
+    color: var(--color-text);
+}
+
+.btn-contact-website {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-xl);
+    background-color: var(--color-accent);
+    color: var(--color-white) !important;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color var(--transition-fast);
+    margin-bottom: var(--spacing-md);
+}
+
+.btn-contact-website:hover {
+    background-color: #283593;
+    color: var(--color-white) !important;
+}
+
+[data-theme="dark"] .btn-contact-website:hover,
+.dark-theme .btn-contact-website:hover {
+    background-color: #5a8ccf;
+}
+
+.contact-divider {
+    border: none;
+    border-top: 1px solid var(--color-borders);
+    margin: var(--spacing-lg) 0;
+}
+
+[data-theme="dark"] .contact-divider,
+.dark-theme .contact-divider {
+    border-color: var(--color-borders-dark);
+}
+
+.contact-fallback-hint {
+    font-size: var(--font-size-sm);
+    color: var(--color-dark-gray);
+    font-style: italic;
+    margin-bottom: var(--spacing-md);
+}
+
+[data-theme="dark"] .contact-fallback-hint,
+.dark-theme .contact-fallback-hint {
+    color: var(--color-text);
+    opacity: 0.7;
+}
+
+/* Read-only box for the email body when using clipboard */
+.email-readonly-box {
+    width: 100%;
+    min-height: 200px;
+    padding: var(--spacing-md);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-family);
+    line-height: 1.6;
+    background-color: var(--color-white);
+    color: var(--color-text);
+    white-space: pre-wrap;
+    overflow-y: auto;
+    max-height: 400px;
+    cursor: text;
+    user-select: all;
+}
+
+[data-theme="dark"] .email-readonly-box,
+.dark-theme .email-readonly-box {
+    background-color: var(--color-cards-dark);
+    border-color: var(--color-borders-dark);
+    color: var(--color-text);
+}
+
+/* --- Action Buttons Row --- */
+.email-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.btn-send-email {
+    flex: 1;
+    min-width: 200px;
+    min-height: 48px;
+    padding: var(--spacing-md) var(--spacing-xl);
+    background-color: var(--color-success);
+    color: var(--color-white) !important;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-send-email:hover {
+    background-color: #388E3C;
+    transform: translateY(-1px);
+    color: var(--color-white) !important;
+}
+
+.btn-copy-email {
+    min-height: 48px;
+    padding: var(--spacing-md) var(--spacing-lg);
+    background-color: var(--color-white);
+    color: var(--color-accent) !important;
+    border: 2px solid var(--color-accent);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    transition: all var(--transition-fast);
+}
+
+.btn-copy-email:hover {
+    background-color: var(--color-accent);
+    color: var(--color-white) !important;
+}
+
+.btn-copy-email.copied {
+    background-color: var(--color-success);
+    border-color: var(--color-success);
+    color: var(--color-white) !important;
+}
+
+[data-theme="dark"] .btn-copy-email,
+.dark-theme .btn-copy-email {
+    background-color: var(--color-cards-dark);
+    color: var(--color-accent) !important;
+    border-color: var(--color-accent);
+}
+
+[data-theme="dark"] .btn-copy-email:hover,
+.dark-theme .btn-copy-email:hover {
+    background-color: var(--color-accent);
+    color: var(--color-white) !important;
+}
+
+/* --- Copy Confirmation Toast --- */
+.copy-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background-color: var(--color-success);
+    color: var(--color-white);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    font-size: var(--font-size-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 9999;
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.copy-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* --- Responsive --- */
+@media (max-width: 600px) {
+    .zip-lookup-group {
+        flex-direction: column;
+    }
+
+    .zip-input-wrapper {
+        width: 100%;
+    }
+
+    .zip-input {
+        width: 100%;
+        font-size: 16px; /* Prevents iOS zoom */
+    }
+
+    .btn-find-rep {
+        width: 100%;
+    }
+
+    .rep-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .rep-info {
+        text-align: center;
+    }
+
+    .email-actions {
+        flex-direction: column;
+    }
+
+    .btn-send-email,
+    .btn-copy-email {
+        width: 100%;
+        min-width: unset;
+    }
+
+    .tell-rep-section.expanded {
+        padding: var(--spacing-md);
+    }
+
+    .email-body-textarea {
+        min-height: 250px;
+        font-size: 16px; /* Prevents iOS zoom */
+    }
+
+    .email-readonly-box {
+        min-height: 180px;
+    }
+}
+
+@media (max-width: 380px) {
+    .btn-tell-rep {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: var(--font-size-sm);
+    }
+}

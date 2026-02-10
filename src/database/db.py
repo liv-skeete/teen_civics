@@ -1305,3 +1305,60 @@ def get_bills_without_sponsor(limit: int = 100) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error getting bills without sponsor: {e}")
         return []
+
+
+def record_individual_vote(voter_id: str, bill_id: str, vote_type: str) -> bool:
+    """
+    Record an individual vote for a voter on a bill.
+    Uses INSERT ON CONFLICT UPDATE (upsert) so that if the voter already voted
+    on this bill, the vote_type and updated_at are updated.
+
+    Args:
+        voter_id: UUID string identifying the voter (from cookie)
+        bill_id: The bill identifier
+        vote_type: Either 'yes', 'no', or 'unsure'
+
+    Returns:
+        bool: True if the vote was recorded successfully, False otherwise
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                INSERT INTO votes (voter_id, bill_id, vote_type)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (voter_id, bill_id)
+                DO UPDATE SET
+                    vote_type = EXCLUDED.vote_type,
+                    updated_at = CURRENT_TIMESTAMP
+                ''', (voter_id, bill_id, vote_type))
+                logger.info(f"Recorded vote for voter {voter_id[:8]}... on bill {bill_id}: {vote_type}")
+                return True
+    except Exception as e:
+        logger.error(f"Error recording individual vote for voter {voter_id[:8]}... on bill {bill_id}: {e}")
+        return False
+
+
+def get_voter_votes(voter_id: str) -> List[Dict[str, str]]:
+    """
+    Retrieve all vote records for a given voter_id.
+
+    Args:
+        voter_id: UUID string identifying the voter (from cookie)
+
+    Returns:
+        List of dicts like [{"bill_id": "hr1234", "vote_type": "yes"}, ...]
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute('''
+                SELECT bill_id, vote_type
+                FROM votes
+                WHERE voter_id = %s
+                ORDER BY updated_at DESC
+                ''', (voter_id,))
+                return [{"bill_id": row["bill_id"], "vote_type": row["vote_type"]} for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error retrieving votes for voter {voter_id[:8]}...: {e}")
+        return []

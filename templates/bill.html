@@ -13,6 +13,10 @@
 {% block twitter_description %}Learn more about the {{ bill.title }}. Get a teen-friendly summary with key points, see its status, and cast your vote in our community poll. Make your voice heard!{% endblock %}
 {% block twitter_image %}https://teencivics.org/static/img/logo.png{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='tell-rep.css', v='2026-02-08-v1') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container bill-detail">
     <article class="bill-card">
@@ -132,6 +136,39 @@
                 </div>
                 {% endif %}
             </div>
+
+            <!-- Tell Your Rep — appears after voting -->
+            <div class="tell-rep-trigger" id="tell-rep-trigger-{{ bill.bill_id }}">
+                <button class="btn-tell-rep" data-bill-id="{{ bill.bill_id }}"
+                        aria-expanded="false" aria-controls="tell-rep-section-{{ bill.bill_id }}">
+                    <span class="btn-icon">📣</span> Tell Your Rep How You Voted
+                </button>
+            </div>
+
+            <div class="tell-rep-section" id="tell-rep-section-{{ bill.bill_id }}"
+                 data-bill-id="{{ bill.bill_id }}" data-bill-title="{{ bill.title }}">
+                <h4>✉️ Make Your Voice Heard</h4>
+                <p class="tell-rep-subtitle">Now that you've voted, tell your representative how you feel about this bill.</p>
+
+                <div class="zip-lookup-group">
+                    <div class="zip-input-wrapper">
+                        <input type="text" class="zip-input" maxlength="5" pattern="[0-9]{5}"
+                               placeholder="ZIP code" inputmode="numeric"
+                               aria-label="Enter your 5-digit ZIP code">
+                        <span class="zip-validation-icon" aria-hidden="true"></span>
+                    </div>
+                    <button class="btn btn-primary btn-find-rep" type="button">Find My Rep</button>
+                </div>
+
+                <div class="tell-rep-error" style="display: none;" role="alert"></div>
+
+                <div class="tell-rep-loading" style="display: none;" aria-live="polite">
+                    <div class="spinner"></div>
+                    <span>Looking up your representative…</span>
+                </div>
+
+                <div class="tell-rep-results" style="display: none;" aria-live="polite"></div>
+            </div>
         </div>
 
         <!-- Bill metadata moved to bottom -->
@@ -159,4 +196,8 @@
        </div>
    </article>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{{ url_for('static', filename='tell-rep.js', v='2026-02-08-v1') }}"></script>
 {% endblock %}
