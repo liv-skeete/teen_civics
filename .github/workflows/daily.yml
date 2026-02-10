@@ -164,6 +164,57 @@ jobs:
         THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+    - name: 📘 Validate FB Token
+      id: fb_validate
+      continue-on-error: true
+      run: |
+        python - <<'PY'
+        import os, sys, json, requests
+
+        token = os.environ.get("FACEBOOK_PAGE_TOKEN", "")
+        if not token:
+            print("⚠️ FACEBOOK_PAGE_TOKEN not set — skipping Facebook post")
+            # Write output to signal downstream step
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write("fb_valid=false\n")
+            sys.exit(0)
+
+        url = "https://graph.facebook.com/debug_token"
+        params = {"input_token": token, "access_token": token}
+
+        try:
+            resp = requests.get(url, params=params, timeout=30)
+            data = resp.json()
+            is_valid = data.get("data", {}).get("is_valid", False)
+        except Exception as e:
+            print(f"⚠️ Facebook token validation request failed: {e}")
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write("fb_valid=false\n")
+            sys.exit(0)
+
+        if is_valid:
+            print("✅ Facebook Page token is valid")
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write("fb_valid=true\n")
+        else:
+            print("⚠️ Facebook token invalid — skipping Facebook post")
+            print(f"   Debug info: {json.dumps(data.get('data', {}), indent=2)}")
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write("fb_valid=false\n")
+        PY
+      env:
+        FACEBOOK_PAGE_TOKEN: ${{ secrets.FACEBOOK_PAGE_TOKEN }}
+
+    - name: 📘 Post to Facebook
+      if: steps.fb_validate.outputs.fb_valid == 'true'
+      continue-on-error: true
+      run: |
+        python scripts/facebook_publisher.py "$BILL_CONTENT"
+      env:
+        FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+        FACEBOOK_PAGE_TOKEN: ${{ secrets.FACEBOOK_PAGE_TOKEN }}
+        BILL_CONTENT: "Check out today's bill summary on TeenCivics! 👉 https://teencivics.org"
+
     - name: Notify on failure
       if: failure()
       run: |
