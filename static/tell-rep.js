@@ -5,6 +5,26 @@
 (() => {
   "use strict";
 
+  // --- Feature Flag: Localhost Only ---
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  
+  if (isLocalhost) {
+    // Determine which bills are present and unhide their containers
+    const containers = document.querySelectorAll('.tell-rep-container');
+    containers.forEach(container => {
+      container.style.display = 'block';
+    });
+    console.log("Tell Your Rep feature enabled (localhost mode)");
+  } else {
+    // Expose a no-op API so other scripts don't crash and exit
+    window.TeenCivics = Object.assign(window.TeenCivics || {}, {
+      showTellRepButton: () => {}, // No-op
+      onVoteChanged: () => {},     // No-op
+    });
+    console.log("Tell Your Rep feature disabled (production mode)");
+    return;
+  }
+
   // --- Helpers ---
   const $ = (sel, root = document) => root.querySelector(sel);
   const $all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -41,6 +61,9 @@
     d.textContent = str;
     return d.innerHTML;
   }
+
+  // --- In-memory state for vote-change updates ---
+  const repContextByBill = new Map();
 
   // --- Main: Show the Tell Your Rep button after voting ---
 
@@ -356,6 +379,13 @@
     const resultsArea = $(".tell-rep-results", section);
     if (!resultsArea) return;
 
+    // Capture context so we can regenerate if the vote changes
+    repContextByBill.set(billId, {
+      section,
+      primaryRep,
+      ccReps: Array.isArray(ccReps) ? ccReps : [],
+    });
+
     // Get user's vote from localStorage
     const vote = getStored(`voted_${billId}`);
     if (!vote || (vote !== "yes" && vote !== "no")) {
@@ -399,6 +429,32 @@
         mailto_url: null,
       }, primaryRep, ccReps);
     }
+  }
+
+  // Regenerate email if vote changes while panel is open
+  async function onVoteChanged(billId, newVote) {
+    const ctx = repContextByBill.get(billId);
+    if (!ctx) return;
+
+    const { section, primaryRep, ccReps } = ctx;
+    if (!section || !section.classList.contains("expanded")) return;
+
+    // Update stored vote direction immediately
+    setStored(`voted_${billId}`, newVote);
+
+    const resultsArea = $(".tell-rep-results", section);
+    if (!resultsArea) return;
+
+    // Preserve rep cards, refresh editor content
+    const editorSection = $(".email-editor-section", resultsArea);
+    if (editorSection) {
+      editorSection.remove();
+    }
+
+    // Fetch new email content and rebuild editor
+    await generateEmail(section, billId, primaryRep, ccReps);
+
+    showToast("Message updated for your new vote.");
   }
 
   // --- Email Editor UI ---
@@ -455,13 +511,27 @@
 
   function buildContactFallbackHtml(emailData, primaryRep) {
     const name = _escHtml(primaryRep.name || "your representative");
-    const website = _escHtml(primaryRep.website || "#");
+    const rawWebsite = primaryRep.website || "#";
+    const hasContactFormUrl = Boolean(primaryRep.contactFormUrl);
+
+    // Use direct contact form URL when available, otherwise append /contact to website
+    const fallbackUrl = rawWebsite === "#"
+      ? "#"
+      : rawWebsite.replace(/\/+$/, "") + "/contact";
+    const contactUrl = hasContactFormUrl ? primaryRep.contactFormUrl : fallbackUrl;
+    const safeContactUrl = _escHtml(contactUrl);
+
+    const linkText = hasContactFormUrl
+      ? `Visit Representative ${name}'s contact form:`
+      : `Visit Representative ${name}'s website to contact them:`;
+
+    const buttonText = hasContactFormUrl ? "🌐 Visit Contact Form" : "🌐 Visit Website";
 
     return `
       <div class="contact-fallback">
-        <p>To contact <strong>Representative ${name}</strong>, visit their official contact form:</p>
-        <a href="${website}" target="_blank" rel="noopener" class="btn-contact-website">
-          🌐 Visit Official Website
+        <p>${linkText}</p>
+        <a href="${safeContactUrl}" target="_blank" rel="noopener" class="btn-contact-website">
+          ${buttonText}
         </a>
         <hr class="contact-divider">
         <p class="contact-fallback-hint">Try this message, or write your own!</p>
@@ -562,15 +632,6 @@
   }
 
   function onCopySuccess(btn) {
-    if (btn) {
-      const original = btn.innerHTML;
-      btn.innerHTML = "✓ Copied!";
-      btn.classList.add("copied");
-      setTimeout(() => {
-        btn.innerHTML = original;
-        btn.classList.remove("copied");
-      }, 2000);
-    }
     showToast("Copied to clipboard!");
   }
 
@@ -628,6 +689,7 @@
   // --- Public API (for script.js integration) ---
   window.TeenCivics = Object.assign(window.TeenCivics || {}, {
     showTellRepButton,
+    onVoteChanged,
   });
 
 })();

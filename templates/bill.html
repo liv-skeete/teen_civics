@@ -137,16 +137,17 @@
                 {% endif %}
             </div>
 
-            <!-- Tell Your Rep — appears after voting -->
-            <div class="tell-rep-trigger" id="tell-rep-trigger-{{ bill.bill_id }}">
-                <button class="btn-tell-rep" data-bill-id="{{ bill.bill_id }}"
-                        aria-expanded="false" aria-controls="tell-rep-section-{{ bill.bill_id }}">
-                    <span class="btn-icon">📣</span> Tell Your Rep How You Voted
-                </button>
-            </div>
+            <!-- Tell Your Rep — appears after voting (hidden by default, shown only on localhost via JS) -->
+            <div class="tell-rep-container" style="display: none;">
+                <div class="tell-rep-trigger" id="tell-rep-trigger-{{ bill.bill_id }}">
+                    <button class="btn-tell-rep" data-bill-id="{{ bill.bill_id }}"
+                            aria-expanded="false" aria-controls="tell-rep-section-{{ bill.bill_id }}">
+                        <span class="btn-icon">📣</span> Tell Your Rep How You Voted
+                    </button>
+                </div>
 
-            <div class="tell-rep-section" id="tell-rep-section-{{ bill.bill_id }}"
-                 data-bill-id="{{ bill.bill_id }}" data-bill-title="{{ bill.title }}">
+                <div class="tell-rep-section" id="tell-rep-section-{{ bill.bill_id }}"
+                     data-bill-id="{{ bill.bill_id }}" data-bill-title="{{ bill.title }}">
                 <h4>✉️ Make Your Voice Heard</h4>
                 <p class="tell-rep-subtitle">Now that you've voted, tell your representative how you feel about this bill.</p>
 
@@ -167,7 +168,8 @@
                     <span>Looking up your representative…</span>
                 </div>
 
-                <div class="tell-rep-results" style="display: none;" aria-live="polite"></div>
+                    <div class="tell-rep-results" style="display: none;" aria-live="polite"></div>
+                </div>
             </div>
         </div>
 
