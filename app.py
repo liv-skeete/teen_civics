@@ -577,6 +577,10 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
+@app.route('/privacy.html')
+def privacy():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'privacy.html')
+
 @app.route('/robots.txt')
 def robots_txt():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'robots.txt')

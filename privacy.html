@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - TeenCivics</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+            line-height: 1.7;
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+            color: #2c3e50;
+            background: #fafafa;
+        }
+        h1 { color: #1A237E; margin-bottom: 4px; }
+        h2 { color: #1A237E; margin-top: 36px; border-bottom: 2px solid #e8eaf6; padding-bottom: 6px; }
+        h3 { color: #34495e; margin-top: 24px; }
+        p, li { margin-bottom: 12px; }
+        ul { padding-left: 24px; }
+        a { color: #1A237E; }
+        .updated { color: #666; font-size: 0.95em; margin-bottom: 28px; }
+        .summary-box {
+            background: #e8eaf6;
+            border-left: 4px solid #1A237E;
+            padding: 16px 20px;
+            border-radius: 6px;
+            margin-bottom: 32px;
+        }
+        .summary-box p { margin-bottom: 6px; }
+        .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; font-weight: 500; }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">&larr; Back to TeenCivics</a>
+
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: February 10, 2026</p>
+
+    <div class="summary-box">
+        <p><strong>Quick summary:</strong> TeenCivics is a civic education platform for teenagers. We do not require accounts, we do not collect your name or email through the site, and we do not sell any data. The only personal identifier we store is an anonymous cookie used to remember your poll votes.</p>
+    </div>
+
+    <h2>1. Who We Are</h2>
+    <p>TeenCivics (<a href="https://teencivics.org">teencivics.org</a>) is created and operated by Olivia (Liv) Skeete. TeenCivics makes government accessible for young people by posting daily plain-English, AI-powered summaries of congressional bills from Congress.gov. The platform also provides community polls, a bill archive, civic resources, and a "Tell Your Rep" feature.</p>
+    <p>For questions about this policy, contact us at <a href="mailto:contact@teencivics.org">contact@teencivics.org</a>.</p>
+
+    <h2>2. Data We Collect</h2>
+
+    <h3>2.1 Anonymous Voter Cookie</h3>
+    <p>When you vote on a bill poll (Yes / No / Unsure), we generate a random anonymous identifier (UUID) and store it in a browser cookie called <code>voter_id</code>. This cookie:</p>
+    <ul>
+        <li>Contains no personal information — it is a randomly generated string.</li>
+        <li>Is used solely to remember which bills you have voted on so you can see your previous votes.</li>
+        <li>Expires after 2 years.</li>
+        <li>Is set as <code>HttpOnly</code> and <code>SameSite=Lax</code> for security.</li>
+    </ul>
+    <p>Your individual votes (bill ID + vote choice) are stored in our database tied to this anonymous identifier. We cannot link this identifier to your real identity.</p>
+
+    <h3>2.2 ZIP Code Lookups ("Tell Your Rep")</h3>
+    <p>If you use the "Tell Your Rep" feature, you may enter your ZIP code to look up your congressional representative. Your ZIP code is:</p>
+    <ul>
+        <li>Sent to the U.S. Census Bureau Geocoder and OpenStreetMap Nominatim to determine your congressional district.</li>
+        <li>Sent to the Congress.gov API to find your representative's information.</li>
+        <li><strong>Not stored</strong> in our database or logs beyond standard server request logging.</li>
+    </ul>
+
+    <h3>2.3 Standard Server Logs</h3>
+    <p>Like most websites, our server automatically logs basic information about each request, including:</p>
+    <ul>
+        <li>IP address (used for rate limiting to prevent abuse).</li>
+        <li>Requested URL path.</li>
+        <li>Browser user-agent string.</li>
+        <li>Timestamps.</li>
+    </ul>
+    <p>These logs are used for security, debugging, and abuse prevention. They are not used for tracking or profiling.</p>
+
+    <h3>2.4 Google Analytics</h3>
+    <p>We use Google Analytics to understand general site usage (e.g., which pages are most popular, how users find us). Google Analytics:</p>
+    <ul>
+        <li>Collects anonymized data — we have <strong>IP anonymization enabled</strong>.</li>
+        <li>Uses cookies set by Google (not by TeenCivics) to distinguish unique visitors.</li>
+        <li>Is governed by <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</li>
+    </ul>
+    <p>You can opt out of Google Analytics by installing the <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Google Analytics Opt-out Browser Add-on</a>.</p>
+
+    <h3>2.5 Session Cookies</h3>
+    <p>Flask sets a session cookie for CSRF (Cross-Site Request Forgery) protection and site functionality. This cookie does not contain personal data and is configured with <code>HttpOnly</code>, <code>SameSite=Lax</code>, and <code>Secure</code> (in production) flags.</p>
+
+    <h2>3. Data We Do NOT Collect</h2>
+    <ul>
+        <li><strong>No accounts or registration</strong> — you never need to create an account to use TeenCivics.</li>
+        <li><strong>No names or email addresses</strong> — we do not collect these through the website. If you email us directly at contact@teencivics.org, that communication is separate.</li>
+        <li><strong>No payment information</strong> — TeenCivics is free and does not process payments.</li>
+        <li><strong>No social media data</strong> — we post to X/Twitter, Bluesky, and Threads but do not collect data from your social media accounts.</li>
+    </ul>
+
+    <h2>4. How We Use Your Data</h2>
+    <ul>
+        <li><strong>Poll votes:</strong> to display community poll results and remember your votes.</li>
+        <li><strong>ZIP code lookups:</strong> to find your congressional representative (processed in real-time, not stored).</li>
+        <li><strong>Server logs:</strong> for security, rate limiting (200 requests/day, 50/hour), and debugging.</li>
+        <li><strong>Analytics:</strong> to understand site usage and improve content.</li>
+    </ul>
+
+    <h2>5. Third-Party Services</h2>
+    <p>TeenCivics uses the following third-party services that may process limited data:</p>
+    <ul>
+        <li><strong>Railway.app</strong> — our hosting provider. <a href="https://railway.app/legal/privacy" target="_blank" rel="noopener">Railway Privacy Policy</a>.</li>
+        <li><strong>Cloudflare</strong> — provides SSL/HTTPS and CDN services. <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>.</li>
+        <li><strong>Google Analytics</strong> — site usage analytics (with IP anonymization). <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>.</li>
+        <li><strong>U.S. Census Bureau Geocoder</strong> — ZIP code to district lookup (government service).</li>
+        <li><strong>OpenStreetMap Nominatim</strong> — ZIP code geocoding. <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank" rel="noopener">OSM Privacy Policy</a>.</li>
+        <li><strong>Congress.gov API</strong> — representative information lookup (government service).</li>
+        <li><strong>Google Fonts</strong> — the Inter font is loaded from Google Fonts. <a href="https://developers.google.com/fonts/faq/privacy" target="_blank" rel="noopener">Google Fonts Privacy</a>.</li>
+    </ul>
+
+    <h2>6. Data Security</h2>
+    <p>We take reasonable measures to protect the data we handle:</p>
+    <ul>
+        <li>All connections use <strong>HTTPS/SSL</strong> (enforced via HSTS headers).</li>
+        <li>Database connections use <strong>SSL encryption</strong>.</li>
+        <li><strong>CSRF protection</strong> on all form submissions.</li>
+        <li><strong>Content Security Policy</strong> headers to prevent XSS attacks.</li>
+        <li><strong>Rate limiting</strong> to prevent API abuse.</li>
+        <li>Cookies are set with <code>HttpOnly</code>, <code>Secure</code>, and <code>SameSite</code> flags.</li>
+        <li>No secrets or credentials are stored in source code.</li>
+    </ul>
+
+    <h2>7. Children's Privacy (COPPA)</h2>
+    <p>TeenCivics is designed for teenagers (ages 13–19) and the general public. We do not knowingly collect personal information from children under 13. Because we do not require accounts, collect names, or collect email addresses through the site, the data we handle is minimal and largely anonymous.</p>
+    <p>If you are a parent or guardian and believe your child under 13 has provided personal information to us, please contact us at <a href="mailto:contact@teencivics.org">contact@teencivics.org</a> and we will take steps to remove it.</p>
+
+    <h2>8. Your Choices</h2>
+    <ul>
+        <li><strong>Cookies:</strong> You can clear or block cookies in your browser settings at any time. Clearing the <code>voter_id</code> cookie will reset your poll vote history.</li>
+        <li><strong>Google Analytics:</strong> Install the <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">opt-out add-on</a> or use your browser's Do Not Track setting.</li>
+        <li><strong>ZIP code:</strong> The "Tell Your Rep" feature is entirely optional. Your ZIP code is not stored.</li>
+    </ul>
+
+    <h2>9. Data Retention</h2>
+    <ul>
+        <li><strong>Poll votes:</strong> retained indefinitely as part of aggregate community results.</li>
+        <li><strong>Server logs:</strong> rotated automatically (5 MB max, 2 backup files).</li>
+        <li><strong>Voter cookie:</strong> expires after 2 years in your browser.</li>
+    </ul>
+
+    <h2>10. Changes to This Policy</h2>
+    <p>We may update this privacy policy from time to time. Changes will be reflected by an updated "Last updated" date at the top of this page. We encourage you to review this policy periodically.</p>
+
+    <h2>11. Contact Us</h2>
+    <p>If you have any questions about this privacy policy or how we handle your data:</p>
+    <ul>
+        <li>Email: <a href="mailto:contact@teencivics.org">contact@teencivics.org</a></li>
+        <li>Feedback form: available on our <a href="/contact">Contact page</a></li>
+    </ul>
+</body>
+</html>
