@@ -2934,7 +2934,7 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .mission-card,
 .dark-theme .mission-card {
   background: linear-gradient(135deg, var(--color-cards-dark) 0%, #2d2d2d 100%);
-  border-color: var(--color-borders-dark);
+  border-color: #4a9eff;
 }
 
 [data-theme="dark"] .about-text p,
