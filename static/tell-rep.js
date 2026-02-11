@@ -5,15 +5,9 @@
 (() => {
   "use strict";
 
-  // --- Feature Flag: Localhost Only ---
+  // --- Debug Logging ---
   const hostname = window.location.hostname;
   const port = window.location.port;
-  const isLocalhost =
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "0.0.0.0" ||
-    hostname === "::1" ||
-    hostname.endsWith(".local");
   
   const logTellRepDebug = (stage, extra = {}) => {
     console.log("[TellRep]", stage, {
@@ -24,22 +18,12 @@
     });
   };
   
-  if (!isLocalhost) {
-    // Expose a no-op API so other scripts don't crash and exit
-    window.TeenCivics = Object.assign(window.TeenCivics || {}, {
-      showTellRepButton: () => {}, // No-op
-      onVoteChanged: () => {},     // No-op
-    });
-    logTellRepDebug("disabled (production mode)");
-    return;
-  }
-  
   function unhideTellRepContainers() {
     const containers = document.querySelectorAll(".tell-rep-container");
     containers.forEach((container) => {
       container.style.display = "block";
     });
-    logTellRepDebug("enabled (localhost mode)", { containersFound: containers.length });
+    logTellRepDebug("enabled", { containersFound: containers.length });
     if (containers.length === 0) {
       console.warn("[TellRep] No .tell-rep-container elements found at DOM ready.");
     }
