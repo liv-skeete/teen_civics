@@ -514,7 +514,7 @@
 .btn-send-email,
 .btn-copy-email,
 .btn-contact-website {
-    min-width: 200px;
+    flex: 1;
     min-height: 48px;
     padding: var(--spacing-md) var(--spacing-xl);
     border-radius: var(--border-radius);
