@@ -448,6 +448,10 @@
     margin-bottom: var(--spacing-md);
 }
 
+.email-actions .btn-contact-website {
+    margin-bottom: 0;
+}
+
 .btn-contact-website:hover {
     background-color: #283593;
     color: var(--color-white) !important;
@@ -511,13 +515,13 @@
 /* --- Action Buttons Row --- */
 .email-actions {
     display: flex;
+    justify-content: center;
     gap: var(--spacing-md);
     margin-top: var(--spacing-md);
     flex-wrap: wrap;
 }
 
 .btn-send-email {
-    flex: 1;
     min-width: 200px;
     min-height: 48px;
     padding: var(--spacing-md) var(--spacing-xl);

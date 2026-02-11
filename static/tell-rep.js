@@ -624,12 +624,12 @@
       <textarea class="email-body-textarea" id="email-body" 
                 aria-label="Email body">${_escHtml(emailData.body)}</textarea>
       <div class="email-actions">
+        <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
+          📋 Copy Message
+        </button>
         <a href="#" class="btn-send-email" role="button" aria-label="Send email">
           ✉️ Send Email
         </a>
-        <button class="btn-copy-email" type="button" aria-label="Copy email to clipboard">
-          📋 Copy to Clipboard
-        </button>
       </div>
     `;
   }
@@ -655,16 +655,16 @@
     return `
       <div class="contact-fallback">
         <p>${linkText}</p>
-        <a href="${safeContactUrl}" target="_blank" rel="noopener" class="btn-contact-website">
-          ${buttonText}
-        </a>
         <hr class="contact-divider">
         <p class="contact-fallback-hint">Try this message, or write your own!</p>
         <div class="email-readonly-box">${_escHtml(emailData.body)}</div>
-        <div class="email-actions" style="justify-content: center;">
+        <div class="email-actions">
           <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
-            📋 Copy to Clipboard
+            📋 Copy Message
           </button>
+          <a href="${safeContactUrl}" target="_blank" rel="noopener" class="btn-contact-website">
+            ${buttonText}
+          </a>
         </div>
       </div>
     `;
@@ -675,9 +675,9 @@
       <div class="contact-fallback">
         <p>We couldn't find a direct contact method for <strong>Representative ${_escHtml(primaryRep.name || "")}</strong>. Here's your message — you can search for their contact form online.</p>
         <div class="email-readonly-box">${_escHtml(emailData.body)}</div>
-        <div class="email-actions" style="justify-content: center;">
+        <div class="email-actions">
           <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
-            📋 Copy to Clipboard
+            📋 Copy Message
           </button>
         </div>
       </div>
