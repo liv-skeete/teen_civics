@@ -10,6 +10,7 @@ import time
 import uuid
 import hmac
 import math
+import threading
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
@@ -77,6 +78,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # CSRF + rate limiting
 csrf = CSRFProtect(app)
+# NOTE: With multiple Gunicorn workers, each worker has independent rate limit
+# counters. To share state, switch to Redis: storage_uri="redis://..."
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
@@ -342,6 +345,34 @@ def extract_teen_impact_score(summary: str) -> Optional[int]:
             pass
     return None
 
+# --- Health Check Routes (no DB, no auth, no rate limit) ---
+
+@app.route("/healthz")
+@csrf.exempt
+@limiter.exempt
+def healthz():
+    """Health check endpoint - always responds quickly, no DB dependency."""
+    return jsonify({"status": "ok", "timestamp": time.time()}), 200
+
+
+@app.route("/healthz/db")
+@csrf.exempt
+@limiter.exempt
+def healthz_db():
+    """Deep health check that tests DB connectivity."""
+    try:
+        from src.database.connection import postgres_connect
+        with postgres_connect() as conn:
+            if conn is None:
+                return jsonify({"status": "degraded", "db": "unreachable"}), 503
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+            return jsonify({"status": "ok", "db": "connected"}), 200
+    except Exception as e:
+        return jsonify({"status": "degraded", "db": str(e)}), 503
+
+
 # --- Routes ---
 @app.route("/")
 def index():
@@ -560,7 +591,10 @@ def bill_detail(slug: str):
         raise
     except Exception as e:
         logger.error(f"Error loading bill with slug '{slug}': {e}", exc_info=True)
-        abort(500)
+        return render_template(
+            "500.html",
+            error_message="Unable to load this bill right now. The database may be temporarily unavailable. Please try again in a few minutes."
+        ), 500
 
 @app.route("/about")
 def about():
@@ -599,6 +633,22 @@ def sitemap_xml():
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 ADMIN_SESSION_TIMEOUT = 7200  # 2 hours in seconds
 ADMIN_LOGIN_ATTEMPTS = {}  # IP -> [(timestamp, ...)]
+_admin_login_lock = threading.Lock()
+ADMIN_LOCKOUT_WINDOW = 3600  # 1 hour — entries older than this are pruned
+
+
+def _prune_login_attempts() -> None:
+    """Remove ADMIN_LOGIN_ATTEMPTS entries older than the lockout window.
+
+    Must be called while holding _admin_login_lock.
+    """
+    cutoff = time.time() - ADMIN_LOCKOUT_WINDOW
+    stale_ips = [
+        ip for ip, attempts in ADMIN_LOGIN_ATTEMPTS.items()
+        if all(ts < cutoff for ts in attempts)
+    ]
+    for ip in stale_ips:
+        del ADMIN_LOGIN_ATTEMPTS[ip]
 
 # Table whitelist to prevent accessing pg_catalog tables etc.
 ADMIN_ALLOWED_TABLES = None  # populated dynamically from information_schema
@@ -691,7 +741,9 @@ def admin_login():
         if session.get("admin_authenticated"):
             return redirect(url_for("admin_dashboard"))
         return render_template("admin/login.html", error=None)
-    # POST
+    # POST — prune stale login-attempt entries before processing
+    with _admin_login_lock:
+        _prune_login_attempts()
     password = request.form.get("password", "")
     if hmac.compare_digest(password, ADMIN_PASSWORD):
         session["admin_authenticated"] = True
@@ -1296,21 +1348,45 @@ FIPS_TO_STATE = {
 
 # In-memory rep cache: key = "STATE-DISTRICT" -> { "data": {...}, "timestamp": float }
 _rep_cache: Dict[str, Dict[str, Any]] = {}
+_rep_cache_lock = threading.Lock()
 REP_CACHE_TTL = 86400  # 24 hours
+REP_CACHE_MAX_SIZE = 256
+
 
 def _get_cached_rep(state: str, district: int) -> Optional[Dict]:
     """Return cached rep data if still fresh, else None."""
     key = f"{state}-{district}"
-    entry = _rep_cache.get(key)
+    with _rep_cache_lock:
+        entry = _rep_cache.get(key)
     if entry and time.time() - entry["timestamp"] < REP_CACHE_TTL:
         return entry["data"]
     return None
 
 
+def _evict_rep_cache() -> None:
+    """Evict expired entries from _rep_cache; clear entirely if still over limit.
+
+    Must be called while holding _rep_cache_lock.
+    """
+    now = time.time()
+    expired_keys = [
+        k for k, v in _rep_cache.items()
+        if now - v["timestamp"] >= REP_CACHE_TTL
+    ]
+    for k in expired_keys:
+        del _rep_cache[k]
+    # If still over the limit after removing expired entries, clear everything
+    if len(_rep_cache) >= REP_CACHE_MAX_SIZE:
+        _rep_cache.clear()
+
+
 def _set_cached_rep(state: str, district: int, data: Dict) -> None:
-    """Cache rep data with current timestamp."""
+    """Cache rep data with current timestamp, enforcing a max size limit."""
     key = f"{state}-{district}"
-    _rep_cache[key] = {"data": data, "timestamp": time.time()}
+    with _rep_cache_lock:
+        if len(_rep_cache) >= REP_CACHE_MAX_SIZE:
+            _evict_rep_cache()
+        _rep_cache[key] = {"data": data, "timestamp": time.time()}
 
 
 # --- Tell Your Rep: API Routes ---

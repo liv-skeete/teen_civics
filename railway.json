@@ -8,6 +8,8 @@
     "numReplicas": 1,
     "sleepApplication": false,
     "useLegacyStacker": false,
+    "healthcheckPath": "/healthz",
+    "healthcheckTimeout": 10,
     "multiRegionConfig": {
       "us-west2": {
         "numReplicas": 1
