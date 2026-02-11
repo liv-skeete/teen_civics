@@ -548,9 +548,10 @@
     } catch (err) {
       console.error("Email generation error:", err);
       // Show a fallback minimal editor
+      const stance = vote === "yes" ? "support" : "oppose";
       showEmailEditor(section, {
         subject: `Constituent Feedback on ${billId} | via TeenCivics`,
-        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I recently reviewed ${billId} on TeenCivics. I voted ${vote.toUpperCase()} on this bill.\n\nI urge you to consider your constituents' views. Thank you for your service.\n\nRespectfully,\n\n[Your Name]`,
+        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billId} on TeenCivics (https://teencivics.org), a civic education platform that helps young Americans engage with legislation.\n\nI ${stance.toUpperCase()} this bill because it directly impacts our community and I urge you to consider your constituents' views.`,
         mailto_url: null,
       }, primaryRep, ccReps);
     }
@@ -618,11 +619,8 @@
     return `
       <h4>📧 Your Email to Rep. ${_escHtml(primaryRep.name || "")}</h4>
       <label for="email-subject" class="visually-hidden">Email subject</label>
-      <input type="text" class="email-subject" id="email-subject" 
+      <input type="text" class="email-subject" id="email-subject"
              value="${_escAttr(emailData.subject)}" aria-label="Email subject line">
-      <label for="email-body" class="visually-hidden">Email body</label>
-      <textarea class="email-body-textarea" id="email-body" 
-                aria-label="Email body">${_escHtml(emailData.body)}</textarea>
       <div class="email-actions">
         <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
           📋 Copy Message
@@ -631,6 +629,9 @@
           ✉️ Send Email
         </a>
       </div>
+      <label for="email-body" class="visually-hidden">Email body</label>
+      <textarea class="email-body-textarea" id="email-body"
+                aria-label="Email body">${_escHtml(emailData.body)}</textarea>
     `;
   }
 
@@ -656,8 +657,6 @@
       <div class="contact-fallback">
         <p>${linkText}</p>
         <hr class="contact-divider">
-        <p class="contact-fallback-hint">Try this message, or write your own!</p>
-        <div class="email-readonly-box">${_escHtml(emailData.body)}</div>
         <div class="email-actions">
           <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
             📋 Copy Message
@@ -666,6 +665,8 @@
             ${buttonText}
           </a>
         </div>
+        <p class="contact-fallback-hint">Try this message, or write your own!</p>
+        <div class="email-readonly-box">${_escHtml(emailData.body)}</div>
       </div>
     `;
   }
@@ -674,12 +675,12 @@
     return `
       <div class="contact-fallback">
         <p>We couldn't find a direct contact method for <strong>Representative ${_escHtml(primaryRep.name || "")}</strong>. Here's your message — you can search for their contact form online.</p>
-        <div class="email-readonly-box">${_escHtml(emailData.body)}</div>
         <div class="email-actions">
           <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
             📋 Copy Message
           </button>
         </div>
+        <div class="email-readonly-box">${_escHtml(emailData.body)}</div>
       </div>
     `;
   }

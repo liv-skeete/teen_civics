@@ -56,46 +56,29 @@ def _fallback_generation(vote: str, bill_title: str, summary_overview: str) -> s
 
     if vote == "yes":
         if desc:
-            # Try to seamlessly integrate the description
-            # If desc starts with "This bill requires...", we change it to "it requires..."
             if desc.lower().startswith("this bill"):
                  desc = "it " + desc[9:].strip()
             elif desc.lower().startswith("the bill"):
                  desc = "it " + desc[8:].strip()
-            
-            # Use lowercase for flow: "because [desc]..."
             if desc and desc[0].isupper():
                  desc = desc[0].lower() + desc[1:]
+            return f"{desc}"
             
-            return (
-                f"{desc} Greater accountability, transparency, and thoughtful policy benefit all Americans, and we must seize this opportunity to make meaningful progress."
-            )
-            
-        return (
-            f"it addresses important issues around {topic_clean} that deserve our attention and action. "
-            "Supporting this measure would help ensure positive outcomes for all Americans."
-        )
+        return f"it addresses important issues around {topic_clean} that deserve action."
     else:
         if desc:
             if desc.lower().startswith("this bill"):
                  desc = "it " + desc[9:].strip()
             elif desc.lower().startswith("the bill"):
                  desc = "it " + desc[8:].strip()
-            
             if desc and desc[0].isupper():
                  desc = desc[0].lower() + desc[1:]
+            return f"{desc}"
 
-            return (
-                f"{desc} However, this approach raises serious concerns, and I urge you to protect our interests by rejecting this measure."
-            )
-
-        return (
-            f"it raises serious concerns around {topic_clean} that have not been adequately addressed. "
-            "I believe this measure risks unintended consequences and should be reconsidered."
-        )
+        return f"it raises serious concerns around {topic_clean} that have not been addressed."
 
 def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_id: Optional[str] = None) -> str:
-    """Generate 2-3 persuasive sentences for email body using AI.
+    """Generate 1 concise persuasive sentence for email body using AI (≤150 chars).
 
     Uses Venice.ai (or configured AI provider) to transform bill context into
     natural advocacy text. Falls back to template-based generation if AI fails.
@@ -114,34 +97,34 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
     safe_overview = clean_text_for_fallback(summary_overview or "")
     safe_title = clean_text_for_fallback(bill_title or "this bill")
     
-    # Construct prompts
+    # Construct prompts — request exactly 1 short sentence to fit 500-char message limit
     system_prompt = (
-        "You are a helpful, passionate constituent writing to a member of Congress. "
-        "Your goal is to complete the sentence: 'I [support/oppose] this legislation because...'\n"
+        "You are a constituent writing to a member of Congress. "
+        "Complete the sentence: 'I [support/oppose] this bill because...'\n"
         "Guidelines:\n"
         "1. Start directly with lowercase (e.g., 'it would help...', 'it fails to...').\n"
-        "2. Write exactly 2-3 sentences max.\n"
-        "3. Explain the specific impact (benefits for support, risks for opposition).\n"
+        "2. Write exactly ONE sentence, max 150 characters.\n"
+        "3. State the single most important point about the bill's impact.\n"
         "4. Do NOT include 'I support' or 'I oppose' in your output.\n"
         "5. Do NOT use bullet points or headers.\n"
-        "6. Use persuasive, natural language.\n"
+        "6. Use concise, persuasive language.\n"
     )
     
     if vote == "yes":
         user_prompt = (
             f"Bill Title: {safe_title}\n"
             f"Summary: {safe_overview}\n\n"
-            "Write 2-3 persuasive sentences explaining why I SUPPORT this bill. "
-            "Focus on solutions, accountability, and positive change. "
-            "Start your response with lowercase so it fits after 'because '."
+            "Write ONE concise sentence (max 150 chars) explaining why I SUPPORT this bill. "
+            "Focus on the single most important benefit. "
+            "Start with lowercase so it fits after 'because '."
         )
     else:
         user_prompt = (
             f"Bill Title: {safe_title}\n"
             f"Summary: {safe_overview}\n\n"
-            "Write 2-3 persuasive sentences explaining why I OPPOSE this bill. "
-            "Focus on negative consequences, overreach, or risks. "
-            "Start your response with lowercase so it fits after 'because '."
+            "Write ONE concise sentence (max 150 chars) explaining why I OPPOSE this bill. "
+            "Focus on the single most important risk or concern. "
+            "Start with lowercase so it fits after 'because '."
         )
 
     try:
@@ -154,7 +137,7 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
         start_time = time.time()
         response = client.chat.completions.create(
             model=PREFERRED_MODEL,
-            max_tokens=150,
+            max_tokens=60,
             temperature=0.7,
             messages=[
                 {"role": "system", "content": system_prompt},

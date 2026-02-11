@@ -1709,27 +1709,37 @@ def generate_email():
         vote_label = "Yes" if vote == "yes" else "No"
         subject = f"Constituent Feedback on {bill_title} — Voted {vote_label} | via TeenCivics"
 
-        # Build body
-        if vote == "yes":
-            stance_paragraph = f"I support this legislation because {reasoning}"
-        else:
-            stance_paragraph = f"I oppose this legislation because {reasoning}"
+        # Build body (≤500 chars for congressional contact form limits)
+        stance = "SUPPORT" if vote == "yes" else "OPPOSE"
+        stance_verb = "support" if vote == "yes" else "oppose"
 
-        body = (
+        # Core template without the "because" clause
+        prefix = (
             f"Dear Representative {rep_last_name},\n\n"
-            f"As your constituent, I recently reviewed {bill_title} ({bill_number}) "
-            f"on TeenCivics (https://teencivics.org), a civic education platform that "
-            f"helps young Americans engage with legislation. I voted {vote_label.upper()} "
-            f"on this bill, and I wanted to share my perspective with you directly.\n\n"
-            f"{stance_paragraph}\n\n"
-            f"[Share your personal story here: Why does this issue matter to you? "
-            f"What experiences shape how you feel about this bill? "
-            f"Feel free to delete this section if you'd prefer to send as-is.]\n\n"
-            f"I urge you to consider your constituents' views when voting on this measure. "
-            f"Thank you for your service.\n\n"
-            f"Respectfully,\n\n"
-            f"[Your Name]"
+            f"As your constituent, I reviewed {bill_title} ({bill_number}) "
+            f"on TeenCivics (https://teencivics.org), a civic education platform "
+            f"that helps young Americans engage with legislation.\n\n"
+            f"I {stance} this bill because "
         )
+
+        # Calculate remaining budget for the reasoning sentence
+        char_budget = 500 - len(prefix)
+
+        # Trim reasoning to fit within budget, ending at a sentence or word boundary
+        reason_text = reasoning.strip()
+        # Take only the first sentence of reasoning
+        first_sentence_match = re.match(r'^(.+?[.!?])(?:\s|$)', reason_text)
+        if first_sentence_match:
+            reason_text = first_sentence_match.group(1)
+
+        if len(reason_text) > char_budget:
+            reason_text = reason_text[:char_budget - 3].rsplit(' ', 1)[0] + '...'
+
+        # Ensure it ends with punctuation
+        if reason_text and reason_text[-1] not in '.!?':
+            reason_text = reason_text.rstrip(',;: ') + '.'
+
+        body = prefix + reason_text
 
         # Build mailto URL if email is available
         mailto_url = None
