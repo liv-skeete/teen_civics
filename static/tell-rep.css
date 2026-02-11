@@ -514,12 +514,13 @@
 .btn-send-email,
 .btn-copy-email,
 .btn-contact-website {
-    width: 220px;
-    min-height: 48px;
+    width: 250px;
+    height: 48px;
     padding: var(--spacing-md) var(--spacing-xl);
     border-radius: var(--border-radius);
     font-size: var(--font-size-md);
     font-weight: 600;
+    line-height: 1;
     cursor: pointer;
     text-decoration: none;
     display: inline-flex;
