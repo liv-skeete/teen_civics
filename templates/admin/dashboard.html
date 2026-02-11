@@ -14,6 +14,8 @@
     <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
   </div>
 
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
   <div class="admin-stats-grid">
     <div class="admin-stat-card">
       <div class="admin-stat-number">{{ total_bills }}</div>
@@ -34,6 +36,14 @@
       <h3>🗄️ Table Browser</h3>
       <p>Browse all database tables and edit individual rows.</p>
     </a>
+    <div class="admin-nav-card" id="sync-contact-forms-card">
+      <h3>🔄 Sync Rep Contact Forms</h3>
+      <p>Pull contact form URLs from Congress data.</p>
+      <button class="btn btn-primary" id="btn-sync-contact-forms" type="button">
+        🔄 Sync Now
+      </button>
+      <div id="sync-contact-forms-status" class="sync-status" style="display: none;"></div>
+    </div>
   </div>
 
   {% if recent_edits %}
@@ -63,5 +73,10 @@
     </div>
   </div>
   {% endif %}
+  <div id="toast-container" class="admin-toast-container"></div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script defer src="{{ url_for('static', filename='admin.js', v='2026-02-08-v1') }}"></script>
 {% endblock %}

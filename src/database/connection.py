@@ -270,6 +270,22 @@ def init_db_tables() -> None:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_votes_voter_id ON votes(voter_id);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_votes_bill_id ON votes(bill_id);")
 
+                # Rep contact forms table for Tell Your Rep feature
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS rep_contact_forms (
+                    bioguide_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    state TEXT,
+                    district INTEGER,
+                    official_website TEXT,
+                    contact_form_url TEXT,
+                    contact_url_source TEXT,
+                    contact_url_verified_at TIMESTAMP,
+                    last_synced_at TIMESTAMP
+                );
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_rep_contact_state_district ON rep_contact_forms(state, district);")
+
         logger.info("Database tables initialized successfully.")
     except Exception as e:
         logger.error(f"Failed to initialize database tables: {e}")

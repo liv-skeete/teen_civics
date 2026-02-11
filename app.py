@@ -102,6 +102,7 @@ from src.database.db import (
     get_voter_votes,
 )
 from src.processors.summarizer import summarize_title
+from src.processors.reasoning_generator import generate_reasoning
 from src.utils.sponsor_formatter import format_sponsor_sentence
 
 # --- Request ID + security headers ---
@@ -916,6 +917,19 @@ def admin_bill_summary(bill_id):
 
 # --- Admin API Routes ---
 
+@app.route("/admin/api/sync-contact-forms", methods=["POST"])
+@admin_required
+def admin_sync_contact_forms():
+    """Trigger manual sync of rep contact form URLs."""
+    try:
+        from src.fetchers.contact_form_sync import sync_contact_forms
+        result = sync_contact_forms()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Contact form sync error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/admin/api/tables")
 @admin_required
 def admin_api_tables():
@@ -1279,7 +1293,6 @@ FIPS_TO_STATE = {
 _rep_cache: Dict[str, Dict[str, Any]] = {}
 REP_CACHE_TTL = 86400  # 24 hours
 
-
 def _get_cached_rep(state: str, district: int) -> Optional[Dict]:
     """Return cached rep data if still fresh, else None."""
     key = f"{state}-{district}"
@@ -1542,8 +1555,8 @@ def rep_lookup():
             members = all_members[:1]
         if not members:
             result = {
-                "name": None,
-                "website": None,
+                    "name": None,
+                    "website": None,
                 "email": None,
                 "photo_url": None,
                 "bioguideId": None,
@@ -1592,12 +1605,62 @@ def rep_lookup():
             "found": True,
         }
 
+        if bioguide_id:
+            try:
+                from src.fetchers.contact_form_sync import get_contact_form_url
+                contact_form_url = get_contact_form_url(bioguide_id)
+                if contact_form_url:
+                    result["contactFormUrl"] = contact_form_url
+            except Exception as e:
+                logger.warning(f"Contact form lookup failed for {bioguide_id}: {e}")
+
         _set_cached_rep(state, district, result)
         return jsonify(result)
 
     except Exception as e:
         logger.error(f"Error in rep_lookup: {e}", exc_info=True)
         return jsonify({"error": "An unexpected error occurred. Please try again."}), 500
+
+
+@app.route("/api/pre-generate-reasoning", methods=["POST"])
+@limiter.limit("10 per minute")
+@csrf.exempt
+def pre_generate_reasoning():
+    """Pre-warm the reasoning cache when a user votes, before they enter their ZIP."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        bill_id = data.get("bill_id", "").strip()
+        vote = data.get("vote", "").strip().lower()
+
+        if not bill_id:
+            return jsonify({"error": "Bill ID is required."}), 400
+        if vote not in ("yes", "no"):
+            return jsonify({"error": "Vote must be 'yes' or 'no'."}), 400
+
+        # Fetch bill from database
+        bill = get_bill_by_id(bill_id)
+        if not bill:
+            return jsonify({"error": "Bill not found."}), 404
+
+        bill_title = bill.get("title", bill_id)
+        summary_overview = bill.get("summary_overview", "") or ""
+
+        # Generate reasoning (result gets cached in _reasoning_cache)
+        generate_reasoning(
+            vote=vote,
+            bill_title=bill_title,
+            summary_overview=summary_overview,
+            bill_id=bill_id,
+        )
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        logger.error(f"Error in pre_generate_reasoning: {e}", exc_info=True)
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 
 @app.route("/api/generate-email", methods=["POST"])
@@ -1629,16 +1692,18 @@ def generate_email():
 
         bill_title = bill.get("title", bill_id)
         bill_number = bill.get("bill_id", bill_id)
-        why_it_matters = bill.get("why_it_matters", "") or ""
-        summary_detailed = bill.get("summary_detailed", "") or ""
         summary_overview = bill.get("summary_overview", "") or ""
 
         # Extract last name from rep name for salutation
         rep_last_name = rep_name.split()[-1] if rep_name else "Representative"
 
-        # Generate reasoning from bill data
-        source_text = why_it_matters or summary_detailed or summary_overview
-        reasoning = _extract_reasoning(source_text, vote)
+        # Generate persuasive reasoning using AI (with template fallback)
+        reasoning = generate_reasoning(
+            vote=vote,
+            bill_title=bill_title,
+            summary_overview=summary_overview,
+            bill_id=bill_id,
+        )
 
         # Build subject
         vote_label = "Yes" if vote == "yes" else "No"
@@ -1653,7 +1718,7 @@ def generate_email():
         body = (
             f"Dear Representative {rep_last_name},\n\n"
             f"As your constituent, I recently reviewed {bill_title} ({bill_number}) "
-            f"on TeenCivics (https://teencivics.com), a civic education platform that "
+            f"on TeenCivics (https://teencivics.org), a civic education platform that "
             f"helps young Americans engage with legislation. I voted {vote_label.upper()} "
             f"on this bill, and I wanted to share my perspective with you directly.\n\n"
             f"{stance_paragraph}\n\n"
@@ -1684,53 +1749,6 @@ def generate_email():
     except Exception as e:
         logger.error(f"Error in generate_email: {e}", exc_info=True)
         return jsonify({"error": "An unexpected error occurred. Please try again."}), 500
-
-
-def _extract_reasoning(source_text: str, vote: str) -> str:
-    """Extract 2-3 relevant sentences from bill text to use as reasoning."""
-    if not source_text:
-        if vote == "yes":
-            return (
-                "I believe it addresses important issues that affect our community "
-                "and would have a positive impact on the lives of everyday Americans."
-            )
-        else:
-            return (
-                "I have concerns about its potential impact on our community "
-                "and believe it needs further consideration before moving forward."
-            )
-
-    # Clean the text — remove markdown/emoji headers, bullets, etc.
-    clean = re.sub(r'\*\*([^*]+)\*\*', r'\1', source_text)
-    clean = re.sub(r'[🏠💰🛠️⚖️🚀📌👉🔎📝🔑📜👥💡]', '', clean)
-    clean = clean.replace("<br>", " ").replace("<br/>", " ").replace("\n", " ")
-    clean = re.sub(r'\s+', ' ', clean).strip()
-
-    # Split into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', clean)
-    sentences = [s.strip() for s in sentences if len(s.strip()) > 20]
-
-    if not sentences:
-        if vote == "yes":
-            return (
-                "I believe it addresses important issues and would have "
-                "a positive impact on our community."
-            )
-        else:
-            return (
-                "I have concerns about its approach and believe it needs "
-                "further consideration."
-            )
-
-    # Take first 2-3 substantive sentences
-    selected = sentences[:min(3, len(sentences))]
-    reasoning = " ".join(selected)
-
-    # Ensure it doesn't end mid-thought
-    if not reasoning.endswith((".", "!", "?")):
-        reasoning += "."
-
-    return reasoning
 
 
 if __name__ == "__main__":

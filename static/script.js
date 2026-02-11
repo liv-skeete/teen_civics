@@ -67,6 +67,10 @@
       if (currentVote) {
         highlightCurrentVote(options, currentVote);
         checkAndRevealSponsor(billId);  // Reveal sponsor if already voted
+        // Show Tell Your Rep button (handles race condition with DOMContentLoaded)
+        if (window.TeenCivics && window.TeenCivics.showTellRepButton) {
+          window.TeenCivics.showTellRepButton(billId);
+        }
       }
 
       // Attach click handlers once
@@ -84,6 +88,10 @@
             if (messageContainer) {
               showLoadingMessage(messageContainer, "You already selected this option.");
               setTimeout(() => { messageContainer.style.display = "none"; }, 1200);
+            }
+            // Still show Tell Your Rep button in case it wasn't visible
+            if (window.TeenCivics && window.TeenCivics.showTellRepButton) {
+              window.TeenCivics.showTellRepButton(billId);
             }
             return;
           }
@@ -129,13 +137,25 @@
 
       setStored(`voted_${billId}`, voteType);
       highlightCurrentVote(options, voteType);
-      
+
+      // Pre-warm reasoning cache in background (don't await, don't block UI)
+      fetch('/api/pre-generate-reasoning', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bill_id: billId, vote: voteType })
+      }).catch(() => {}); // Silently ignore failures
+
       // Reveal sponsor after voting
       checkAndRevealSponsor(billId);
 
       // Show Tell Your Rep button (if tell-rep.js is loaded)
       if (window.TeenCivics && window.TeenCivics.showTellRepButton) {
         window.TeenCivics.showTellRepButton(billId);
+      }
+
+      // If vote was changed, notify Tell Your Rep to regenerate the email
+      if (isChange && window.TeenCivics && window.TeenCivics.onVoteChanged) {
+        window.TeenCivics.onVoteChanged(billId, voteType);
       }
 
       // After vote, refresh results exactly once

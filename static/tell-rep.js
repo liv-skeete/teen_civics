@@ -6,23 +6,43 @@
   "use strict";
 
   // --- Feature Flag: Localhost Only ---
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const hostname = window.location.hostname;
+  const port = window.location.port;
+  const isLocalhost =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname === "::1" ||
+    hostname.endsWith(".local");
   
-  if (isLocalhost) {
-    // Determine which bills are present and unhide their containers
-    const containers = document.querySelectorAll('.tell-rep-container');
-    containers.forEach(container => {
-      container.style.display = 'block';
+  const logTellRepDebug = (stage, extra = {}) => {
+    console.log("[TellRep]", stage, {
+      hostname,
+      port,
+      readyState: document.readyState,
+      ...extra,
     });
-    console.log("Tell Your Rep feature enabled (localhost mode)");
-  } else {
+  };
+  
+  if (!isLocalhost) {
     // Expose a no-op API so other scripts don't crash and exit
     window.TeenCivics = Object.assign(window.TeenCivics || {}, {
       showTellRepButton: () => {}, // No-op
       onVoteChanged: () => {},     // No-op
     });
-    console.log("Tell Your Rep feature disabled (production mode)");
+    logTellRepDebug("disabled (production mode)");
     return;
+  }
+  
+  function unhideTellRepContainers() {
+    const containers = document.querySelectorAll(".tell-rep-container");
+    containers.forEach((container) => {
+      container.style.display = "block";
+    });
+    logTellRepDebug("enabled (localhost mode)", { containersFound: containers.length });
+    if (containers.length === 0) {
+      console.warn("[TellRep] No .tell-rep-container elements found at DOM ready.");
+    }
   }
 
   // --- Helpers ---
@@ -274,7 +294,21 @@
         handleMultiDistrict(section, billId, reps);
       } else {
         displayRepInfo(section, reps[0]);
-        await generateEmail(section, billId, reps[0]);
+
+        // Show drafting indicator while AI generates the email
+        const draftingIndicator = document.createElement("div");
+        draftingIndicator.className = "tell-rep-drafting";
+        draftingIndicator.textContent = "✍️ Drafting your message…";
+        if (resultsArea) resultsArea.appendChild(draftingIndicator);
+
+        try {
+          await generateEmail(section, billId, reps[0]);
+        } finally {
+          // Remove indicator whether generation succeeded or failed
+          if (draftingIndicator.parentNode) {
+            draftingIndicator.remove();
+          }
+        }
       }
 
     } catch (err) {
@@ -293,32 +327,139 @@
 
     // Sort by weight descending
     reps.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-    const primary = reps[0];
-    const others = reps.slice(1);
 
-    let html = `
-      <div class="multi-district-notice">
-        <strong>📍 Your ZIP code covers multiple congressional districts.</strong>
-        Showing all representatives — the primary one (most likely yours) is listed first.
-      </div>
-      <div class="rep-cards-container">
-        <div class="rep-card-label">Primary Representative (To:)</div>
-        ${buildRepCardHtml(primary)}
-    `;
+    resultsArea.innerHTML = '';
+    resultsArea.style.display = 'block';
 
-    if (others.length > 0) {
-      html += `<div class="rep-card-label">Other Districts in Your ZIP (CC:)</div>`;
-      others.forEach((r) => { html += buildRepCardHtml(r); });
-    }
+    // Header label
+    const label = document.createElement('p');
+    label.className = 'district-selection-label';
+    label.style.cssText = 'margin-bottom: var(--spacing-sm); font-weight: 500; color: var(--color-text);';
+    label.textContent = "What's your congressional district?";
+    resultsArea.appendChild(label);
 
-    html += `</div>`;
-    resultsArea.innerHTML = html;
+    // Select dropdown
+    const select = document.createElement('select');
+    select.className = 'district-select';
+    select.setAttribute('aria-label', 'Select your congressional district');
+    select.style.cssText = 'width: 100%; margin-bottom: var(--spacing-md);';
 
-    // Attach photo error handlers
-    attachPhotoFallbacks(resultsArea);
+    // Default option
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Select district...';
+    select.appendChild(defaultOpt);
 
-    // Generate email for primary rep
-    generateEmail(section, billId, primary, others);
+    // "I don't know" option
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = "I don't know";
+    select.appendChild(allOpt);
+
+    // Per-district options
+    reps.forEach((rep, index) => {
+      const opt = document.createElement('option');
+      opt.value = index.toString();
+      const distNum = rep.district != null ? rep.district : '?';
+      opt.textContent = `District ${distNum} [${rep.name}]`;
+      select.appendChild(opt);
+    });
+
+    resultsArea.appendChild(select);
+
+    // Container for dynamic rep display (below dropdown)
+    const repDisplay = document.createElement('div');
+    repDisplay.className = 'rep-display-container';
+    resultsArea.appendChild(repDisplay);
+
+    // Change handler
+    select.addEventListener('change', async function() {
+      const value = this.value;
+      repDisplay.innerHTML = '';
+
+      // Also remove any existing email editor section that may have been appended
+      const existingEditor = $(".email-editor-section", resultsArea);
+      if (existingEditor) existingEditor.remove();
+
+      if (value === 'all') {
+        showAllReps(reps, repDisplay, billId);
+      } else if (value !== '') {
+        const idx = parseInt(value, 10);
+        const rep = reps[idx];
+
+        // Render rep card into the sub-container (not via displayRepInfo which overwrites resultsArea)
+        repDisplay.innerHTML = `
+          <div class="rep-cards-container">
+            ${buildRepCardHtml(rep)}
+          </div>
+        `;
+        attachPhotoFallbacks(repDisplay);
+
+        // Show drafting indicator
+        const draftingIndicator = document.createElement("div");
+        draftingIndicator.className = "tell-rep-drafting";
+        draftingIndicator.textContent = "✍️ Drafting your message…";
+        repDisplay.appendChild(draftingIndicator);
+
+        try {
+          await generateEmail(section, billId, rep);
+        } finally {
+          if (draftingIndicator.parentNode) {
+            draftingIndicator.remove();
+          }
+        }
+      }
+      // If empty value, repDisplay stays empty (hidden)
+    });
+  }
+
+  function showAllReps(reps, container, billId) {
+    reps.forEach(rep => {
+      const row = document.createElement('div');
+      row.className = 'rep-row';
+      row.style.cssText = 'display: flex; gap: var(--spacing-md); align-items: center; margin-bottom: var(--spacing-md); padding: var(--spacing-sm); border-radius: var(--radius-md); background: var(--color-surface);';
+
+      // Photo
+      if (rep.photo_url) {
+        const img = document.createElement('img');
+        img.src = rep.photo_url;
+        img.alt = rep.name;
+        img.style.cssText = 'width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;';
+        img.addEventListener('error', () => {
+          const initial = (rep.name || '?').charAt(0).toUpperCase();
+          const placeholder = document.createElement('div');
+          placeholder.style.cssText = 'width: 48px; height: 48px; border-radius: 50%; background: var(--color-accent); color: var(--color-white); display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;';
+          placeholder.textContent = initial;
+          img.replaceWith(placeholder);
+        }, { once: true });
+        row.appendChild(img);
+      }
+
+      // Info container
+      const info = document.createElement('div');
+      info.style.cssText = 'flex: 1; min-width: 0;';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.style.cssText = 'font-weight: 600; display: block;';
+      nameSpan.textContent = rep.name;
+      info.appendChild(nameSpan);
+
+      row.appendChild(info);
+
+      // Contact link
+      const contactUrl = rep.contactFormUrl || rep.website;
+      if (contactUrl) {
+        const link = document.createElement('a');
+        link.href = contactUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'Visit Contact Form';
+        link.style.cssText = 'white-space: nowrap; color: var(--color-primary); text-decoration: none; font-weight: 500;';
+        row.appendChild(link);
+      }
+
+      container.appendChild(row);
+    });
   }
 
   // --- Display Single Rep ---
@@ -674,6 +815,8 @@
   // --- Bootstrap ---
 
   function bootstrap() {
+    logTellRepDebug("bootstrap");
+    unhideTellRepContainers();
     initTellRepToggles();
     initZipValidation();
     initFindRepButtons();

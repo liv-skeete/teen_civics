@@ -184,6 +184,22 @@
   background: linear-gradient(135deg, var(--color-cards) 0%, rgba(26, 35, 126, 0.03) 100%);
 }
 
+/* ===== Sync Status ===== */
+.sync-status {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-dark-gray);
+}
+
+.sync-status-success {
+  color: var(--color-success);
+}
+
+.sync-status-error {
+  color: var(--color-error);
+}
+
 /* ===== Section ===== */
 .admin-section {
   margin-bottom: var(--spacing-xl);

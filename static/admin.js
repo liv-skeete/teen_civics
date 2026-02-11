@@ -23,6 +23,13 @@ const AdminApp = (() => {
     }, 4000);
   }
 
+  function getResultsPayload(data) {
+    if (data?.results) {
+      return data.results;
+    }
+    return data || {};
+  }
+
   // --- Confirmation modal ---
   let _confirmCallback = null;
 
@@ -56,6 +63,77 @@ const AdminApp = (() => {
   function getCSRFToken() {
     const input = document.querySelector('input[name="csrf_token"]');
     return input ? input.value : "";
+  }
+
+  // --- Sync Rep Contact Forms ---
+  async function syncRepContactForms(btn) {
+    if (!btn) return;
+    const statusEl = document.getElementById("sync-contact-forms-status");
+    const originalText = btn.textContent;
+
+    btn.disabled = true;
+    btn.textContent = "Syncing...";
+    if (statusEl) {
+      statusEl.style.display = "none";
+      statusEl.textContent = "";
+      statusEl.className = "sync-status";
+    }
+
+    try {
+      const response = await fetch("/admin/api/sync-contact-forms", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCSRFToken(),
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const results = getResultsPayload(data);
+        const total = results.total ?? 0;
+        const withContactForm = results.with_contact_form ?? 0;
+        const crawled = results.crawled ?? 0;
+        const validated = results.validated ?? 0;
+
+        const summary = `Synced ${total} reps (${withContactForm} with contact forms)` +
+          (crawled ? `, ${crawled} crawled` : "") +
+          (validated ? `, ${validated} validated` : "");
+
+        showToast(summary, "success");
+        if (statusEl) {
+          statusEl.textContent = `✅ ${summary}`;
+          statusEl.classList.add("sync-status-success");
+          statusEl.style.display = "block";
+        }
+      } else {
+        const errorMessage = data.error || "Unknown error";
+        showToast(`Sync failed: ${errorMessage}`, "error");
+        if (statusEl) {
+          statusEl.textContent = `❌ Sync failed: ${errorMessage}`;
+          statusEl.classList.add("sync-status-error");
+          statusEl.style.display = "block";
+        }
+      }
+    } catch (err) {
+      const errorMessage = err?.message || "Network error";
+      showToast(`Sync failed: ${errorMessage}`, "error");
+      if (statusEl) {
+        statusEl.textContent = `❌ Sync failed: ${errorMessage}`;
+        statusEl.classList.add("sync-status-error");
+        statusEl.style.display = "block";
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+
+  function initSyncContactForms() {
+    const btn = document.getElementById("btn-sync-contact-forms");
+    if (!btn) return;
+    btn.addEventListener("click", () => syncRepContactForms(btn));
   }
 
   // --- Generic row save (edit_row.html) ---
@@ -159,6 +237,13 @@ const AdminApp = (() => {
     }
   });
 
+  // --- Bootstrap ---
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initSyncContactForms, { once: true });
+  } else {
+    initSyncContactForms();
+  }
+
   // --- Public API ---
   return {
     showToast,
@@ -166,5 +251,6 @@ const AdminApp = (() => {
     hideConfirmModal,
     handleSave,
     handleBillSummarySave,
+    syncRepContactForms,
   };
 })();
