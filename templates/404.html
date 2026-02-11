@@ -12,13 +12,13 @@
         
         <div class="error-actions">
             <a href="{{ url_for('index') }}" class="btn btn-primary">Go Home</a>
-            <a href="{{ url_for('archive') }}" class="btn btn-secondary">Browse Bills</a>
+            <a href="{{ url_for('bills') }}" class="btn btn-secondary">Browse Bills</a>
             <a href="{{ url_for('resources') }}" class="btn btn-secondary">View Resources</a>
         </div>
 
         <div class="error-search">
             <p>Or try searching for a specific bill:</p>
-            <form action="{{ url_for('archive') }}" method="GET" class="search-form">
+            <form action="{{ url_for('bills') }}" method="GET" class="search-form">
                 <label for="search-input" class="visually-hidden">Search bills</label>
                 <!-- FIXED: Changed name="search" to name="q" to match archive route -->
                 <input 

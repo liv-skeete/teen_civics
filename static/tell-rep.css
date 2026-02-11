@@ -427,45 +427,33 @@
 }
 
 .contact-fallback p {
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
     color: var(--color-text);
 }
 
 .btn-contact-website {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md) var(--spacing-xl);
     background-color: var(--color-accent);
     color: var(--color-white) !important;
-    border: none;
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-md);
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background-color var(--transition-fast);
-    margin-bottom: var(--spacing-md);
-}
-
-.email-actions .btn-contact-website {
-    margin-bottom: 0;
+    border: 2px solid var(--color-accent);
 }
 
 .btn-contact-website:hover {
     background-color: #283593;
+    border-color: #283593;
+    transform: translateY(-1px);
     color: var(--color-white) !important;
 }
 
 [data-theme="dark"] .btn-contact-website:hover,
 .dark-theme .btn-contact-website:hover {
     background-color: #5a8ccf;
+    border-color: #5a8ccf;
 }
 
 .contact-divider {
     border: none;
     border-top: 1px solid var(--color-borders);
-    margin: 8px 0;
+    margin: 4px 0;
 }
 
 [data-theme="dark"] .contact-divider,
@@ -516,18 +504,19 @@
 .email-actions {
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: var(--spacing-md);
-    margin-top: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
     flex-wrap: wrap;
 }
 
-.btn-send-email {
+.btn-send-email,
+.btn-copy-email,
+.btn-contact-website {
     min-width: 200px;
     min-height: 48px;
     padding: var(--spacing-md) var(--spacing-xl);
-    background-color: var(--color-success);
-    color: var(--color-white) !important;
-    border: none;
     border-radius: var(--border-radius);
     font-size: var(--font-size-md);
     font-weight: 600;
@@ -538,29 +527,26 @@
     justify-content: center;
     gap: var(--spacing-sm);
     transition: background-color var(--transition-fast), transform var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.btn-send-email {
+    background-color: var(--color-success);
+    color: var(--color-white) !important;
+    border: 2px solid var(--color-success);
 }
 
 .btn-send-email:hover {
     background-color: #388E3C;
+    border-color: #388E3C;
     transform: translateY(-1px);
     color: var(--color-white) !important;
 }
 
 .btn-copy-email {
-    min-height: 48px;
-    padding: var(--spacing-md) var(--spacing-lg);
     background-color: var(--color-white);
     color: var(--color-accent) !important;
     border: 2px solid var(--color-accent);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-md);
-    font-weight: 500;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm);
-    transition: all var(--transition-fast);
 }
 
 .btn-copy-email:hover {
@@ -662,7 +648,8 @@
     }
 
     .btn-send-email,
-    .btn-copy-email {
+    .btn-copy-email,
+    .btn-contact-website {
         width: 100%;
         min-width: unset;
     }

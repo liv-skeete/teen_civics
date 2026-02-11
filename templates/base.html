@@ -103,7 +103,7 @@
     },
     "potentialAction": {
       "@type": "SearchAction",
-      "target": "https://teencivics.org/archive?q={search_term_string}",
+      "target": "https://teencivics.org/bills?q={search_term_string}",
       "query-input": "required name=search_term_string"
     }
   }
@@ -124,7 +124,7 @@
       </a>
       <div class="nav-menu" id="nav-menu">
         <a href="{{ url_for('index') }}" class="nav-link" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a>
-        <a href="{{ url_for('archive') }}" class="nav-link" {% if request.endpoint == 'archive' %}aria-current="page"{% endif %}>Archive</a>
+        <a href="{{ url_for('bills') }}" class="nav-link" {% if request.endpoint == 'bills' %}aria-current="page"{% endif %}>Bills</a>
         <a href="{{ url_for('resources') }}" class="nav-link" {% if request.endpoint == 'resources' %}aria-current="page"{% endif %}>Resources</a>
         <a href="{{ url_for('about') }}" class="nav-link" {% if request.endpoint == 'about' %}aria-current="page"{% endif %}>About</a>
         <a href="{{ url_for('grants') }}" class="nav-link" {% if request.endpoint == 'grants' %}aria-current="page"{% endif %}>Grants</a>
@@ -152,7 +152,7 @@
       <div class="footer-section">
         <h4>Quick Links</h4>
         <a href="{{ url_for('index') }}">Home</a>
-        <a href="{{ url_for('archive') }}">Bill Archive</a>
+        <a href="{{ url_for('bills') }}">Bills</a>
         <a href="{{ url_for('resources') }}">Resources</a>
         <a href="{{ url_for('about') }}">About</a>
         <a href="{{ url_for('grants') }}">Grants</a>

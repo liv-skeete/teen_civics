@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Flask web application for TeenCivics.
-Provides routes for displaying bills, an archive, and other static pages.
+Provides routes for displaying bills and other static pages.
 """
 
 import re
@@ -367,9 +367,14 @@ def index():
         return render_template("index.html", bill=None, error="Unable to load the latest bill. Please try again later.")
 
 @app.route("/archive")
-def archive():
+def archive_redirect():
+    """Redirect old /archive URL to /bills for backward compatibility."""
+    return redirect(url_for('bills', **request.args), code=301)
+
+@app.route("/bills")
+def bills():
     """
-    Archive page route with search, filtering, and sorting capabilities.
+    Bills page route with search, filtering, and sorting capabilities.
     
     Query parameters:
     - q: Search query string
@@ -383,7 +388,7 @@ def archive():
     from src.database.connection import get_connection_string
     
     start_time = time.time()
-    logger.info("=== Archive request started ===")
+    logger.info("=== Bills page request started ===")
     
     try:
         # Verify database connection
@@ -434,7 +439,7 @@ def archive():
         
         # Log request details for debugging
         logger.info(
-            f"Archive query: q='{q}', status='{status}', "
+            f"Bills query: q='{q}', status='{status}', "
             f"page={page}, sort_by_impact={sort_by_impact}"
         )
         
@@ -493,12 +498,12 @@ def archive():
         total_time = time.time() - start_time
         
         logger.info(f"Template rendered in {render_time:.3f}s")
-        logger.info(f"=== Archive request completed in {total_time:.3f}s ===")
+        logger.info(f"=== Bills page request completed in {total_time:.3f}s ===")
         
         return response
         
     except Exception as e:
-        error_msg = f"Failed to load archive: {str(e)}"
+        error_msg = f"Failed to load bills page: {str(e)}"
         logger.error(error_msg, exc_info=True)
         
         # Return error page with proper fallback values
@@ -1722,20 +1727,10 @@ def generate_email():
             f"I {stance} this bill because "
         )
 
-        # Calculate remaining budget for the reasoning sentence
-        char_budget = 500 - len(prefix)
-
-        # Trim reasoning to fit within budget, ending at a sentence or word boundary
+        # Use the AI-generated reasoning as-is (it should be a complete sentence)
         reason_text = reasoning.strip()
-        # Take only the first sentence of reasoning
-        first_sentence_match = re.match(r'^(.+?[.!?])(?:\s|$)', reason_text)
-        if first_sentence_match:
-            reason_text = first_sentence_match.group(1)
 
-        if len(reason_text) > char_budget:
-            reason_text = reason_text[:char_budget - 3].rsplit(' ', 1)[0] + '...'
-
-        # Ensure it ends with punctuation
+        # Only ensure it ends with punctuation
         if reason_text and reason_text[-1] not in '.!?':
             reason_text = reason_text.rstrip(',;: ') + '.'
 

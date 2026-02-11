@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {# Updated poll results design - 2025-10-03 #}
 
-{% block title %}Bill Archive - TeenCivics{% endblock %}
+{% block title %}Bills - TeenCivics{% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="resources-header">
-        <h1 class="h3-style">Bill Archive</h1>
+        <h1 class="h3-style">Bills</h1>
         <p>Browse all congressional bills summarized by TeenCivics</p>
     </div>
 
     <!-- Search and Filter Section -->
     <div class="search-and-filter-section">
-        <form class="search-form" method="get" action="{{ url_for('archive') }}" id="archive-form">
+        <form class="search-form" method="get" action="{{ url_for('bills') }}" id="archive-form">
             <!-- Top Row: Search Input and Buttons -->
             <div class="search-row">
                 <input
@@ -33,8 +33,8 @@
                     Search
                 </button>
                 {% if q %}
-                <a 
-                    href="{{ url_for('archive') }}" 
+                <a
+                    href="{{ url_for('bills') }}"
                     class="btn btn-clear"
                     aria-label="Clear search"
                 >
@@ -204,7 +204,7 @@
     {% if total_pages > 1 %}
     <div class="pagination">
         {% if current_page > 1 %}
-        <a href="{{ url_for('archive', page=current_page - 1, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link prev" aria-label="Go to previous page">
+        <a href="{{ url_for('bills', page=current_page - 1, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link prev" aria-label="Go to previous page">
             ← Previous
         </a>
         {% endif %}
@@ -213,14 +213,14 @@
             {% if page_num == current_page %}
             <span class="page-link current" aria-current="page">{{ page_num }}</span>
             {% else %}
-            <a href="{{ url_for('archive', page=page_num, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link" aria-label="Go to page {{ page_num }}">
+            <a href="{{ url_for('bills', page=page_num, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link" aria-label="Go to page {{ page_num }}">
                 {{ page_num }}
             </a>
             {% endif %}
         {% endfor %}
 
         {% if current_page < total_pages %}
-        <a href="{{ url_for('archive', page=current_page + 1, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link next" aria-label="Go to next page">
+        <a href="{{ url_for('bills', page=current_page + 1, q=q, status=status_filter if status_filter != 'all' else None, sort_by_impact=1 if sort_by_impact else None) }}" class="page-link next" aria-label="Go to next page">
             Next →
         </a>
         {% endif %}
@@ -232,12 +232,12 @@
         <h2>No Results Found</h2>
         {% if q %}
             <p>No bills found for your search query "<strong>{{ q }}</strong>"{% if status_filter != 'all' %} with status "<strong>{{ status_filter|format_status }}</strong>"{% endif %}.</p>
-            <a href="{{ url_for('archive') }}" class="btn btn-primary">Clear Search</a>
+            <a href="{{ url_for('bills') }}" class="btn btn-primary">Clear Search</a>
         {% elif status_filter != 'all' %}
             <p>No bills found with status "<strong>{{ status_filter|format_status }}</strong>".</p>
-            <a href="{{ url_for('archive') }}" class="btn btn-primary">View All Bills</a>
+            <a href="{{ url_for('bills') }}" class="btn btn-primary">View All Bills</a>
         {% else %}
-            <p>No bills available in the archive yet.</p>
+            <p>No bills available yet.</p>
         {% endif %}
     </div>
     {% endif %}

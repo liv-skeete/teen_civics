@@ -36,8 +36,8 @@ class TestAppRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
     
     @patch('app.get_all_tweeted_bills')
-    def test_archive_uses_tweeted_only(self, mock_get_tweeted):
-        """Test that archive uses get_all_tweeted_bills instead of get_all_bills."""
+    def test_bills_uses_tweeted_only(self, mock_get_tweeted):
+        """Test that bills page uses get_all_tweeted_bills instead of get_all_bills."""
         # Mock tweeted bills
         mock_bills = [
             {'bill_id': 'hr1234-118', 'title': 'Test Bill 1', 'published': True},
@@ -45,7 +45,7 @@ class TestAppRoutes(unittest.TestCase):
         ]
         mock_get_tweeted.return_value = mock_bills
         
-        response = self.app.get('/archive')
+        response = self.app.get('/bills')
         
         # Verify the correct function was called
         mock_get_tweeted.assert_called_once()
@@ -63,11 +63,11 @@ class TestAppRoutes(unittest.TestCase):
         # Should render template with bill=None
     
     @patch('app.get_all_tweeted_bills')
-    def test_archive_no_tweeted_bills(self, mock_get_tweeted):
-        """Test archive handles case where no bills have been tweeted."""
+    def test_bills_no_tweeted_bills(self, mock_get_tweeted):
+        """Test bills page handles case where no bills have been tweeted."""
         mock_get_tweeted.return_value = []
         
-        response = self.app.get('/archive')
+        response = self.app.get('/bills')
         
         mock_get_tweeted.assert_called_once()
         self.assertEqual(response.status_code, 200)
@@ -76,9 +76,9 @@ class TestAppRoutes(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
-# --- Archive Search Route Tests ---
+# --- Bills Search Route Tests ---
 
-class TestArchiveSearch(unittest.TestCase):
+class TestBillsSearch(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
@@ -137,27 +137,27 @@ class TestArchiveSearch(unittest.TestCase):
                 """, (row[0], row[1], row[2], row[3], row[4], row[5], f"{row[1]}-slug"))
             conn.commit()
 
-    def test_archive_search_renders_search_input(self):
-        """Test that the archive page renders the search input form."""
-        response = self.app.get('/archive')
+    def test_bills_search_renders_search_input(self):
+        """Test that the bills page renders the search input form."""
+        response = self.app.get('/bills')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'<input type="text" class="search-input" name="q"', response.data)
 
-    def test_archive_search_exact_bill_id(self):
+    def test_bills_search_exact_bill_id(self):
         """Test that searching for an exact bill_id returns the correct bill."""
-        response = self.app.get('/archive?q=hjres105-119')
+        response = self.app.get('/bills?q=hjres105-119')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'hjres105-119', response.data)
         self.assertIn(b'space exploration', response.data)
 
-    def test_archive_search_title_phrase(self):
+    def test_bills_search_title_phrase(self):
         """Test that searching for a quoted phrase returns the correct bill."""
-        response = self.app.get('/archive?q="North Dakota Field Office"')
+        response = self.app.get('/bills?q="North Dakota Field Office"')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'hr123', response.data)
         self.assertIn(b'North Dakota Field Office', response.data)
 
-    def test_archive_search_keywords_and_pagination(self):
+    def test_bills_search_keywords_and_pagination(self):
         """Test keyword search with pagination."""
         # Seed more data for pagination
         with self.db.db_connect() as conn:
@@ -170,23 +170,23 @@ class TestArchiveSearch(unittest.TestCase):
             conn.commit()
         
         # With page size of 24, we should have 13 total results for "environment"
-        response_p1 = self.app.get('/archive?q=environment&page=1')
+        response_p1 = self.app.get('/bills?q=environment&page=1')
         self.assertEqual(response_p1.status_code, 200)
         self.assertIn(b'of 13 results', response_p1.data)
         
         # Check that pagination links preserve the query
-        self.assertIn(b'href="/archive?q=environment&page=1"', response_p1.data)
+        self.assertIn(b'href="/bills?q=environment&page=1"', response_p1.data)
 
-    def test_archive_search_no_results(self):
+    def test_bills_search_no_results(self):
         """Test that a search with no results shows the empty-state message."""
-        response = self.app.get('/archive?q=nonexistentterm')
+        response = self.app.get('/bills?q=nonexistentterm')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'No Results Found', response.data)
         self.assertIn(b'No bills found for your search query "<strong>nonexistentterm</strong>"', response.data)
 
-    def test_archive_preserves_query_with_status(self):
+    def test_bills_preserves_query_with_status(self):
         """Test that changing status preserves the search query."""
-        response = self.app.get('/archive?q=environment&status=introduced')
+        response = self.app.get('/bills?q=environment&status=introduced')
         self.assertEqual(response.status_code, 200)
         # Check that the search input retains the query
         self.assertIn(b'value="environment"', response.data)

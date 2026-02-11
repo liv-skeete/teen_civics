@@ -78,7 +78,7 @@ def _fallback_generation(vote: str, bill_title: str, summary_overview: str) -> s
         return f"it raises serious concerns around {topic_clean} that have not been addressed."
 
 def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_id: Optional[str] = None) -> str:
-    """Generate 1 concise persuasive sentence for email body using AI (≤150 chars).
+    """Generate 1 concise persuasive sentence for email body using AI.
 
     Uses Venice.ai (or configured AI provider) to transform bill context into
     natural advocacy text. Falls back to template-based generation if AI fails.
@@ -97,33 +97,34 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
     safe_overview = clean_text_for_fallback(summary_overview or "")
     safe_title = clean_text_for_fallback(bill_title or "this bill")
     
-    # Construct prompts — request exactly 1 short sentence to fit 500-char message limit
+    # Construct prompts — request 1-2 persuasive sentences to fit email message
     system_prompt = (
         "You are a constituent writing to a member of Congress. "
         "Complete the sentence: 'I [support/oppose] this bill because...'\n"
         "Guidelines:\n"
         "1. Start directly with lowercase (e.g., 'it would help...', 'it fails to...').\n"
-        "2. Write exactly ONE sentence, max 150 characters.\n"
-        "3. State the single most important point about the bill's impact.\n"
-        "4. Do NOT include 'I support' or 'I oppose' in your output.\n"
-        "5. Do NOT use bullet points or headers.\n"
-        "6. Use concise, persuasive language.\n"
+        "2. Write 1-2 sentences, max 300 characters total.\n"
+        "3. Make a PERSUASIVE ARGUMENT — explain WHY you care, not just what the bill does.\n"
+        "4. Appeal to values like fairness, safety, freedom, opportunity, or responsibility.\n"
+        "5. Do NOT just summarize the bill — argue for or against it.\n"
+        "6. Do NOT include 'I support' or 'I oppose' in your output.\n"
+        "7. Do NOT use bullet points or headers.\n"
     )
     
     if vote == "yes":
         user_prompt = (
             f"Bill Title: {safe_title}\n"
             f"Summary: {safe_overview}\n\n"
-            "Write ONE concise sentence (max 150 chars) explaining why I SUPPORT this bill. "
-            "Focus on the single most important benefit. "
+            "Write 1-2 persuasive sentences (max 300 chars) arguing why I SUPPORT this bill. "
+            "Don't just describe the bill — make an argument about WHY it matters and WHY it's the right thing to do. "
             "Start with lowercase so it fits after 'because '."
         )
     else:
         user_prompt = (
             f"Bill Title: {safe_title}\n"
             f"Summary: {safe_overview}\n\n"
-            "Write ONE concise sentence (max 150 chars) explaining why I OPPOSE this bill. "
-            "Focus on the single most important risk or concern. "
+            "Write 1-2 persuasive sentences (max 300 chars) arguing why I OPPOSE this bill. "
+            "Don't just describe the bill — make an argument about WHY it's harmful or misguided. "
             "Start with lowercase so it fits after 'because '."
         )
 
@@ -137,7 +138,7 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
         start_time = time.time()
         response = client.chat.completions.create(
             model=PREFERRED_MODEL,
-            max_tokens=60,
+            max_tokens=250,
             temperature=0.7,
             messages=[
                 {"role": "system", "content": system_prompt},
