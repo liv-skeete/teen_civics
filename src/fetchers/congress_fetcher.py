@@ -304,7 +304,8 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
                     while retry_count < max_retries and (not full_text or len(full_text.strip()) <= 100):
                         if retry_count > 0:
                             logger.info(f"🔁 Retry {retry_count}/{max_retries-1} for fetching text for {bill['bill_id']}")
-                            time.sleep(2 ** retry_count)  # Exponential backoff
+                            if not os.getenv('SKIP_DELAYS'):
+                                time.sleep(2 ** retry_count)  # Exponential backoff
                         
                         # First, try to fetch text using the API text endpoint (most reliable)
                         congress = bill.get('congress')
@@ -428,10 +429,11 @@ def download_bill_text(source_url: str, bill_id: Optional[str] = None) -> tuple[
         return "", None
         
     try:
-        # Add small random delay to appear more human-like
+         # Add small random delay to appear more human-like
         delay = random.uniform(1.0, 3.0)
         logger.info(f"Waiting {delay:.2f} seconds before fetching bill page for {bill_id or 'unknown'}")
-        time.sleep(delay)
+        if not os.getenv('SKIP_DELAYS'):
+            time.sleep(delay)
         
         # Update headers with random user agent
         update_session_headers()
@@ -490,11 +492,12 @@ def download_bill_text(source_url: str, bill_id: Optional[str] = None) -> tuple[
         # Add small delay before next request
         delay = random.uniform(0.5, 2.0)
         logger.info(f"Waiting {delay:.2f} seconds before fetching text versions page")
-        time.sleep(delay)
+        if not os.getenv('SKIP_DELAYS'):
+            time.sleep(delay)
         
         # Update headers with random user agent
         update_session_headers()
-            
+        
         logger.info(f"Fetching text versions page: {text_page_url}")
         text_page_response = session.get(text_page_url, timeout=30)
         text_page_response.raise_for_status()
@@ -554,7 +557,8 @@ def download_bill_text(source_url: str, bill_id: Optional[str] = None) -> tuple[
         # Add small delay before downloading text
         delay = random.uniform(0.5, 1.5)
         logger.info(f"Waiting {delay:.2f} seconds before downloading bill text")
-        time.sleep(delay)
+        if not os.getenv('SKIP_DELAYS'):
+            time.sleep(delay)
         
         # Update headers with random user agent
         update_session_headers()
@@ -630,7 +634,8 @@ def _download_direct_text(url: str, bill_id: Optional[str] = None) -> str:
         # Add small delay to appear more human-like
         delay = random.uniform(0.5, 2.0)
         logger.info(f"Waiting {delay:.2f} seconds before downloading direct text")
-        time.sleep(delay)
+        if not os.getenv('SKIP_DELAYS'):
+            time.sleep(delay)
         
         logger.info(f"Downloading direct text for {bill_id or 'unknown'} from {url}")
         response = session.get(url, timeout=30)
