@@ -153,8 +153,7 @@ def main(dry_run: bool = False) -> int:
             return 0
 
         logger.info("📥 Fetching and enriching recent bills from Congress.gov...")
-        # Reduced from 25 to 5 for GitHub Actions performance (daily workflow timeout fix)
-        bills = fetch_and_enrich_bills(limit=5)
+        bills = fetch_and_enrich_bills(limit=25)
         logger.info(f"📊 Retrieved and enriched {len(bills)} bills")
 
         selected_bill = None

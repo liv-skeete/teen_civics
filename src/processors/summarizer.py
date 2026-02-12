@@ -529,20 +529,15 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
 
 def _call_venice_once(client: OpenAI, model: str, system: str, user: str):
     """Single API call to Venice AI (OpenAI-compatible)."""
-    try:
-        return client.chat.completions.create(
-            model=model,
-            max_tokens=4096,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user}
-            ],
-            timeout=30.0,
-        )
-    except (TimeoutError, Exception) as e:
-        logger.error(f"Venice API timeout or error: {e}")
-        raise
+    return client.chat.completions.create(
+        model=model,
+        max_tokens=4096,
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user}
+        ],
+    )
 
 def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
     """Call Venice AI with preferred model, fallback on errors."""
@@ -1016,24 +1011,18 @@ def summarize_title(bill_title: str) -> str:
         
         user_prompt = f"Summarize the following bill title: \"{bill_title}\""
         
-        try:
-            response = client.chat.completions.create(
-                model=PREFERRED_MODEL,
-                max_tokens=100,
-                temperature=0.5,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                timeout=30.0,
-            )
-            
-            summarized_title = _extract_text_from_response(response)
-            return summarized_title.strip()
-        except (TimeoutError, Exception) as e:
-            logger.error(f"Venice API timeout or error in title summarization: {e}")
-            # Fallback to simple truncation if summarization fails
-            return bill_title[:250] + '...' if len(bill_title) > 250 else bill_title
+        response = client.chat.completions.create(
+            model=PREFERRED_MODEL,
+            max_tokens=100,
+            temperature=0.5,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        
+        summarized_title = _extract_text_from_response(response)
+        return summarized_title.strip()
         
     except Exception as e:
         logger.error(f"Error summarizing title: {e}")
