@@ -148,6 +148,7 @@ jobs:
           # Run the orchestrator
           python src/orchestrator.py
       env:
+        SKIP_DELAYS: 'true'
         CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
         VENICE_API_KEY: ${{ secrets.VENICE_API_KEY }}
         VENICE_BASE_URL: https://api.venice.ai/api/v1
