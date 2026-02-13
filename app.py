@@ -101,6 +101,7 @@ from src.database.db import (
     update_poll_results,
     search_tweeted_bills,
     count_search_tweeted_bills,
+    search_and_count_bills,
     record_individual_vote,
     get_voter_votes,
 )
@@ -478,10 +479,9 @@ def bills():
         db_start = time.time()
         
         try:
-            bills = search_tweeted_bills(
+            bills, total_results = search_and_count_bills(
                 q, status, page, page_size, sort_by_impact=sort_by_impact
             )
-            total_results = count_search_tweeted_bills(q, status)
         except Exception as db_error:
             logger.error(f"Database query error: {db_error}", exc_info=True)
             return render_template(
@@ -1794,10 +1794,70 @@ def generate_email():
         stance = "SUPPORT" if vote == "yes" else "OPPOSE"
         stance_verb = "support" if vote == "yes" else "oppose"
 
+        def should_prepend_the(title: str) -> bool:
+            if not title:
+                return False
+            t = title.strip()
+            if not t:
+                return False
+            lower = t.lower()
+            if lower.startswith(("the ", "a ", "an ")):
+                return False
+            # Clause-like or verb-led titles (avoid "the" in front)
+            if lower.startswith((
+                "to ",
+                "recognizing ",
+                "expressing ",
+                "supporting ",
+                "commending ",
+                "condemning ",
+                "honoring ",
+                "celebrating ",
+                "providing ",
+                "prohibiting ",
+                "requiring ",
+                "establishing ",
+                "amending ",
+                "authorizing ",
+                "extending ",
+                "directing ",
+                "repealing ",
+                "designating ",
+                "encouraging ",
+                "urging ",
+                "calling ",
+                "promoting ",
+                "creating ",
+                "protecting ",
+                "ensuring ",
+                "improving ",
+                "updating ",
+                "revising ",
+                "reaffirming ",
+                "resolving ",
+                "relating ",
+                "approving ",
+                "modifying ",
+                "clarifying ",
+                "removing ",
+                "restoring ",
+                "enhancing ",
+            )):
+                return False
+            return True
+
+        title_for_intro = (bill_title or "").strip()
+        if not title_for_intro:
+            bill_ref = f"the bill ({bill_number})"
+        else:
+            bill_ref = f"{title_for_intro} ({bill_number})"
+            if should_prepend_the(title_for_intro):
+                bill_ref = f"the {bill_ref}"
+
         # Core template without the "because" clause
         prefix = (
             f"Dear Representative {rep_last_name},\n\n"
-            f"As your constituent, I reviewed {bill_title} ({bill_number}) "
+            f"As your constituent, I reviewed {bill_ref} "
             f"on TeenCivics (https://teencivics.org), a civic education platform "
             f"that helps young Americans engage with legislation.\n\n"
             f"I {stance} this bill because "

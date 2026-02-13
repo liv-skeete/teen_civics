@@ -549,9 +549,35 @@
       console.error("Email generation error:", err);
       // Show a fallback minimal editor
       const stance = vote === "yes" ? "support" : "oppose";
+      const billTitle = (section && section.dataset && section.dataset.billTitle) ? section.dataset.billTitle.trim() : "";
+      const needsThe = (title) => {
+        if (!title) return false;
+        const t = title.trim().toLowerCase();
+        if (!t) return false;
+        if (t.startsWith("the ") || t.startsWith("a ") || t.startsWith("an ")) return false;
+        if (t.startsWith(
+          "to "
+        )) return false;
+        if (t.startsWith("recognizing ") || t.startsWith("expressing ") || t.startsWith("supporting ") || t.startsWith("commending ") ||
+            t.startsWith("condemning ") || t.startsWith("honoring ") || t.startsWith("celebrating ") || t.startsWith("providing ") ||
+            t.startsWith("prohibiting ") || t.startsWith("requiring ") || t.startsWith("establishing ") || t.startsWith("amending ") ||
+            t.startsWith("authorizing ") || t.startsWith("extending ") || t.startsWith("directing ") || t.startsWith("repealing ") ||
+            t.startsWith("designating ") || t.startsWith("encouraging ") || t.startsWith("urging ") || t.startsWith("calling ") ||
+            t.startsWith("promoting ") || t.startsWith("creating ") || t.startsWith("protecting ") || t.startsWith("ensuring ") ||
+            t.startsWith("improving ") || t.startsWith("updating ") || t.startsWith("revising ") || t.startsWith("reaffirming ") ||
+            t.startsWith("resolving ") || t.startsWith("relating ") || t.startsWith("approving ") || t.startsWith("modifying ") ||
+            t.startsWith("clarifying ") || t.startsWith("removing ") || t.startsWith("restoring ") || t.startsWith("enhancing ")) {
+          return false;
+        }
+        return true;
+      };
+      let billLabel = billTitle ? `${billTitle} (${billId})` : `the bill (${billId})`;
+      if (billTitle && needsThe(billTitle)) {
+        billLabel = `the ${billLabel}`;
+      }
       showEmailEditor(section, {
         subject: `Constituent Feedback on ${billId} | via TeenCivics`,
-        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billId} on TeenCivics (https://teencivics.org), a civic education platform that helps young Americans engage with legislation.\n\nI ${stance.toUpperCase()} this bill because it directly impacts our community and I urge you to consider your constituents' views.`,
+        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billLabel} on TeenCivics (https://teencivics.org), a civic education platform that helps young Americans engage with legislation.\n\nI ${stance.toUpperCase()} this bill because it directly impacts our community and I urge you to consider your constituents' views.`,
         mailto_url: null,
       }, primaryRep, ccReps);
     }

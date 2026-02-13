@@ -30,6 +30,16 @@ logger = logging.getLogger(__name__)
 # Bill ID pattern for exact matching
 BILL_ID_REGEX = re.compile(r'^[a-z]+[0-9]+(?:-[0-9]+)?$', re.IGNORECASE)
 
+# Columns needed by the archive page (avoids fetching full_text, fts_vector,
+# summary_long, summary_detailed, summary_overview which are large and unused).
+ARCHIVE_COLUMNS = (
+    "id, bill_id, title, short_title, status, normalized_status, "
+    "summary_tweet, congress_session, date_introduced, date_processed, "
+    "published, source_url, website_slug, tags, "
+    "poll_results_yes, poll_results_no, teen_impact_score, "
+    "sponsor_name, sponsor_party, sponsor_state"
+)
+
 def get_current_congress() -> str:
     """
     Calculate current Congress session based on date.
@@ -740,7 +750,7 @@ def _search_tweeted_bills_like(
                 order_clause = build_order_clause(sort_by_impact)
 
                 query = f"""
-                    SELECT * FROM bills
+                    SELECT {ARCHIVE_COLUMNS} FROM bills
                     WHERE {published_condition}
                     AND ({full_like_clause})
                     {status_clause}
@@ -788,7 +798,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     order_clause = build_order_clause(sort_by_impact)
 
                     query = f"""
-                        SELECT * FROM bills
+                        SELECT {ARCHIVE_COLUMNS} FROM bills
                         WHERE {published_condition}
                         {status_clause}
                         {order_clause}
@@ -819,7 +829,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     order_clause = build_order_clause(sort_by_impact)
 
                     cursor.execute(f"""
-                        SELECT * FROM bills
+                        SELECT {ARCHIVE_COLUMNS} FROM bills
                         WHERE {published_condition}
                         AND LOWER(bill_id) = %(exact_id)s
                         {status_clause}
@@ -850,7 +860,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     order_clause = build_order_clause(sort_by_impact)
 
                     cursor.execute(f"""
-                        SELECT * FROM bills
+                        SELECT {ARCHIVE_COLUMNS} FROM bills
                         WHERE {published_condition}
                         {status_clause}
                         {date_clause}
@@ -887,7 +897,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     order_clause = "ORDER BY rank DESC, date_processed DESC"
 
                 query = f"""
-                    SELECT *, ts_rank_cd(fts_vector, websearch_to_tsquery('english', %(fts_query)s)) as rank
+                    SELECT {ARCHIVE_COLUMNS}, ts_rank_cd(fts_vector, websearch_to_tsquery('english', %(fts_query)s)) as rank
                     FROM bills
                     WHERE {published_condition}
                     AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
@@ -1044,6 +1054,142 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
     except Exception as e:
         logger.error(f"FTS count failed: {e}. Falling back to LIKE count.")
         return _count_search_tweeted_bills_like(phrases, tokens, status, start_date, end_date)
+
+
+def search_and_count_bills(
+    q: str, status: Optional[str], page: int, page_size: int, sort_by_impact: bool = False
+) -> Tuple[List[Dict[str, Any]], int]:
+    """
+    Combined search + count in a single database connection.
+    Eliminates the overhead of acquiring a second connection for the count query.
+
+    Returns:
+        (bills_list, total_count) tuple
+    """
+    norm_q = q.strip()[:200]
+    offset = (page - 1) * page_size
+
+    # Build shared filter components once
+    status_clause, base_params = build_status_filter(status)
+    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+    order_clause = build_order_clause(sort_by_impact)
+
+    # Extract date range from query
+    cleaned_q, start_date, end_date = parse_date_range_from_query(norm_q) if norm_q else (norm_q, None, None)
+    date_clause, date_params = build_date_filter(start_date, end_date) if norm_q else ("", {})
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                # --- Determine query strategy ---
+
+                if not norm_q:
+                    # Empty query: browse all bills
+                    search_params = dict(base_params, limit=page_size, offset=offset)
+                    count_params = dict(base_params)
+
+                    search_sql = f"""
+                        SELECT {ARCHIVE_COLUMNS} FROM bills
+                        WHERE {published_condition} {status_clause}
+                        {order_clause}
+                        LIMIT %(limit)s OFFSET %(offset)s
+                    """
+                    count_sql = f"""
+                        SELECT COUNT(*) FROM bills
+                        WHERE {published_condition} {status_clause}
+                    """
+
+                elif BILL_ID_REGEX.match(cleaned_q):
+                    # Exact bill ID match
+                    search_params = dict(base_params, **date_params,
+                                         exact_id=cleaned_q.lower(), limit=page_size, offset=offset)
+                    count_params = dict(base_params, **date_params, exact_id=cleaned_q.lower())
+
+                    search_sql = f"""
+                        SELECT {ARCHIVE_COLUMNS} FROM bills
+                        WHERE {published_condition}
+                        AND LOWER(bill_id) = %(exact_id)s
+                        {status_clause} {date_clause}
+                        {order_clause}
+                        LIMIT %(limit)s OFFSET %(offset)s
+                    """
+                    count_sql = f"""
+                        SELECT COUNT(*) FROM bills
+                        WHERE {published_condition}
+                        AND LOWER(bill_id) = %(exact_id)s
+                        {status_clause} {date_clause}
+                    """
+
+                else:
+                    phrases, tokens = parse_search_query(cleaned_q)
+
+                    if not phrases and not tokens and start_date:
+                        # Date-only filter
+                        search_params = dict(base_params, **date_params,
+                                             limit=page_size, offset=offset)
+                        count_params = dict(base_params, **date_params)
+
+                        search_sql = f"""
+                            SELECT {ARCHIVE_COLUMNS} FROM bills
+                            WHERE {published_condition}
+                            {status_clause} {date_clause}
+                            {order_clause}
+                            LIMIT %(limit)s OFFSET %(offset)s
+                        """
+                        count_sql = f"""
+                            SELECT COUNT(*) FROM bills
+                            WHERE {published_condition}
+                            {status_clause} {date_clause}
+                        """
+
+                    elif not phrases and not tokens:
+                        return [], 0
+
+                    else:
+                        # FTS search
+                        fts_query_str = build_fts_query(phrases, tokens)
+                        fts_order = order_clause if sort_by_impact else "ORDER BY rank DESC, date_processed DESC"
+
+                        search_params = dict(base_params, **date_params,
+                                             fts_query=fts_query_str, limit=page_size, offset=offset)
+                        count_params = dict(base_params, **date_params, fts_query=fts_query_str)
+
+                        search_sql = f"""
+                            SELECT {ARCHIVE_COLUMNS},
+                                   ts_rank_cd(fts_vector, websearch_to_tsquery('english', %(fts_query)s)) as rank
+                            FROM bills
+                            WHERE {published_condition}
+                            AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
+                            {status_clause} {date_clause}
+                            {fts_order}
+                            LIMIT %(limit)s OFFSET %(offset)s
+                        """
+                        count_sql = f"""
+                            SELECT COUNT(*) FROM bills
+                            WHERE {published_condition}
+                            AND fts_vector @@ websearch_to_tsquery('english', %(fts_query)s)
+                            {status_clause} {date_clause}
+                        """
+
+                # Execute both queries on the same connection
+                cursor.execute(search_sql, search_params)
+                bills = [dict(row) for row in cursor.fetchall()]
+
+                cursor.execute(count_sql, count_params)
+                total = (cursor.fetchone() or [0])[0]
+
+                return bills, total
+
+    except Exception as e:
+        logger.error(f"search_and_count_bills failed: {e}", exc_info=True)
+        # Fall back to the two separate calls
+        try:
+            bills = search_tweeted_bills(q, status, page, page_size, sort_by_impact)
+            total = count_search_tweeted_bills(q, status)
+            return bills, total
+        except Exception as fallback_err:
+            logger.error(f"Fallback also failed: {fallback_err}")
+            return [], 0
 
 
 def select_and_lock_unposted_bill() -> Optional[Dict[str, Any]]:

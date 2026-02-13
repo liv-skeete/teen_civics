@@ -466,6 +466,16 @@ def init_db_tables() -> None:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_sponsor_name ON bills (sponsor_name);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_fts_vector ON bills USING GIN (fts_vector);")
 
+                # Composite indexes for archive page performance
+                # Browse: WHERE published = TRUE ORDER BY date_processed DESC
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_published_date ON bills (published, date_processed DESC);")
+                # Status filter: WHERE published = TRUE AND normalized_status = X ORDER BY date_processed DESC
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_published_status_date ON bills (published, normalized_status, date_processed DESC);")
+                # Impact sort: WHERE published = TRUE ORDER BY teen_impact_score DESC NULLS LAST
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_published_impact ON bills (published, teen_impact_score DESC NULLS LAST, date_processed DESC);")
+                # Normalized status for filtered counts
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_normalized_status ON bills (normalized_status);")
+
                 cursor.execute("""
                 SELECT column_name
                 FROM information_schema.columns
