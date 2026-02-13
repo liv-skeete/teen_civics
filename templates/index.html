@@ -6,6 +6,8 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='tell-rep.css', v='2026-02-08-v1') }}">
+<!-- Preload hero image so browser starts fetching it immediately -->
+<link rel="preload" as="image" type="image/webp" href="{{ url_for('static', filename='img/hero.webp') }}" fetchpriority="high">
 {% endblock %}
 
 {% block extra_js %}
@@ -13,7 +15,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="hero-section" style="background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('/static/img/hero.jpg'); background-size: cover; background-position: center; color: white; padding: 6rem 0;">
+<div class="hero-section hero-with-image">
     <div class="container">
         <h1>Congress Made Simple</h1>
         <p class="hero-subtitle" style="color: #f0f0f0;">Understand congressional bills through AI-powered summaries designed for teenagers</p>
