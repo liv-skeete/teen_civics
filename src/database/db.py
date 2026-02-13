@@ -37,7 +37,7 @@ ARCHIVE_COLUMNS = (
     "summary_tweet, congress_session, date_introduced, date_processed, "
     "published, source_url, website_slug, tags, "
     "poll_results_yes, poll_results_no, teen_impact_score, "
-    "sponsor_name, sponsor_party, sponsor_state"
+    "sponsor_name, sponsor_party, sponsor_state, subject_tags"
 )
 
 def get_current_congress() -> str:
@@ -169,8 +169,9 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     congress_session, date_introduced, date_processed, source_url,
                     website_slug, tags, published, full_text,
                     normalized_status, teen_impact_score,
-                    sponsor_name, sponsor_party, sponsor_state
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    sponsor_name, sponsor_party, sponsor_state,
+                    subject_tags
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     bill_data.get('bill_id'),
                     bill_data.get('title'),
@@ -192,7 +193,8 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     bill_data.get('teen_impact_score'),
                     bill_data.get('sponsor_name'),
                     bill_data.get('sponsor_party'),
-                    bill_data.get('sponsor_state')
+                    bill_data.get('sponsor_state'),
+                    bill_data.get('subject_tags')
                 ))
         logger.info(f"Successfully inserted bill {bill_data.get('bill_id')}")
         return True
@@ -737,7 +739,8 @@ def _search_tweeted_bills_like(
                     like_clauses.append(f"""
                         (LOWER(COALESCE(title, '')) LIKE %({param_name})s OR
                          LOWER(COALESCE(summary_long, '')) LIKE %({param_name})s OR
-                         LOWER(COALESCE(sponsor_name, '')) LIKE %({param_name})s)
+                         LOWER(COALESCE(sponsor_name, '')) LIKE %({param_name})s OR
+                         LOWER(COALESCE(subject_tags, '')) LIKE %({param_name})s)
                     """)
                 
                 full_like_clause = " AND ".join(like_clauses)
@@ -936,7 +939,8 @@ def _count_search_tweeted_bills_like(phrases: List[str], tokens: List[str], stat
                     like_clauses.append(f"""
                         (LOWER(COALESCE(title, '')) LIKE %({param_name})s OR
                          LOWER(COALESCE(summary_long, '')) LIKE %({param_name})s OR
-                         LOWER(COALESCE(sponsor_name, '')) LIKE %({param_name})s)
+                         LOWER(COALESCE(sponsor_name, '')) LIKE %({param_name})s OR
+                         LOWER(COALESCE(subject_tags, '')) LIKE %({param_name})s)
                     """)
                 full_like_clause = " AND ".join(like_clauses)
                 # Check if status is 'introduced' to adjust the published condition
@@ -1482,6 +1486,78 @@ def record_individual_vote(voter_id: str, bill_id: str, vote_type: str) -> bool:
                 return True
     except Exception as e:
         logger.error(f"Error recording individual vote for voter {voter_id[:8]}... on bill {bill_id}: {e}")
+        return False
+
+
+def record_vote_and_update_poll(
+    bill_id: str, vote_type: str, voter_id: str, previous_vote: Optional[str] = None
+) -> bool:
+    """
+    Combined operation: update poll aggregates AND record individual vote
+    in a single database connection. Eliminates the overhead of acquiring
+    two separate connections.
+
+    Args:
+        bill_id: The bill identifier
+        vote_type: 'yes', 'no', or 'unsure'
+        voter_id: UUID string identifying the voter
+        previous_vote: The user's previous vote if changing ('yes' or 'no')
+
+    Returns:
+        bool: True if the poll update succeeded, False otherwise
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                # 1) Decrement previous vote if changing
+                if previous_vote:
+                    prev = previous_vote.lower()
+                    if prev == 'yes':
+                        cursor.execute(
+                            'UPDATE bills SET poll_results_yes = GREATEST(0, COALESCE(poll_results_yes, 0) - 1) WHERE bill_id = %s',
+                            (normalized_id,),
+                        )
+                    elif prev == 'no':
+                        cursor.execute(
+                            'UPDATE bills SET poll_results_no = GREATEST(0, COALESCE(poll_results_no, 0) - 1) WHERE bill_id = %s',
+                            (normalized_id,),
+                        )
+
+                # 2) Increment new vote
+                vt = vote_type.lower()
+                if vt == 'yes':
+                    cursor.execute(
+                        'UPDATE bills SET poll_results_yes = COALESCE(poll_results_yes, 0) + 1 WHERE bill_id = %s',
+                        (normalized_id,),
+                    )
+                elif vt == 'no':
+                    cursor.execute(
+                        'UPDATE bills SET poll_results_no = COALESCE(poll_results_no, 0) + 1 WHERE bill_id = %s',
+                        (normalized_id,),
+                    )
+                elif vt != 'unsure':
+                    logger.error(f"Invalid vote_type: {vote_type}")
+                    return False
+
+                if cursor.rowcount == 0:
+                    logger.warning(f"No bill found with id {normalized_id} to update poll results")
+                    return False
+
+                # 3) Record individual vote (same connection, same transaction)
+                cursor.execute('''
+                INSERT INTO votes (voter_id, bill_id, vote_type)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (voter_id, bill_id)
+                DO UPDATE SET
+                    vote_type = EXCLUDED.vote_type,
+                    updated_at = CURRENT_TIMESTAMP
+                ''', (voter_id, bill_id, vote_type))
+
+                logger.info(f"Recorded vote + poll update for voter {voter_id[:8]}... on bill {normalized_id}: {vote_type}")
+                return True
+    except Exception as e:
+        logger.error(f"Error in record_vote_and_update_poll for {normalized_id}: {e}")
         return False
 
 

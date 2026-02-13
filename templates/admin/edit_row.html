@@ -28,7 +28,37 @@
         <span class="admin-field-type">{{ col.data_type }}</span>
       </label>
       {% set val = row[col.column_name] if row[col.column_name] is not none else '' %}
-      {% if col.data_type in ['text', 'character varying'] and val|string|length > 200 %}
+      {% if col.column_name == 'subject_tags' and table_name == 'bills' %}
+      {# Subject tags checkbox group — max 3 selections #}
+      {% set current_tags = val.split(',') if val else [] %}
+      <div class="admin-checkbox-group" id="field-{{ col.column_name }}" data-max="3">
+        <p class="admin-checkbox-hint">Select up to 3 subject tags:</p>
+        {% set tag_options = [
+          ("economy-finance", "Economy & Finance"),
+          ("climate-environment", "Climate & Environment"),
+          ("education-youth", "Education & Youth"),
+          ("health-healthcare", "Health & Healthcare"),
+          ("civil-rights-justice", "Civil Rights & Justice"),
+          ("immigration", "Immigration"),
+          ("defense-military", "Defense & Military"),
+          ("technology-privacy", "Technology & Privacy"),
+          ("agriculture-food", "Agriculture & Food"),
+          ("energy", "Energy"),
+          ("foreign-policy", "Foreign Policy"),
+          ("government-elections", "Government & Elections"),
+          ("miscellaneous", "Miscellaneous (fallback)")
+        ] %}
+        {% for slug, display in tag_options %}
+        <label class="admin-checkbox-label">
+          <input type="checkbox" name="subject_tags_checkbox" value="{{ slug }}"
+                 {% if slug in current_tags %}checked{% endif %}
+                 onchange="AdminApp.enforceMaxCheckboxes(this, 3)">
+          {{ display }}
+        </label>
+        {% endfor %}
+      </div>
+      <input type="hidden" name="subject_tags" id="subject-tags-hidden" value="{{ val }}">
+      {% elif col.data_type in ['text', 'character varying'] and val|string|length > 200 %}
       <textarea id="field-{{ col.column_name }}" name="{{ col.column_name }}"
                 class="admin-input admin-textarea" rows="6">{{ val }}</textarea>
       {% elif col.data_type == 'boolean' %}

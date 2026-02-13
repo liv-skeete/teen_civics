@@ -143,6 +143,24 @@ const AdminApp = (() => {
     });
   }
 
+  // --- Subject tags checkbox helpers ---
+  function syncSubjectTagsCheckboxes() {
+    const hidden = document.getElementById("subject-tags-hidden");
+    if (!hidden) return;
+    const checked = document.querySelectorAll('input[name="subject_tags_checkbox"]:checked');
+    const slugs = Array.from(checked).map((cb) => cb.value);
+    hidden.value = slugs.join(",");
+  }
+
+  function enforceMaxCheckboxes(changedCb, max) {
+    const checked = document.querySelectorAll('input[name="subject_tags_checkbox"]:checked');
+    if (checked.length > max) {
+      changedCb.checked = false;
+      showToast(`Maximum ${max} subject tags allowed`, "error");
+    }
+    syncSubjectTagsCheckboxes();
+  }
+
   function doSaveRow() {
     const form = document.getElementById("edit-row-form");
     if (!form) return;
@@ -151,11 +169,16 @@ const AdminApp = (() => {
     const rowId = form.dataset.rowId;
     const csrfToken = getCSRFToken();
 
+    // Sync subject tags checkboxes to hidden field before collecting data
+    syncSubjectTagsCheckboxes();
+
     // Collect form data
     const data = {};
     const inputs = form.querySelectorAll("input[name], textarea[name], select[name]");
     inputs.forEach((input) => {
       if (input.name === "csrf_token") return;
+      // Skip the individual checkboxes — the hidden field carries the value
+      if (input.name === "subject_tags_checkbox") return;
       data[input.name] = input.value;
     });
 
@@ -252,5 +275,7 @@ const AdminApp = (() => {
     handleSave,
     handleBillSummarySave,
     syncRepContactForms,
+    enforceMaxCheckboxes,
+    syncSubjectTagsCheckboxes,
   };
 })();

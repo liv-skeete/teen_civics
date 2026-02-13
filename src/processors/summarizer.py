@@ -337,8 +337,18 @@ def _build_enhanced_system_prompt() -> str:
         "- No repetition between sections?\n"
         "- All required emoji headers present in correct order?\n\n"
         
+        "**SUBJECT TAGGING (for internal classification — NOT shown to users):**\n"
+        "Assign 1–3 subject tags from this FIXED list of slugs:\n"
+        "  economy-finance, climate-environment, education-youth, health-healthcare,\n"
+        "  civil-rights-justice, immigration, defense-military, technology-privacy,\n"
+        "  agriculture-food, energy, foreign-policy, government-elections\n"
+        "If NONE of the 12 categories fit, use 'miscellaneous' as the sole tag.\n"
+        "Every bill MUST get at least one tag. Never return an empty subject_tags value.\n"
+        "Return as a comma-separated string of slugs in a JSON field called 'subject_tags'.\n"
+        "Example: \"economy-finance,education-youth\"\n\n"
+        
         "**Output format (strict JSON):**\n"
-        '{"overview": "...", "detailed": "...", "tweet": "..."}\n'
+        '{"overview": "...", "detailed": "...", "tweet": "...", "subject_tags": "slug1,slug2"}\n'
     )
 
 def _build_user_prompt(bill: Dict[str, Any]) -> str:
@@ -500,6 +510,10 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
             'tweet': [
                 r'"tweet"\s*:\s*"([^"]*)"',
                 r'tweet:\s*([^\n]+)',
+            ],
+            'subject_tags': [
+                r'"subject_tags"\s*:\s*"([^"]*)"',
+                r'subject_tags:\s*([^\n]+)',
             ]
         }
         
@@ -517,6 +531,7 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
             result.setdefault('overview', '')
             result.setdefault('detailed', '')
             result.setdefault('tweet', '')
+            result.setdefault('subject_tags', '')
             return result
         
         # Last resort fallback
@@ -918,7 +933,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     """
     Enhanced bill summarization for teens.
     
-    Returns dict with keys: overview, detailed, term_dictionary, tweet
+    Returns dict with keys: overview, detailed, tweet, subject_tags
     
     All scoring logic is in the Claude prompt, not Python code.
     """
@@ -951,6 +966,12 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     
     logger.info(f"Parsed keys: {list(parsed.keys())}")
     
+    # Extract and validate subject_tags
+    from src.utils.subject_tags import validate_tags
+    raw_subject_tags = str(parsed.get("subject_tags", "")).strip()
+    subject_tags = validate_tags(raw_subject_tags)
+    logger.info(f"🏷️ Subject tags: raw='{raw_subject_tags}' → validated='{subject_tags}'")
+    
     # Normalize text fields
     overview = _normalize_structured_text(parsed.get("overview", ""))
     detailed = _normalize_structured_text(parsed.get("detailed", ""))
@@ -967,7 +988,8 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         return {
             "overview": "",
             "detailed": "",
-            "tweet": ""
+            "tweet": "",
+            "subject_tags": subject_tags  # still return whatever tags we got
         }
     
     # Deduplicate headers and scores
@@ -994,7 +1016,8 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     return {
         "overview": overview,
         "detailed": detailed,
-        "tweet": tweet
+        "tweet": tweet,
+        "subject_tags": subject_tags
     }
 def summarize_title(bill_title: str) -> str:
     """

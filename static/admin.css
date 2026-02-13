@@ -681,3 +681,44 @@
     max-width: none;
   }
 }
+
+/* ===== Subject Tags Checkbox Group ===== */
+.admin-checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-borders);
+  border-radius: var(--radius);
+  background: var(--color-surface, #f9f9f9);
+}
+
+.admin-checkbox-hint {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #666);
+  font-style: italic;
+}
+
+.admin-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.admin-checkbox-label:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.admin-checkbox-label input[type="checkbox"] {
+  accent-color: var(--color-accent, #4f46e5);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

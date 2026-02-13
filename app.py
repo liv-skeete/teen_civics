@@ -103,6 +103,7 @@ from src.database.db import (
     count_search_tweeted_bills,
     search_and_count_bills,
     record_individual_vote,
+    record_vote_and_update_poll,
     get_voter_votes,
 )
 from src.processors.summarizer import summarize_title
@@ -1274,13 +1275,11 @@ def record_vote():
         if not bill_id or vote_type not in ["yes", "no", "unsure"]:
             abort(400, description="Invalid request data")
 
-        updated = update_poll_results(bill_id, vote_type, previous_vote)
+        # Combined: update poll aggregates + record individual vote in one DB connection
+        voter_id, _is_new = _get_or_create_voter_id()
+        updated = record_vote_and_update_poll(bill_id, vote_type, voter_id, previous_vote)
         if not updated:
             abort(404, description="Bill not found or vote update failed")
-
-        # Record individual vote server-side
-        voter_id, _is_new = _get_or_create_voter_id()
-        record_individual_vote(voter_id, bill_id, vote_type)
 
         response = make_response(jsonify({"success": True, "voter_id": voter_id}))
         _set_voter_cookie(response, voter_id)

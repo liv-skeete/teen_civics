@@ -452,6 +452,7 @@ def init_db_tables() -> None:
                     sponsor_name TEXT,
                     sponsor_party TEXT,
                     sponsor_state TEXT,
+                    subject_tags TEXT,
                     last_edited_at TEXT,
                     last_edited_by TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

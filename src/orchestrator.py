@@ -406,6 +406,8 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 "sponsor_name": selected_bill.get("sponsor_name", ""),
                 "sponsor_party": selected_bill.get("sponsor_party", ""),
                 "sponsor_state": selected_bill.get("sponsor_state", ""),
+                # Subject tags from AI summarizer
+                "subject_tags": summary.get("subject_tags", ""),
             }
             
             # Warn about missing metadata to help debug future issues
