@@ -121,7 +121,7 @@ jobs:
     - name: Run daily bill posting
       uses: nick-fields/retry@v3
       with:
-        timeout_minutes: 25
+        timeout_minutes: 13
         max_attempts: 2
         retry_wait_seconds: 60
         command: |

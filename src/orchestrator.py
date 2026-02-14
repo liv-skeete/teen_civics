@@ -24,7 +24,7 @@ load_dotenv()
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status
+from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status, fetch_bill_ids_from_texts_received_today, enrich_single_bill
 from src.processors.summarizer import summarize_bill_enhanced
 from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content
 from src.publishers.facebook_publisher import FacebookPublisher
@@ -128,6 +128,11 @@ def derive_status_from_tracker(tracker: Any) -> tuple[str, str]:
 def main(dry_run: bool = False) -> int:
     """
     Main orchestrator function.
+    
+    Uses a lazy enrichment strategy:
+    1. Phase 1 (Fast): Fetch just the bill IDs from "Texts Received Today" (~10s)
+    2. Phase 2 (Fast): Filter out bills already in DB (already posted)
+    3. Phase 3 (Lazy): Enrich candidate bills ONE AT A TIME until one posts successfully
     """
     try:
         logger.info("🚀 Starting orchestrator...")
@@ -152,74 +157,101 @@ def main(dry_run: bool = False) -> int:
             logger.info("🛑 DUPLICATE PREVENTION: A bill was already posted today. Skipping evening scan.")
             return 0
 
-        logger.info("📥 Fetching and enriching recent bills from Congress.gov...")
-        bills = fetch_and_enrich_bills(limit=25)
-        logger.info(f"📊 Retrieved and enriched {len(bills)} bills")
+        # ── Phase 1 (Fast): Fetch bill IDs only ──────────────────────────
+        phase1_start = time_module.time()
+        logger.info("📥 Phase 1: Fetching bill IDs from 'Texts Received Today'...")
+        bill_ids = fetch_bill_ids_from_texts_received_today()
+        phase1_elapsed = time_module.time() - phase1_start
+        logger.info(f"⏱️ Phase 1: Fetched {len(bill_ids)} bill IDs in {phase1_elapsed:.1f}s")
 
-        selected_bill = None
-        selected_bill_data = None
-
-        if bills:
-            logger.info("🔍 Scanning for unprocessed bills...")
-            # Build list of candidates to try
-            candidates = []
-            for bill in bills:
-                bill_id = normalize_bill_id(bill.get("bill_id", ""))
-                logger.info(f"   📋 Checking bill: {bill_id}")
-                if bill_already_posted(bill_id):
-                    logger.info(f"   ✅ Bill {bill_id} already tweeted. Skipping.")
+        # ── Phase 2 (Fast): Filter out already-posted / problematic bills ─
+        phase2_start = time_module.time()
+        logger.info("🔍 Phase 2: Filtering candidates against database...")
+        candidate_ids = []
+        db_hit_bills = []  # Bills in DB but not yet posted (can skip enrichment)
+        for bid in bill_ids:
+            bid = normalize_bill_id(bid)
+            if bill_already_posted(bid):
+                logger.info(f"   ✅ {bid} already posted. Skipping.")
+                continue
+            existing = get_bill_by_id(bid)
+            if existing:
+                if existing.get("problematic"):
+                    logger.info(f"   ⚠️ {bid} marked problematic. Skipping.")
                     continue
-                
-                existing_bill = get_bill_by_id(bill_id)
-                if existing_bill:
-                    # Skip problematic bills
-                    if existing_bill.get("problematic"):
-                        logger.info(f"   ⚠️ Bill {bill_id} exists but is marked problematic. Skipping.")
-                        continue
-                    logger.info(f"   🎯 Bill {bill_id} exists but not tweeted. Adding to candidates.")
-                    candidates.append((bill, existing_bill))
-                else:
-                    ft = (bill.get("full_text") or "").strip()
-                    if len(ft) < 100:
-                        logger.info(f"   🚫 New bill {bill_id} missing valid full text (len={len(ft)}). Marking problematic and continuing.")
-                        mark_bill_as_problematic(bill_id, "No valid full text available during selection")
-                        continue
-                    logger.info(f"   🆕 Bill {bill_id} is new with full text. Adding to candidates.")
-                    candidates.append((bill, None))
-        
-            
-            # If no candidates from API, check DB for unposted bills
-            if not candidates:
-                logger.info("📭 No new bills from API. Checking DB for any unposted bills...")
-                unposted = select_and_lock_unposted_bill()
-                if unposted:
-                    logger.info(f"   🔄 Found and locked unposted bill in DB: {unposted['bill_id']}")
-                    candidates.append(({"bill_id": unposted["bill_id"]}, unposted))
-            
-            if not candidates:
-                logger.info("📭 No unposted bills available. Nothing to do.")
+                logger.info(f"   🎯 {bid} in DB but not posted. Adding as priority candidate.")
+                db_hit_bills.append((bid, existing))
+            else:
+                logger.info(f"   🆕 {bid} is new. Adding to enrichment candidates.")
+                candidate_ids.append(bid)
+        phase2_elapsed = time_module.time() - phase2_start
+        logger.info(f"⏱️ Phase 2: Filtered to {len(db_hit_bills)} DB hits + {len(candidate_ids)} new candidates in {phase2_elapsed:.1f}s")
+
+        # ── Phase 3 (Lazy): Process candidates one at a time ─────────────
+        phase3_start = time_module.time()
+        logger.info("⚙️ Phase 3: Processing candidates (lazy enrichment)...")
+
+        # 3a) Try DB-hit bills first (already have data, no enrichment needed)
+        for bid, existing_data in db_hit_bills:
+            logger.info(f"⚙️ Processing DB candidate: {bid}")
+            result = process_single_bill({"bill_id": bid}, existing_data, dry_run)
+            if result == 0:
+                phase3_elapsed = time_module.time() - phase3_start
+                logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
+                logger.info(f"✅ Successfully processed bill {bid}")
                 return 0
-            
-            # Try each candidate until one succeeds or all fail
-            for selected_bill, selected_bill_data in candidates:
-                bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
-                logger.info(f"⚙️ Processing candidate bill: {bill_id}")
-                
-                # Attempt to process this bill
-                result = process_single_bill(selected_bill, selected_bill_data, dry_run)
-                
-                if result == 0:
-                    # Success! Exit with success
-                    logger.info(f"✅ Successfully processed bill {bill_id}")
-                    return 0
-                else:
-                    # Failed, try next candidate
-                    logger.info(f"⏭️  Bill {bill_id} failed processing, trying next candidate...")
-                    continue
-            
-            # If we get here, all candidates failed
-            logger.info("📭 All candidates failed processing. No tweet posted this run.")
-            return 0  # Return success so workflow doesn't fail
+            else:
+                logger.info(f"⏭️  DB candidate {bid} failed processing, trying next...")
+
+        # 3b) Enrich new candidates one at a time
+        for bid in candidate_ids:
+            logger.info(f"🔧 Enriching new candidate: {bid}")
+            enrich_start = time_module.time()
+            try:
+                enriched = enrich_single_bill(bid)
+            except Exception as e:
+                logger.warning(f"❌ Enrichment failed for {bid}: {e}")
+                continue
+            enrich_elapsed = time_module.time() - enrich_start
+            logger.info(f"⏱️ Enriched {bid} in {enrich_elapsed:.1f}s")
+
+            if not enriched:
+                logger.warning(f"⏭️  Enrichment returned None for {bid}, skipping.")
+                continue
+
+            # Validate full text before processing
+            ft = (enriched.get("full_text") or "").strip()
+            if len(ft) < 100:
+                logger.info(f"   🚫 {bid} missing valid full text (len={len(ft)}). Marking problematic.")
+                mark_bill_as_problematic(bid, "No valid full text available during selection")
+                continue
+
+            logger.info(f"⚙️ Processing enriched candidate: {bid}")
+            result = process_single_bill(enriched, None, dry_run)
+            if result == 0:
+                phase3_elapsed = time_module.time() - phase3_start
+                logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
+                logger.info(f"✅ Successfully processed bill {bid}")
+                return 0
+            else:
+                logger.info(f"⏭️  Enriched candidate {bid} failed processing, trying next...")
+
+        # 3c) Fallback: check DB for any unposted bills
+        logger.info("📭 No candidates from feed succeeded. Checking DB for unposted bills...")
+        unposted = select_and_lock_unposted_bill()
+        if unposted:
+            bid = unposted['bill_id']
+            logger.info(f"   🔄 Found and locked unposted bill in DB: {bid}")
+            result = process_single_bill({"bill_id": bid}, unposted, dry_run)
+            if result == 0:
+                phase3_elapsed = time_module.time() - phase3_start
+                logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
+                return 0
+
+        phase3_elapsed = time_module.time() - phase3_start
+        logger.info(f"⏱️ Phase 3: All candidates exhausted in {phase3_elapsed:.1f}s")
+        logger.info("📭 No bills could be posted this run.")
+        return 0  # Return success so workflow doesn't fail
 
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
@@ -298,7 +330,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 # Persist regenerated summaries
                 try:
                     from src.database.db import update_bill_summaries as _ubs
-                    if _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", "")):
+                    if _ubs(bill_id, summary.get("overview", ""), summary.get("detailed", ""), summary.get("tweet", ""), subject_tags=summary.get("subject_tags", "")):
                         # Merge updated fields locally for tweet formatting
                         bill_data.update({
                             "summary_tweet": summary.get("tweet", ""),
@@ -308,6 +340,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                             "teen_impact_score": teen_impact_score,
                             "normalized_status": selected_bill.get("normalized_status"),
                             "status": selected_bill.get("status"),
+                            "subject_tags": summary.get("subject_tags", ""),
                         })
                         logger.info("💾 Database summaries updated (regen).")
                     else:

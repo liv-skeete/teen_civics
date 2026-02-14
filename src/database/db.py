@@ -1322,7 +1322,7 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
 
 # Duplicate mark_bill_as_problematic removed (merged into single implementation above)
 
-def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str = "") -> bool:
+def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str = "", subject_tags: str = "") -> bool:
     """
     Update the summaries for a specific bill.
     Note: term_dictionary parameter is kept for API compat but is no longer stored.
@@ -1335,9 +1335,10 @@ def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str
                 UPDATE bills
                 SET summary_overview = %s,
                     summary_detailed = %s,
-                    summary_tweet = %s
+                    summary_tweet = %s,
+                    subject_tags = %s
                 WHERE bill_id = %s
-                ''', (overview, detailed, tweet, normalized_id))
+                ''', (overview, detailed, tweet, subject_tags, normalized_id))
                 if cursor.rowcount == 1:
                     logger.info(f"Successfully updated summaries for bill {normalized_id}")
                     return True

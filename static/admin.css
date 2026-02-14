@@ -722,3 +722,35 @@
   height: 16px;
   cursor: pointer;
 }
+
+/* ===== Subject Tag Badges ===== */
+.admin-tags-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.admin-tag-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: var(--color-accent, #4f46e5);
+  color: #fff;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.admin-no-tags {
+  color: var(--color-muted, #9ca3af);
+}
+
+.admin-help-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--color-muted, #6b7280);
+  line-height: 1.4;
+}

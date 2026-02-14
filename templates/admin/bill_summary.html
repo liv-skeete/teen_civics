@@ -89,6 +89,19 @@
         </select>
       </div>
 
+      <!-- Subject Tags -->
+      <div class="admin-form-group admin-form-group-wide">
+        <label for="field-subject_tags">Subject Tags</label>
+        <input type="text" id="field-subject_tags" name="subject_tags"
+               value="{{ bill.subject_tags or '' }}" class="admin-input"
+               placeholder="e.g., health-healthcare, education-youth, economy-finance">
+        <small class="admin-help-text">
+          Valid tags: economy-finance, climate-environment, education-youth, health-healthcare,
+          civil-rights-justice, immigration, defense-military, technology-privacy,
+          agriculture-food, energy, foreign-policy, government-elections, miscellaneous
+        </small>
+      </div>
+
     </div>
 
     <div class="admin-form-actions">

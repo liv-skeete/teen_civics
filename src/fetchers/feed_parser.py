@@ -540,6 +540,141 @@ def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
     logger.info(f"📊 Enrichment Results:\n   - Bills checked: {checked_bills}\n   - Bills enriched: {len(enriched_bills)}\n   - Bills returned: {len(enriched_bills)}")
     return enriched_bills
 
+
+def enrich_single_bill(bill_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Enrich a single bill by its ID (e.g., 'hr1234-119').
+    Fetches details, tracker, sponsor, and full text for just one bill.
+    
+    This is the lazy-enrichment counterpart to fetch_and_enrich_bills(),
+    designed to be called one bill at a time to avoid enriching bills
+    that will never be posted.
+    
+    Args:
+        bill_id: Normalized bill ID like 'hr1234-119'
+    
+    Returns:
+        Enriched bill dict or None if enrichment fails.
+    """
+    from .congress_fetcher import fetch_bill_text_from_api, fetch_bill_details_from_api, derive_tracker_from_actions, download_bill_text
+    import time as _time
+    
+    api_key = os.getenv('CONGRESS_API_KEY')
+    if not api_key:
+        logger.error("CONGRESS_API_KEY not set; cannot enrich bill")
+        return None
+    
+    match = re.match(r'([a-z]+)(\d+)-(\d+)', bill_id)
+    if not match:
+        logger.error(f"Cannot parse bill_id '{bill_id}' for enrichment")
+        return None
+    
+    bill_type, bill_number, congress = match.groups()
+    logger.info(f"🔧 Enriching single bill: {bill_id}")
+    
+    # 1) Fetch bill details from API
+    detail_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}?api_key={api_key}"
+    bill_data = None
+    try:
+        detail_resp = requests.get(detail_url, headers={"Accept": "application/json"}, timeout=30)
+        if detail_resp.status_code == 200:
+            bill_data = detail_resp.json().get('bill')
+        else:
+            logger.warning(f"⚠️ API returned status {detail_resp.status_code} for {bill_id}")
+    except requests.RequestException as e:
+        logger.warning(f"❌ API call failed for {bill_id}: {e}")
+    
+    if not bill_data:
+        logger.error(f"❌ Could not fetch bill details for {bill_id}")
+        return None
+    
+    # 2) Fetch actions and derive tracker
+    tracker_data = None
+    try:
+        details = fetch_bill_details_from_api(congress, bill_type, bill_number, api_key)
+        actions = details.get('actions', [])
+        tracker_data = derive_tracker_from_actions(actions)
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to fetch actions for {bill_id}: {e}")
+    
+    # 3) Build source URL and optionally scrape tracker
+    source_url = construct_bill_url(congress, bill_type, bill_number)
+    if source_url:
+        scraped = scrape_bill_tracker(source_url, force_scrape=True)
+        if scraped:
+            tracker_data = scraped
+    
+    # 4) Extract introduced date with fallbacks
+    introduced_date = bill_data.get('introducedDate')
+    if not introduced_date:
+        latest_action = bill_data.get('latestAction', {})
+        action_text = (latest_action.get('text') or '').lower()
+        if 'introduced' in action_text:
+            introduced_date = latest_action.get('actionDate')
+    if not introduced_date:
+        for action in (bill_data.get('actions') or []):
+            text = (action.get('text') or '').lower()
+            if 'introduced' in text:
+                introduced_date = action.get('actionDate')
+                if introduced_date:
+                    break
+    
+    # 5) Extract sponsor data
+    sponsor_name = ''
+    sponsor_party = ''
+    sponsor_state = ''
+    sponsors = bill_data.get('sponsors', [])
+    if sponsors:
+        primary = sponsors[0]
+        sponsor_name = primary.get('fullName', '')
+        sponsor_party = primary.get('party', '')
+        sponsor_state = primary.get('state', '')
+        logger.info(f"✅ Sponsor: {sponsor_name} ({sponsor_party}-{sponsor_state})")
+    
+    # 6) Fetch full text (API then scrape fallback)
+    full_text = ""
+    text_source = "none"
+    try:
+        ft, fmt = fetch_bill_text_from_api(str(congress), str(bill_type), str(bill_number), api_key, timeout=30)
+    except Exception:
+        ft, fmt = ("", None)
+    if ft and len(ft.strip()) > 100:
+        full_text = ft
+        text_source = f"api-{fmt or 'unknown'}"
+        logger.info(f"✅ Fetched {len(ft)} chars for {bill_id} from {text_source}")
+    elif source_url and not running_in_ci():
+        try:
+            ft2, status = download_bill_text(source_url, bill_id)
+            if ft2 and len(ft2.strip()) > 100:
+                full_text = ft2
+                text_source = "scraped"
+                logger.info(f"✅ Fetched {len(ft2)} chars for {bill_id} from scrape fallback")
+        except Exception as e:
+            logger.warning(f"⚠️ Scrape fallback failed for {bill_id}: {e}")
+    
+    text_versions_url = f"https://api.congress.gov/v3/bill/{congress}/{bill_type}/{bill_number}/text"
+    
+    enriched = {
+        'bill_id': bill_id,
+        'title': bill_data.get('title'),
+        'text_url': text_versions_url,
+        'source_url': source_url,
+        'date_introduced': introduced_date,
+        'congress': congress,
+        'latest_action': (bill_data.get('latestAction') or {}).get('text'),
+        'latest_action_date': (bill_data.get('latestAction') or {}).get('actionDate'),
+        'tracker': tracker_data,
+        'full_text': full_text,
+        'text_source': text_source,
+        'sponsor_name': sponsor_name,
+        'sponsor_party': sponsor_party,
+        'sponsor_state': sponsor_state,
+    }
+    
+    logger.info(f"✅ Enrichment complete for {bill_id}: text={len(full_text)} chars, source={text_source}")
+    return enriched
+
+
 # HTTP headers to avoid 403 errors
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',

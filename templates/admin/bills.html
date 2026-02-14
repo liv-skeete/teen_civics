@@ -50,6 +50,7 @@
           <th>Bill ID</th>
           <th>Title</th>
           <th>Status</th>
+          <th>Tags</th>
           <th>Last Edited</th>
           <th>Actions</th>
         </tr>
@@ -66,6 +67,15 @@
               {{ (bill.normalized_status or bill.status or 'Unknown')|replace('_', ' ')|title }}
             </span>
           </td>
+          <td class="admin-tags-cell">
+            {% if bill.subject_tags %}
+              {% for tag in bill.subject_tags.split(',') %}
+                <span class="admin-tag-badge">{{ tag.strip() }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="admin-no-tags">—</span>
+            {% endif %}
+          </td>
           <td class="admin-date-cell">
             {{ bill.last_edited_at|format_datetime_simple if bill.last_edited_at else '—' }}
           </td>
@@ -76,7 +86,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="admin-empty">No bills found.</td>
+          <td colspan="6" class="admin-empty">No bills found.</td>
         </tr>
         {% endfor %}
       </tbody>
