@@ -933,6 +933,7 @@ def admin_bills():
                 # Get bills
                 cur.execute(
                     f"""SELECT id, bill_id, title, status, normalized_status,
+                               subject_tags, hidden,
                                last_edited_at, last_edited_by
                         FROM bills {where_sql}
                         ORDER BY date_processed DESC NULLS LAST
@@ -1203,6 +1204,41 @@ def admin_api_update_row(table_name, row_id):
         })
     except Exception as e:
         logger.error(f"Admin API update row error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/admin/api/bills/<int:bill_id>/hide", methods=["POST"])
+@admin_required
+def admin_api_hide_bill(bill_id):
+    """Soft-delete (hide) or unhide a bill. Expects JSON {"hidden": true/false}."""
+    try:
+        from src.database.connection import postgres_connect
+        import psycopg2.extras
+
+        data = request.get_json() or {}
+        hidden = data.get("hidden", True)
+        if hidden not in (True, False):
+            hidden = bool(hidden)
+
+        with postgres_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """UPDATE bills
+                       SET hidden = %s,
+                           last_edited_at = %s,
+                           last_edited_by = 'Liv'
+                       WHERE id = %s
+                       RETURNING bill_id, hidden""",
+                    (hidden, datetime.now(timezone.utc).isoformat(), bill_id),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"error": "Bill not found"}), 404
+
+        action = "hidden" if hidden else "unhidden"
+        logger.info(f"Admin {action} bill id={bill_id} (bill_id={row['bill_id']})")
+        return jsonify({"success": True, "bill_id": row["bill_id"], "hidden": hidden})
+    except Exception as e:
+        logger.error(f"Admin hide bill error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(404)

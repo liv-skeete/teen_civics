@@ -37,8 +37,11 @@ ARCHIVE_COLUMNS = (
     "summary_tweet, congress_session, date_introduced, date_processed, "
     "published, source_url, website_slug, tags, "
     "poll_results_yes, poll_results_no, teen_impact_score, "
-    "sponsor_name, sponsor_party, sponsor_state, subject_tags"
+    "sponsor_name, sponsor_party, sponsor_state, subject_tags, hidden"
 )
+
+# Standard exclusion clause for public queries (excludes soft-deleted bills)
+NOT_HIDDEN = "(hidden IS NULL OR hidden = FALSE)"
 
 def get_current_congress() -> str:
     """
@@ -376,10 +379,11 @@ def get_latest_bill() -> Optional[Dict[str, Any]]:
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                cursor.execute('''
+                cursor.execute(f'''
                 SELECT * FROM bills
                 WHERE COALESCE(title, '') != ''
                   AND (problematic IS NULL OR problematic = FALSE)
+                  AND {NOT_HIDDEN}
                 ORDER BY date_processed DESC
                 LIMIT 1
                 ''')
@@ -396,9 +400,10 @@ def get_latest_tweeted_bill() -> Optional[Dict[str, Any]]:
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                cursor.execute('''
+                cursor.execute(f'''
                 SELECT * FROM bills
                 WHERE published = TRUE
+                  AND {NOT_HIDDEN}
                 ORDER BY date_processed DESC
                 LIMIT 1
                 ''')
@@ -409,15 +414,18 @@ def get_latest_tweeted_bill() -> Optional[Dict[str, Any]]:
 
 # Alias for backwards compatibility
 get_latest_published_bill = get_latest_tweeted_bill
-def get_bill_by_slug(slug: str) -> Optional[Dict[str, Any]]:
+def get_bill_by_slug(slug: str, include_hidden: bool = False) -> Optional[Dict[str, Any]]:
     """
     Retrieve a specific bill by its website_slug.
-    Used for bill detail pages.
+    Used for bill detail pages. Hidden bills are excluded by default.
     """
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                cursor.execute('SELECT * FROM bills WHERE website_slug = %s', (slug,))
+                if include_hidden:
+                    cursor.execute('SELECT * FROM bills WHERE website_slug = %s', (slug,))
+                else:
+                    cursor.execute(f'SELECT * FROM bills WHERE website_slug = %s AND {NOT_HIDDEN}', (slug,))
                 row = cursor.fetchone()
                 return dict(row) if row else None
     except Exception as e:
@@ -492,9 +500,10 @@ def get_all_tweeted_bills(limit: int = 100) -> List[Dict[str, Any]]:
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                cursor.execute('''
+                cursor.execute(f'''
                 SELECT * FROM bills
                 WHERE published = TRUE
+                  AND {NOT_HIDDEN}
                 ORDER BY date_processed DESC
                 LIMIT %s
                 ''', (limit,))
@@ -750,7 +759,7 @@ def _search_tweeted_bills_like(
                 params.update({'limit': page_size, 'offset': offset})
 
                 # Check if status is 'introduced' to adjust the published condition
-                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
 
                 # Build ORDER BY clause using helper for consistency
                 order_clause = build_order_clause(sort_by_impact)
@@ -798,7 +807,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     status_clause, params = build_status_filter(status)
                     params.update({'limit': page_size, 'offset': offset})
                     # Check if status is 'introduced' to adjust the published condition
-                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                    published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
 
                     # Build ORDER BY clause using helper for consistency
                     order_clause = build_order_clause(sort_by_impact)
@@ -829,7 +838,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     params.update({'exact_id': cleaned_q.lower(), 'limit': page_size, 'offset': offset})
                     params.update(date_params)
                     # Check if status is 'introduced' to adjust the published condition
-                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                    published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
 
                     # Build ORDER BY clause using helper for consistency
                     order_clause = build_order_clause(sort_by_impact)
@@ -860,7 +869,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                     params.update({'limit': page_size, 'offset': offset})
                     params.update(date_params)
                     # Check if status is 'introduced' to adjust the published condition
-                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                    published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
 
                     # Build ORDER BY clause using helper for consistency
                     order_clause = build_order_clause(sort_by_impact)
@@ -893,7 +902,7 @@ def search_tweeted_bills(q: str, status: Optional[str], page: int, page_size: in
                 
                 # The tsvector column 'fts_vector' should be created via migration script
                 # Check if status is 'introduced' to adjust the published condition
-                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
 
                 # Build ORDER BY: if sorting by impact, override FTS rank with impact
                 # When sorting by impact score, NULL/0 values are placed last
@@ -947,7 +956,7 @@ def _count_search_tweeted_bills_like(phrases: List[str], tokens: List[str], stat
                     """)
                 full_like_clause = " AND ".join(like_clauses)
                 # Check if status is 'introduced' to adjust the published condition
-                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
                 query = f"""
                     SELECT COUNT(*) FROM bills
                     WHERE {published_condition} AND ({full_like_clause}) {status_clause} {date_clause}
@@ -975,7 +984,7 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                 with conn.cursor() as cursor:
                     status_clause, params = build_status_filter(status)
                     # Check if status is 'introduced' to adjust the published condition
-                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                    published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
                     query = f"""
                         SELECT COUNT(*) FROM bills
                         WHERE {published_condition}
@@ -999,7 +1008,7 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                     params.update({'exact_id': cleaned_q.lower()})
                     params.update(date_params)
                     # Check if status is 'introduced' to adjust the published condition
-                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                    published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
                     cursor.execute(f"""
                         SELECT COUNT(*) FROM bills
                         WHERE {published_condition}
@@ -1023,7 +1032,7 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                     date_clause, date_params = build_date_filter(start_date, end_date)
                     params.update(date_params)
                     # Check if status is 'introduced' to adjust the published condition
-                    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                    published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
                     cursor.execute(f"""
                         SELECT COUNT(*) FROM bills
                         WHERE {published_condition}
@@ -1048,7 +1057,7 @@ def count_search_tweeted_bills(q: str, status: Optional[str]) -> int:
                 params.update({'fts_query': fts_query_str})
                 params.update(date_params)
                 # Check if status is 'introduced' to adjust the published condition
-                published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+                published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
                 query = f"""
                     SELECT COUNT(*) FROM bills
                     WHERE {published_condition}
@@ -1078,7 +1087,7 @@ def search_and_count_bills(
 
     # Build shared filter components once
     status_clause, base_params = build_status_filter(status)
-    published_condition = "published = TRUE" if status != 'introduced' else "1=1"
+    published_condition = f"published = TRUE AND {NOT_HIDDEN}" if status != 'introduced' else NOT_HIDDEN
     order_clause = build_order_clause(sort_by_impact)
 
     # Extract date range from query

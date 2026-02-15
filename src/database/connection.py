@@ -453,6 +453,7 @@ def init_db_tables() -> None:
                     sponsor_party TEXT,
                     sponsor_state TEXT,
                     subject_tags TEXT,
+                    hidden BOOLEAN DEFAULT FALSE,
                     last_edited_at TEXT,
                     last_edited_by TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -487,6 +488,15 @@ def init_db_tables() -> None:
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_published ON bills (published);")
                 elif "tweet_posted" in bill_columns:
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_tweet_posted ON bills (tweet_posted);")
+
+                # Auto-migrate: add hidden column for soft-delete if missing
+                if "hidden" not in bill_columns:
+                    logger.info("Migrating: adding 'hidden' column to bills table")
+                    cursor.execute("ALTER TABLE bills ADD COLUMN hidden BOOLEAN DEFAULT FALSE;")
+
+                # Index for public queries that exclude hidden bills
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_hidden ON bills (hidden);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_published_hidden_date ON bills (published, hidden, date_processed DESC);")
 
                 # Trigger to auto-update updated_at
                 cursor.execute("""

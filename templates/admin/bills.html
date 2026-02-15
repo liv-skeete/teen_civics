@@ -57,8 +57,11 @@
       </thead>
       <tbody>
         {% for bill in bills %}
-        <tr>
-          <td class="admin-bill-id">{{ bill.bill_id }}</td>
+        <tr class="{{ 'admin-row-hidden' if bill.hidden else '' }}">
+          <td class="admin-bill-id">
+            {{ bill.bill_id }}
+            {% if bill.hidden %}<span class="admin-hidden-badge" title="Hidden from public">🚫</span>{% endif %}
+          </td>
           <td class="admin-cell-truncate" title="{{ bill.title }}">
             {{ bill.title|truncate(70, True) }}
           </td>
@@ -82,6 +85,17 @@
           <td class="admin-actions-cell">
             <a href="{{ url_for('admin_bill_summary', bill_id=bill.bill_id) }}" class="btn btn-small btn-primary">Summary</a>
             <a href="{{ url_for('admin_edit_row', table_name='bills', row_id=bill.id) }}" class="btn btn-small btn-secondary">Edit All</a>
+            {% if bill.hidden %}
+            <button class="btn btn-small btn-success admin-hide-btn"
+                    data-bill-id="{{ bill.id }}"
+                    data-action="unhide"
+                    title="Unhide — restore to public listing">👁 Show</button>
+            {% else %}
+            <button class="btn btn-small btn-danger admin-hide-btn"
+                    data-bill-id="{{ bill.id }}"
+                    data-action="hide"
+                    title="Hide — soft-delete from public listing">🚫 Hide</button>
+            {% endif %}
           </td>
         </tr>
         {% else %}
@@ -115,4 +129,46 @@
   </div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.admin-hide-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var billId = this.dataset.billId;
+      var action = this.dataset.action;
+      var label = action === 'hide'
+        ? 'Hide this bill from the public site? It will still exist in the database.'
+        : 'Restore this bill to the public site?';
+      if (!confirm(label)) return;
+
+      var hidden = (action === 'hide');
+      var csrfToken = document.querySelector('meta[name="csrf-token"]')
+                        ? document.querySelector('meta[name="csrf-token"]').content
+                        : '{{ csrf_token() }}';
+
+      fetch('/admin/api/bills/' + billId + '/hide', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ hidden: hidden })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert('Error: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(function(err) {
+        alert('Request failed: ' + err.message);
+      });
+    });
+  });
+});
+</script>
 {% endblock %}
