@@ -371,12 +371,15 @@ def get_latest_bill() -> Optional[Dict[str, Any]]:
     """
     Retrieve the most recently processed bill (regardless of tweet status).
     This is used as a fallback when no tweeted bills are available.
+    Excludes problematic/placeholder bills with empty titles.
     """
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
                 cursor.execute('''
                 SELECT * FROM bills
+                WHERE COALESCE(title, '') != ''
+                  AND (problematic IS NULL OR problematic = FALSE)
                 ORDER BY date_processed DESC
                 LIMIT 1
                 ''')

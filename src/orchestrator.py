@@ -263,6 +263,17 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
     """
     try:
         bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
+
+        # Safety check: refuse to process bills with no title (placeholder rows)
+        effective_title = (
+            (selected_bill_data or {}).get("title") or
+            selected_bill.get("title") or ""
+        ).strip()
+        if not effective_title:
+            logger.error(f"🚫 Bill {bill_id} has no title — cannot process. Marking as problematic.")
+            mark_bill_as_problematic(bill_id, "No title available from API or DB")
+            return 1
+
         if selected_bill_data:
             logger.info("💾 Using existing summaries from database")
             bill_data = selected_bill_data
