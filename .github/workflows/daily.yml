@@ -177,3 +177,33 @@ jobs:
           echo "📋 Archiving orchestrator log..."
           cp orchestrator.log orchestrator_$(date +%Y%m%d_%H%M%S).log
         fi
+
+  sync-staging:
+    runs-on: ubuntu-latest
+    needs: post-bill
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    timeout-minutes: 15
+    env:
+      PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Sync prod to staging
+        run: python scripts/sync_prod_to_staging.py
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Prod-to-staging sync failed"
+          echo "::error::Staging sync failed after production run. Check logs for details."
