@@ -9,10 +9,13 @@ on:
     # Note: During EST (winter), this runs at 9:30 PM ET
     - cron: '30 2 * * *'
   workflow_dispatch:  # Allow manual triggering
+  push:
+    branches: [main, staging]
 
 jobs:
   ping-database:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     timeout-minutes: 10
     
     steps:
@@ -71,6 +74,7 @@ jobs:
   post-bill:
     runs-on: ubuntu-latest
     needs: ping-database
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     timeout-minutes: 30
     env:
       CONGRESS_FETCH_MODE: html
@@ -145,9 +149,11 @@ jobs:
             echo "🔧 Running MANUAL scan"
           fi
           
-          # Run the orchestrator
+          # Retry problematic bills first, then proceed with normal scan
           python src/orchestrator.py
       env:
+        RETRY_PROBLEMATIC_LIMIT: "5"
+        RETRY_PROBLEMATIC_ONLY: "false"
         CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
         VENICE_API_KEY: ${{ secrets.VENICE_API_KEY }}
         VENICE_BASE_URL: https://api.venice.ai/api/v1
