@@ -31,7 +31,9 @@ from src.publishers.facebook_publisher import FacebookPublisher
 from src.database.db import (
     bill_already_posted, get_bill_by_id, insert_bill, update_tweet_info,
     generate_website_slug, init_db, normalize_bill_id,
-    select_and_lock_unposted_bill, has_posted_today, mark_bill_as_problematic
+    select_and_lock_unposted_bill, has_posted_today, mark_bill_as_problematic,
+    get_all_problematic_bills, unmark_bill_as_problematic,
+    update_bill_title, update_bill_full_text,
 )
 
 # NOTE: Substack posting is disabled (Cloudflare blocks datacenter IPs).
@@ -157,100 +159,198 @@ def main(dry_run: bool = False) -> int:
             logger.info("🛑 DUPLICATE PREVENTION: A bill was already posted today. Skipping evening scan.")
             return 0
 
-        # ── Phase 1 (Fast): Fetch bill IDs only ──────────────────────────
-        phase1_start = time_module.time()
-        logger.info("📥 Phase 1: Fetching bill IDs from 'Texts Received Today'...")
-        bill_ids = fetch_bill_ids_from_texts_received_today()
-        phase1_elapsed = time_module.time() - phase1_start
-        logger.info(f"⏱️ Phase 1: Fetched {len(bill_ids)} bill IDs in {phase1_elapsed:.1f}s")
+        # ── Phase 1+2+3: Scrape → Filter → Process (with re-scrape retry) ─
+        MAX_SCRAPE_ATTEMPTS = 2  # Cap re-scrapes to avoid infinite loops
+        for scrape_attempt in range(1, MAX_SCRAPE_ATTEMPTS + 1):
+            logger.info(f"🔄 Scrape attempt {scrape_attempt}/{MAX_SCRAPE_ATTEMPTS}")
 
-        # ── Phase 2 (Fast): Filter out already-posted / problematic bills ─
-        phase2_start = time_module.time()
-        logger.info("🔍 Phase 2: Filtering candidates against database...")
-        candidate_ids = []
-        db_hit_bills = []  # Bills in DB but not yet posted (can skip enrichment)
-        for bid in bill_ids:
-            bid = normalize_bill_id(bid)
-            if bill_already_posted(bid):
-                logger.info(f"   ✅ {bid} already posted. Skipping.")
-                continue
-            existing = get_bill_by_id(bid)
-            if existing:
-                if existing.get("problematic"):
-                    logger.info(f"   ⚠️ {bid} marked problematic. Skipping.")
+            # ── Phase 1 (Fast): Fetch bill IDs only ──────────────────────────
+            phase1_start = time_module.time()
+            logger.info("📥 Phase 1: Fetching bill IDs from 'Texts Received Today'...")
+            bill_ids = fetch_bill_ids_from_texts_received_today()
+            phase1_elapsed = time_module.time() - phase1_start
+            logger.info(f"⏱️ Phase 1: Fetched {len(bill_ids)} bill IDs in {phase1_elapsed:.1f}s")
+
+            if not bill_ids and scrape_attempt < MAX_SCRAPE_ATTEMPTS:
+                logger.info("📭 No bill IDs found on first scrape. Will re-scrape after a short delay...")
+                time_module.sleep(5)
+                continue  # retry the scrape
+
+            # ── Phase 2 (Fast): Filter out already-posted / problematic bills ─
+            phase2_start = time_module.time()
+            logger.info("🔍 Phase 2: Filtering candidates against database...")
+            candidate_ids = []
+            db_hit_bills = []  # Bills in DB but not yet posted (can skip enrichment)
+            for bid in bill_ids:
+                bid = normalize_bill_id(bid)
+                if bill_already_posted(bid):
+                    logger.info(f"   ✅ {bid} already posted. Skipping.")
                     continue
-                logger.info(f"   🎯 {bid} in DB but not posted. Adding as priority candidate.")
-                db_hit_bills.append((bid, existing))
-            else:
-                logger.info(f"   🆕 {bid} is new. Adding to enrichment candidates.")
-                candidate_ids.append(bid)
-        phase2_elapsed = time_module.time() - phase2_start
-        logger.info(f"⏱️ Phase 2: Filtered to {len(db_hit_bills)} DB hits + {len(candidate_ids)} new candidates in {phase2_elapsed:.1f}s")
+                existing = get_bill_by_id(bid)
+                if existing:
+                    if existing.get("problematic"):
+                        logger.info(f"   ⚠️ {bid} marked problematic. Skipping.")
+                        continue
+                    logger.info(f"   🎯 {bid} in DB but not posted. Adding as priority candidate.")
+                    db_hit_bills.append((bid, existing))
+                else:
+                    logger.info(f"   🆕 {bid} is new. Adding to enrichment candidates.")
+                    candidate_ids.append(bid)
+            phase2_elapsed = time_module.time() - phase2_start
+            logger.info(f"⏱️ Phase 2: Filtered to {len(db_hit_bills)} DB hits + {len(candidate_ids)} new candidates in {phase2_elapsed:.1f}s")
 
-        # ── Phase 3 (Lazy): Process candidates one at a time ─────────────
-        phase3_start = time_module.time()
-        logger.info("⚙️ Phase 3: Processing candidates (lazy enrichment)...")
-
-        # 3a) Try DB-hit bills first (already have data, no enrichment needed)
-        for bid, existing_data in db_hit_bills:
-            logger.info(f"⚙️ Processing DB candidate: {bid}")
-            result = process_single_bill({"bill_id": bid}, existing_data, dry_run)
-            if result == 0:
-                phase3_elapsed = time_module.time() - phase3_start
-                logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
-                logger.info(f"✅ Successfully processed bill {bid}")
-                return 0
-            else:
-                logger.info(f"⏭️  DB candidate {bid} failed processing, trying next...")
-
-        # 3b) Enrich new candidates one at a time
-        for bid in candidate_ids:
-            logger.info(f"🔧 Enriching new candidate: {bid}")
-            enrich_start = time_module.time()
-            try:
-                enriched = enrich_single_bill(bid)
-            except Exception as e:
-                logger.warning(f"❌ Enrichment failed for {bid}: {e}")
+            # If no candidates after filtering and we can re-scrape, do so
+            if not db_hit_bills and not candidate_ids and scrape_attempt < MAX_SCRAPE_ATTEMPTS:
+                logger.info("📭 All feed bills filtered out. Will re-scrape after short delay...")
+                time_module.sleep(5)
                 continue
-            enrich_elapsed = time_module.time() - enrich_start
-            logger.info(f"⏱️ Enriched {bid} in {enrich_elapsed:.1f}s")
+
+            # ── Phase 3 (Lazy): Process candidates one at a time ─────────────
+            phase3_start = time_module.time()
+            logger.info("⚙️ Phase 3: Processing candidates (lazy enrichment)...")
+
+            # 3a) Try DB-hit bills first (already have data, no enrichment needed)
+            for bid, existing_data in db_hit_bills:
+                logger.info(f"⚙️ Processing DB candidate: {bid}")
+                result = process_single_bill({"bill_id": bid}, existing_data, dry_run)
+                if result == 0:
+                    phase3_elapsed = time_module.time() - phase3_start
+                    logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
+                    logger.info(f"✅ Successfully processed bill {bid}")
+                    return 0
+                else:
+                    logger.info(f"⏭️  DB candidate {bid} failed processing, trying next...")
+
+            # 3b) Enrich new candidates one at a time
+            for bid in candidate_ids:
+                logger.info(f"🔧 Enriching new candidate: {bid}")
+                enrich_start = time_module.time()
+                try:
+                    enriched = enrich_single_bill(bid)
+                except Exception as e:
+                    logger.warning(f"❌ Enrichment failed for {bid}: {e}")
+                    continue
+                enrich_elapsed = time_module.time() - enrich_start
+                logger.info(f"⏱️ Enriched {bid} in {enrich_elapsed:.1f}s")
+
+                if not enriched:
+                    logger.warning(f"⏭️  Enrichment returned None for {bid}, skipping.")
+                    continue
+
+                # Validate full text before processing
+                ft = (enriched.get("full_text") or "").strip()
+                if len(ft) < 100:
+                    logger.info(f"   🚫 {bid} missing valid full text (len={len(ft)}). Marking problematic.")
+                    mark_bill_as_problematic(bid, "No valid full text available during selection")
+                    continue
+
+                logger.info(f"⚙️ Processing enriched candidate: {bid}")
+                result = process_single_bill(enriched, None, dry_run)
+                if result == 0:
+                    phase3_elapsed = time_module.time() - phase3_start
+                    logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
+                    logger.info(f"✅ Successfully processed bill {bid}")
+                    return 0
+                else:
+                    logger.info(f"⏭️  Enriched candidate {bid} failed processing, trying next...")
+
+            # 3c) Fallback: check DB for any unposted bills
+            logger.info("📭 No candidates from feed succeeded. Checking DB for unposted bills...")
+            unposted = select_and_lock_unposted_bill()
+            if unposted:
+                bid = unposted['bill_id']
+                logger.info(f"   🔄 Found and locked unposted bill in DB: {bid}")
+                result = process_single_bill({"bill_id": bid}, unposted, dry_run)
+                if result == 0:
+                    phase3_elapsed = time_module.time() - phase3_start
+                    logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
+                    return 0
+
+            phase3_elapsed = time_module.time() - phase3_start
+            logger.info(f"⏱️ Phase 3: All candidates exhausted in {phase3_elapsed:.1f}s (scrape attempt {scrape_attempt})")
+
+            # If we still have scrape attempts left, loop back for a re-scrape
+            if scrape_attempt < MAX_SCRAPE_ATTEMPTS:
+                logger.info("🔁 Re-scraping feed to look for newly available bills...")
+                time_module.sleep(5)
+                continue
+
+            # All scrape attempts exhausted — break out to Phase 4
+            break
+
+        # ── Phase 4: Problematic-bill recovery ───────────────────────────
+        logger.info("🔍 Phase 4: Re-checking problematic bills for updated info...")
+        phase4_start = time_module.time()
+        problematic_bills = get_all_problematic_bills(limit=20)
+        logger.info(f"   Found {len(problematic_bills)} problematic bills to re-check.")
+
+        recovered_count = 0
+        for prob_bill in problematic_bills:
+            pbid = prob_bill.get("bill_id", "")
+            prob_reason = prob_bill.get("problem_reason", "")
+            logger.info(f"   🔎 Re-checking {pbid} (reason: {prob_reason})")
+
+            # Re-enrich from the API to see if title/full_text are now available
+            try:
+                enriched = enrich_single_bill(pbid)
+            except Exception as e:
+                logger.warning(f"   ❌ Re-enrichment failed for {pbid}: {e}")
+                continue
 
             if not enriched:
-                logger.warning(f"⏭️  Enrichment returned None for {bid}, skipping.")
+                logger.info(f"   ⏭️  Enrichment still returns None for {pbid}, keeping problematic.")
                 continue
 
-            # Validate full text before processing
-            ft = (enriched.get("full_text") or "").strip()
-            if len(ft) < 100:
-                logger.info(f"   🚫 {bid} missing valid full text (len={len(ft)}). Marking problematic.")
-                mark_bill_as_problematic(bid, "No valid full text available during selection")
+            # Check if the root cause is now resolved
+            new_title = (enriched.get("title") or "").strip()
+            new_ft = (enriched.get("full_text") or "").strip()
+            old_title = (prob_bill.get("title") or "").strip()
+
+            is_now_valid = True
+            reasons_still_bad = []
+
+            if not new_title and not old_title:
+                reasons_still_bad.append("still no title")
+                is_now_valid = False
+            if len(new_ft) < 100 and "full text" in prob_reason.lower():
+                reasons_still_bad.append(f"full text still short (len={len(new_ft)})")
+                is_now_valid = False
+
+            if not is_now_valid:
+                logger.info(f"   ⏭️  {pbid} still problematic: {', '.join(reasons_still_bad)}")
                 continue
 
-            logger.info(f"⚙️ Processing enriched candidate: {bid}")
-            result = process_single_bill(enriched, None, dry_run)
-            if result == 0:
-                phase3_elapsed = time_module.time() - phase3_start
-                logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
-                logger.info(f"✅ Successfully processed bill {bid}")
-                return 0
-            else:
-                logger.info(f"⏭️  Enriched candidate {bid} failed processing, trying next...")
+            # Bill has improved — update DB fields and unmark
+            logger.info(f"   ✅ {pbid} now has valid data. Unmarking problematic.")
+            recovered_count += 1
 
-        # 3c) Fallback: check DB for any unposted bills
-        logger.info("📭 No candidates from feed succeeded. Checking DB for unposted bills...")
-        unposted = select_and_lock_unposted_bill()
-        if unposted:
-            bid = unposted['bill_id']
-            logger.info(f"   🔄 Found and locked unposted bill in DB: {bid}")
-            result = process_single_bill({"bill_id": bid}, unposted, dry_run)
-            if result == 0:
-                phase3_elapsed = time_module.time() - phase3_start
-                logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
-                return 0
+            if new_title and new_title != old_title:
+                update_bill_title(pbid, new_title)
 
-        phase3_elapsed = time_module.time() - phase3_start
-        logger.info(f"⏱️ Phase 3: All candidates exhausted in {phase3_elapsed:.1f}s")
-        logger.info("📭 No bills could be posted this run.")
+            if len(new_ft) >= 100:
+                update_bill_full_text(pbid, new_ft)
+
+            unmark_bill_as_problematic(pbid)
+
+            # Attempt to process and post the recovered bill
+            logger.info(f"   🚀 Attempting to process recovered bill {pbid}...")
+            refreshed = get_bill_by_id(pbid)
+            if refreshed:
+                result = process_single_bill(
+                    {**enriched, "bill_id": pbid},
+                    refreshed,
+                    dry_run
+                )
+                if result == 0:
+                    phase4_elapsed = time_module.time() - phase4_start
+                    logger.info(f"⏱️ Phase 4: Successfully posted recovered bill {pbid} in {phase4_elapsed:.1f}s")
+                    return 0
+                else:
+                    logger.info(f"   ⏭️  Recovered bill {pbid} failed processing, continuing...")
+
+        phase4_elapsed = time_module.time() - phase4_start
+        logger.info(f"⏱️ Phase 4: Checked {len(problematic_bills)} problematic bills, recovered {recovered_count}, in {phase4_elapsed:.1f}s")
+        logger.info("📭 No bills could be posted this run (all phases exhausted).")
         return 0  # Return success so workflow doesn't fail
 
     except Exception as e:

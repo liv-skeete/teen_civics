@@ -20,6 +20,9 @@ from .db import (
     update_poll_results,
     update_bill_summaries,
     update_bill_full_text,
+    get_all_problematic_bills,
+    unmark_bill_as_problematic,
+    update_bill_title,
 )
 
 __all__ = [
@@ -37,4 +40,7 @@ __all__ = [
     'update_poll_results',
     'update_bill_summaries',
     'update_bill_full_text',
+    'get_all_problematic_bills',
+    'unmark_bill_as_problematic',
+    'update_bill_title',
 ]

@@ -1325,6 +1325,98 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
 
 # Duplicate mark_bill_as_problematic removed (merged into single implementation above)
 
+
+def get_all_problematic_bills(limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Retrieve all bills currently marked as problematic.
+    Used by the orchestrator recovery loop to re-check whether
+    previously problematic bills now have valid data (e.g. title, full text).
+
+    Args:
+        limit: Maximum number of problematic bills to return.
+
+    Returns:
+        List of bill dictionaries ordered by date_processed DESC.
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute('''
+                    SELECT * FROM bills
+                    WHERE problematic = TRUE
+                    ORDER BY date_processed DESC
+                    LIMIT %s
+                ''', (limit,))
+                return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error retrieving problematic bills: {e}")
+        return []
+
+
+def unmark_bill_as_problematic(bill_id: str) -> bool:
+    """
+    Clear the problematic flag on a bill so it becomes eligible for processing again.
+
+    Args:
+        bill_id: The bill identifier (will be normalized).
+
+    Returns:
+        True if the update succeeded, False otherwise.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE bills
+                    SET problematic = FALSE,
+                        problem_reason = NULL
+                    WHERE bill_id = %s
+                ''', (normalized_id,))
+                if cursor.rowcount == 1:
+                    logger.info(f"Unmarked bill {normalized_id} as no longer problematic.")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to unmark.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error unmarking bill {normalized_id} as non-problematic: {e}")
+        return False
+
+
+def update_bill_title(bill_id: str, title: str) -> bool:
+    """
+    Update the title (and recalculated short_title) for a specific bill.
+
+    Args:
+        bill_id: The bill identifier (will be normalized).
+        title: The new title string.
+
+    Returns:
+        True if the update succeeded, False otherwise.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    short_title = deterministic_shorten_title(title, 80) if title else None
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE bills
+                    SET title = %s,
+                        short_title = %s
+                    WHERE bill_id = %s
+                ''', (title, short_title, normalized_id))
+                if cursor.rowcount == 1:
+                    logger.info(f"Updated title for bill {normalized_id}")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to update title.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error updating title for bill {normalized_id}: {e}")
+        return False
+
+
 def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str = "", subject_tags: str = "") -> bool:
     """
     Update the summaries for a specific bill.
