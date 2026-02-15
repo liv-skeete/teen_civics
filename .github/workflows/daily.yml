@@ -193,6 +193,9 @@ jobs:
     env:
       PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -206,7 +209,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Sync prod to staging
-        run: python scripts/sync_prod_to_staging.py
+        run: |
+          echo "Working directory: $(pwd)"
+          python scripts/sync_prod_to_staging.py
 
       - name: Notify on failure
         if: failure()
