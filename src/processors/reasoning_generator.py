@@ -29,53 +29,19 @@ def _fallback_generation(vote: str, bill_title: str, summary_overview: str) -> s
     """Generate template-based fallback text from bill metadata."""
     logger.warning("Using fallback reasoning generation.")
     
-    # Process summary for concise description
-    desc = clean_text_for_fallback(summary_overview)
-    if 'Overview' in desc:
-         try:
-             desc = desc.split('Overview')[-1].strip()
-         except IndexError:
-             pass
-    
-    # Extract first sentence
-    m = re.match(r'^(.+?[.!?])\s', desc)
-    if m:
-        desc = m.group(1)
-    
-    # Ensure it's not too long
-    if len(desc) > 200:
-        desc = desc[:197].rsplit(' ', 1)[0] + '...'
-        
     # Process title for topic
     topic = bill_title or "this legislation"
     topic = re.sub(r'^(To amend|A bill to|A resolution to|Providing for)\s+', '', topic, flags=re.IGNORECASE).strip()
     if len(topic) > 80:
          topic = topic[:77] + "..."
 
-    topic_clean = clean_text_for_fallback(topic)
+    topic_clean = clean_text_for_fallback(topic).rstrip(".,;:")
 
+    # Simplified, consistent templates that don't rely on potentially awkward summary extracts
     if vote == "yes":
-        if desc:
-            if desc.lower().startswith("this bill"):
-                 desc = "it " + desc[9:].strip()
-            elif desc.lower().startswith("the bill"):
-                 desc = "it " + desc[8:].strip()
-            if desc and desc[0].isupper():
-                 desc = desc[0].lower() + desc[1:]
-            return f"{desc}"
-            
-        return f"it addresses important issues around {topic_clean} that deserve action."
+        return f"it addresses critical issues regarding {topic_clean} and represents a step forward for our country."
     else:
-        if desc:
-            if desc.lower().startswith("this bill"):
-                 desc = "it " + desc[9:].strip()
-            elif desc.lower().startswith("the bill"):
-                 desc = "it " + desc[8:].strip()
-            if desc and desc[0].isupper():
-                 desc = desc[0].lower() + desc[1:]
-            return f"{desc}"
-
-        return f"it raises serious concerns around {topic_clean} that have not been addressed."
+        return f"it raises significant concerns regarding {topic_clean} and fails to adequately address potential downsides."
 
 def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_id: Optional[str] = None) -> str:
     """Generate 1 concise persuasive sentence for email body using AI.
@@ -116,7 +82,7 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
             f"Bill Title: {safe_title}\n"
             f"Summary: {safe_overview}\n\n"
             "Write 1-2 persuasive sentences (max 300 chars) arguing why I SUPPORT this bill. "
-            "Don't just describe the bill — make an argument about WHY it matters and WHY it's the right thing to do. "
+            "Crucial: Do not just restate the summary. Give a REASON for support (e.g., 'it protects our future', 'it ensures fairness', 'it solves the problem of X'). "
             "Start with lowercase so it fits after 'because '."
         )
     else:
@@ -124,7 +90,7 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
             f"Bill Title: {safe_title}\n"
             f"Summary: {safe_overview}\n\n"
             "Write 1-2 persuasive sentences (max 300 chars) arguing why I OPPOSE this bill. "
-            "Don't just describe the bill — make an argument about WHY it's harmful or misguided. "
+            "Crucial: Do not just restate the summary. Give a REASON for opposition (e.g., 'it risks our privacy', 'it costs too much', 'it fails to solve the root cause'). "
             "Start with lowercase so it fits after 'because '."
         )
 
@@ -155,9 +121,18 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
         # Remove any accidental prefixes
         text = re.sub(r"^(because\s+|that\s+|i\s+support\s+.*?because\s+|i\s+oppose\s+.*?because\s+)", "", text, flags=re.IGNORECASE).strip()
 
-        # Ensure lowercase start
+        # Ensure lowercase start, but protect proper nouns
+        # Only lowercase if the first word isn't a likely proper noun
         if text and len(text) > 1 and text[0].isupper() and text[1].islower():
-             text = text[0].lower() + text[1:]
+             first_word = text.split()[0].rstrip('.,;:')
+             # Common proper nouns to protect
+             protected_words = {
+                 "Congress", "Senate", "House", "Federal", "Government", "Constitution",
+                 "America", "American", "United", "States", "President", "Supreme", "Court",
+                 "Democrat", "Republican", "Bill", "Act"
+             }
+             if first_word not in protected_words:
+                 text = text[0].lower() + text[1:]
              
         # Remove textual artifacts
         text = text.replace('"', '').replace("'", "'")
