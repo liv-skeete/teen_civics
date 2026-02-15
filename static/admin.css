@@ -689,8 +689,13 @@
   gap: var(--spacing-xs);
   padding: var(--spacing-sm);
   border: 1px solid var(--color-borders);
-  border-radius: var(--radius);
-  background: var(--color-surface, #f9f9f9);
+  border-radius: var(--border-radius);
+  background: var(--color-light-gray);
+}
+
+[data-theme="dark"] .admin-checkbox-group {
+  background: var(--color-cards-dark);
+  border-color: var(--color-borders-dark);
 }
 
 .admin-checkbox-hint {

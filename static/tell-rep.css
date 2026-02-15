@@ -679,17 +679,19 @@
 /* --- District Select Dropdown --- */
 .district-select {
     padding: var(--spacing-sm) var(--spacing-md);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    background: var(--color-light-gray);
     color: var(--color-text);
-    font-size: 1rem;
+    font-size: var(--font-size-md);
+    font-family: var(--font-family);
     cursor: pointer;
     appearance: auto;
+    min-height: var(--btn-min-height);
 }
 
 .district-select:focus {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
 }
 
@@ -712,8 +714,8 @@
     align-items: center;
     margin-bottom: var(--spacing-md);
     padding: var(--spacing-sm);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
+    border-radius: var(--border-radius);
+    background: var(--color-light-gray);
 }
 
 [data-theme="dark"] .rep-row,

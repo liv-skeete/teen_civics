@@ -5,6 +5,8 @@
 (() => {
   "use strict";
 
+  const API_BASE = (window.APP_ROOT || "");
+
   // --- Debug Logging ---
   const hostname = window.location.hostname;
   const port = window.location.port;
@@ -224,7 +226,7 @@
 
     try {
       // Step 1: ZIP → districts
-      const zipResp = await fetch("/api/zip-lookup", {
+      const zipResp = await fetch(API_BASE + "/api/zip-lookup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -246,7 +248,7 @@
       const reps = [];
       for (const dist of districts) {
         try {
-          const repResp = await fetch("/api/rep-lookup", {
+          const repResp = await fetch(API_BASE + "/api/rep-lookup", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -318,7 +320,6 @@
     // Header label
     const label = document.createElement('p');
     label.className = 'district-selection-label';
-    label.style.cssText = 'margin-bottom: var(--spacing-sm); font-weight: 500; color: var(--color-text);';
     label.textContent = "What's your congressional district?";
     resultsArea.appendChild(label);
 
@@ -326,7 +327,7 @@
     const select = document.createElement('select');
     select.className = 'district-select';
     select.setAttribute('aria-label', 'Select your congressional district');
-    select.style.cssText = 'width: 100%; margin-bottom: var(--spacing-md);';
+    select.className = 'district-select district-select-full';
 
     // Default option
     const defaultOpt = document.createElement('option');
@@ -401,18 +402,17 @@
     reps.forEach(rep => {
       const row = document.createElement('div');
       row.className = 'rep-row';
-      row.style.cssText = 'display: flex; gap: var(--spacing-md); align-items: center; margin-bottom: var(--spacing-md); padding: var(--spacing-sm); border-radius: var(--radius-md); background: var(--color-surface);';
 
       // Photo
       if (rep.photo_url) {
         const img = document.createElement('img');
         img.src = rep.photo_url;
         img.alt = rep.name;
-        img.style.cssText = 'width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;';
+        img.className = 'rep-row-photo';
         img.addEventListener('error', () => {
           const initial = (rep.name || '?').charAt(0).toUpperCase();
           const placeholder = document.createElement('div');
-          placeholder.style.cssText = 'width: 48px; height: 48px; border-radius: 50%; background: var(--color-accent); color: var(--color-white); display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;';
+          placeholder.className = 'rep-row-photo-placeholder';
           placeholder.textContent = initial;
           img.replaceWith(placeholder);
         }, { once: true });
@@ -421,10 +421,10 @@
 
       // Info container
       const info = document.createElement('div');
-      info.style.cssText = 'flex: 1; min-width: 0;';
+      info.className = 'rep-row-info';
 
       const nameSpan = document.createElement('span');
-      nameSpan.style.cssText = 'font-weight: 600; display: block;';
+      nameSpan.className = 'rep-row-name';
       nameSpan.textContent = rep.name;
       info.appendChild(nameSpan);
 
@@ -438,7 +438,7 @@
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.textContent = 'Visit Contact Form';
-        link.style.cssText = 'white-space: nowrap; color: var(--color-primary); text-decoration: none; font-weight: 500;';
+        link.className = 'rep-row-contact-link';
         row.appendChild(link);
       }
 
@@ -524,7 +524,7 @@
     }
 
     try {
-      const resp = await fetch("/api/generate-email", {
+      const resp = await fetch(API_BASE + "/api/generate-email", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
