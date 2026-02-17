@@ -575,9 +575,12 @@
       if (billTitle && needsThe(billTitle)) {
         billLabel = `the ${billLabel}`;
       }
+      const supportArg = `it would make a real difference for families and young people in our community, and passing it sends a clear message that Congress is listening to the people it serves.`;
+      const opposeArg = `it risks harming the people it claims to help, and my community deserves a solution that actually addresses the root problem instead of creating new ones.`;
+      const reasonArg = vote === "yes" ? supportArg : opposeArg;
       showEmailEditor(section, {
         subject: `Constituent Feedback on ${billId} | via TeenCivics`,
-        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billLabel} on TeenCivics (https://teencivics.org), a civic education platform that helps young Americans engage with legislation.\n\nI ${stance.toUpperCase()} this bill because it directly impacts our community and I urge you to consider your constituents' views.`,
+        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billLabel} on TeenCivics (https://teencivics.org), a civic education platform that helps young Americans engage with legislation.\n\nI ${stance.toUpperCase()} this bill because ${reasonArg}\n\nI urge you to consider your constituents' views on this important matter.\n\nRespectfully,\n\n[Your Name]`,
         mailto_url: null,
       }, primaryRep, ccReps);
     }

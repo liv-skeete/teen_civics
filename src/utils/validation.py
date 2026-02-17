@@ -17,6 +17,7 @@ MIN_FULL_TEXT_LENGTH = 100
 def validate_bill_data(bill: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     Validate that a bill has all required fields populated and content meets quality standards.
+    Works with both API-format data (field: 'congress') and DB-format data (field: 'congress_session').
     
     Args:
         bill: Dictionary containing bill data
@@ -26,35 +27,37 @@ def validate_bill_data(bill: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     reasons = []
     
-    # 1. Required Fields presence check
-    required_fields = {
-        "title": "Title",
-        "bill_id": "Bill ID",
-        "congress": "Congress Session", # Maps to 'congress_session' in DB, 'congress' in API
-    }
+    # 1. Title is absolutely required
+    title = str(bill.get("title") or "").strip()
+    if not title:
+        reasons.append("Missing title")
     
-    for field, name in required_fields.items():
-        val = bill.get(field)
-        if not val or not str(val).strip():
-            reasons.append(f"Missing required field: {name}")
+    # 2. Bill ID is absolutely required
+    bill_id = str(bill.get("bill_id") or "").strip()
+    if not bill_id:
+        reasons.append("Missing bill_id")
+    
+    # 3. Congress session — accept either 'congress' (API) or 'congress_session' (DB)
+    congress = str(bill.get("congress") or bill.get("congress_session") or "").strip()
+    if not congress:
+        reasons.append("Missing congress session")
 
-    # 2. Full Text Validation
-    # We require substantial full text to generate accurate summaries/impact scores.
+    # 4. Full Text Validation
     full_text = str(bill.get("full_text") or "").strip()
     if not full_text:
         reasons.append("Missing full text")
     elif len(full_text) < MIN_FULL_TEXT_LENGTH:
         reasons.append(f"Full text too short (length={len(full_text)}, min={MIN_FULL_TEXT_LENGTH})")
 
-    # 3. Sponsor Validation
-    # We want to display sponsor info (name/party/state) if possible.
-    # While technically a bill exists without it in early stages, for our 'quality' bar 
-    # we might want to enforce it or at least log significant warning.
-    # INSTRUCTION: "Tighten validation so daily workflow never posts bills with missing info"
-    # User specified "sponsor" in the instructions list of examples.
+    # 5. Sponsor Validation
     sponsor_name = str(bill.get("sponsor_name") or "").strip()
     if not sponsor_name:
         reasons.append("Missing sponsor information")
+
+    # 6. Status must not be 'problematic' or empty
+    status = str(bill.get("status") or "").strip().lower()
+    if status == "problematic":
+        reasons.append("Status is 'problematic'")
 
     if reasons:
         return False, reasons

@@ -37,17 +37,26 @@ def _fallback_generation(vote: str, bill_title: str, summary_overview: str) -> s
 
     topic_clean = clean_text_for_fallback(topic).rstrip(".,;:")
 
-    # Simplified, consistent templates that don't rely on potentially awkward summary extracts
+    # Stronger fallback templates with values-based arguments
     if vote == "yes":
-        return f"it addresses critical issues regarding {topic_clean} and represents a step forward for our country."
+        return (
+            f"it takes meaningful action on {topic_clean}, which directly affects "
+            f"communities like mine. Passing this legislation would move us closer "
+            f"to a fairer, more accountable system for all Americans."
+        )
     else:
-        return f"it raises significant concerns regarding {topic_clean} and fails to adequately address potential downsides."
+        return (
+            f"it fails to adequately protect the interests of everyday Americans "
+            f"regarding {topic_clean}. The potential costs and unintended consequences "
+            f"outweigh the benefits, and I urge you to seek a better solution."
+        )
 
-def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_id: Optional[str] = None) -> str:
-    """Generate 1 concise persuasive sentence for email body using AI.
+def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_id: Optional[str] = None, summary_detailed: Optional[str] = None) -> str:
+    """Generate 1-2 concise persuasive sentences for email body using AI.
 
     Uses Venice.ai (or configured AI provider) to transform bill context into
-    natural advocacy text. Falls back to template-based generation if AI fails.
+    natural advocacy text with strong argumentation. Falls back to template-based
+    generation if AI fails.
     """
     
     # Check cache first if bill_id provided
@@ -63,34 +72,57 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
     safe_overview = clean_text_for_fallback(summary_overview or "")
     safe_title = clean_text_for_fallback(bill_title or "this bill")
     
-    # Construct prompts — request 1-2 persuasive sentences to fit email message
+    # Include detailed summary for richer context (truncate to avoid token limits)
+    safe_detailed = ""
+    if summary_detailed:
+        safe_detailed = clean_text_for_fallback(summary_detailed)
+        if len(safe_detailed) > 800:
+            safe_detailed = safe_detailed[:800] + "..."
+    
+    # Build context block — give AI as much bill substance as possible
+    context_parts = [f"Bill Title: {safe_title}"]
+    if safe_overview:
+        context_parts.append(f"Overview: {safe_overview}")
+    if safe_detailed:
+        context_parts.append(f"Key Details: {safe_detailed}")
+    context_block = "\n".join(context_parts)
+    
+    # Construct prompts — demand genuine persuasive argumentation
     system_prompt = (
-        "You are a constituent writing to a member of Congress. "
-        "Complete the sentence: 'I [support/oppose] this bill because...'\n"
-        "Guidelines:\n"
-        "1. Start directly with lowercase (e.g., 'it would help...', 'it fails to...').\n"
+        "You are a passionate young constituent writing to your member of Congress. "
+        "Your job is to complete the sentence: 'I [support/oppose] this bill because...'\n\n"
+        "CRITICAL RULES:\n"
+        "1. Start directly with lowercase (e.g., 'it would protect...', 'it threatens...').\n"
         "2. Write 1-2 sentences, max 300 characters total.\n"
-        "3. Make a PERSUASIVE ARGUMENT — explain WHY you care, not just what the bill does.\n"
-        "4. Appeal to values like fairness, safety, freedom, opportunity, or responsibility.\n"
-        "5. Do NOT just summarize the bill — argue for or against it.\n"
-        "6. Do NOT include 'I support' or 'I oppose' in your output.\n"
-        "7. Do NOT use bullet points or headers.\n"
+        "3. Make a REAL ARGUMENT — state a specific consequence, impact, or principle at stake.\n"
+        "4. Name WHO is affected and HOW (e.g., 'students', 'working families', 'small businesses', 'my generation').\n"
+        "5. Appeal to concrete values: safety, fairness, opportunity, accountability, freedom, fiscal responsibility.\n"
+        "6. NEVER just describe or summarize the bill. ARGUE for/against it.\n"
+        "7. Do NOT include 'I support' or 'I oppose' — your text follows 'because '.\n"
+        "8. Do NOT use bullet points, headers, or quotation marks.\n"
+        "9. Sound like a real person who genuinely cares, not a form letter.\n"
     )
     
     if vote == "yes":
         user_prompt = (
-            f"Bill Title: {safe_title}\n"
-            f"Summary: {safe_overview}\n\n"
-            "Write 1-2 persuasive sentences (max 300 chars) arguing why I SUPPORT this bill. "
-            "Crucial: Do not just restate the summary. Give a REASON for support (e.g., 'it protects our future', 'it ensures fairness', 'it solves the problem of X'). "
+            f"{context_block}\n\n"
+            "Write 1-2 persuasive sentences (max 300 chars) arguing why I SUPPORT this bill.\n\n"
+            "BAD example (just restates the bill): 'it would create new regulations for companies.'\n"
+            "GOOD example (makes an argument): 'it would finally hold corporations accountable for pollution "
+            "that harms communities like mine, and every day we delay costs lives.'\n\n"
+            "Your argument must explain a SPECIFIC BENEFIT or PROBLEM IT SOLVES. "
+            "Mention who benefits and why it matters. "
             "Start with lowercase so it fits after 'because '."
         )
     else:
         user_prompt = (
-            f"Bill Title: {safe_title}\n"
-            f"Summary: {safe_overview}\n\n"
-            "Write 1-2 persuasive sentences (max 300 chars) arguing why I OPPOSE this bill. "
-            "Crucial: Do not just restate the summary. Give a REASON for opposition (e.g., 'it risks our privacy', 'it costs too much', 'it fails to solve the root cause'). "
+            f"{context_block}\n\n"
+            "Write 1-2 persuasive sentences (max 300 chars) arguing why I OPPOSE this bill.\n\n"
+            "BAD example (just restates the bill): 'it would change current healthcare policy.'\n"
+            "GOOD example (makes an argument): 'it would strip protections from millions of working "
+            "families without offering any real alternative, putting my community at risk.'\n\n"
+            "Your argument must explain a SPECIFIC HARM, RISK, or FLAW. "
+            "Mention who gets hurt and why a better approach is needed. "
             "Start with lowercase so it fits after 'because '."
         )
 

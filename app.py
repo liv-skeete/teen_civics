@@ -983,10 +983,10 @@ def admin_sync_contact_forms():
     try:
         from src.fetchers.contact_form_sync import sync_contact_forms
         result = sync_contact_forms()
-        return jsonify(result)
+        return jsonify({"success": True, "results": result})
     except Exception as e:
         logger.error(f"Contact form sync error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/admin/api/tables")
@@ -1809,6 +1809,7 @@ def generate_email():
         bill_title = bill.get("title", bill_id)
         bill_number = bill.get("bill_id", bill_id)
         summary_overview = bill.get("summary_overview", "") or ""
+        summary_detailed = bill.get("summary_detailed", "") or ""
 
         # Extract last name from rep name for salutation
         rep_last_name = rep_name.split()[-1] if rep_name else "Representative"
@@ -1819,6 +1820,7 @@ def generate_email():
             bill_title=bill_title,
             summary_overview=summary_overview,
             bill_id=bill_id,
+            summary_detailed=summary_detailed,
         )
 
         # Build subject
