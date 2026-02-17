@@ -1278,6 +1278,10 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
     """
     Mark a bill as problematic to prevent it from being processed again.
 
+    Sets ``problematic_marked_at`` to the current timestamp so the 15-day
+    recheck delay can be calculated later.  Does NOT reset ``recheck_attempted``
+    — once a recheck has been attempted, the bill stays locked out.
+
     Behavior:
       - UPDATE if the bill exists.
       - If no rows updated, UPSERT a minimal placeholder row marked problematic.
@@ -1291,7 +1295,8 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
                     '''
                     UPDATE bills
                     SET problematic = TRUE,
-                        problem_reason = %s
+                        problem_reason = %s,
+                        problematic_marked_at = COALESCE(problematic_marked_at, CURRENT_TIMESTAMP)
                     WHERE bill_id = %s
                     ''',
                     (reason, normalized_id)
@@ -1314,13 +1319,14 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
                     INSERT INTO bills (
                         bill_id, title, summary_tweet, summary_long, status,
                         date_processed, source_url, website_slug, problematic,
-                        problem_reason, published
+                        problem_reason, problematic_marked_at, published
                     )
-                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, TRUE, %s, FALSE)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, TRUE, %s, CURRENT_TIMESTAMP, FALSE)
                     ON CONFLICT (bill_id)
                     DO UPDATE SET
                         problematic = EXCLUDED.problematic,
                         problem_reason = EXCLUDED.problem_reason,
+                        problematic_marked_at = COALESCE(bills.problematic_marked_at, CURRENT_TIMESTAMP),
                         updated_at = CURRENT_TIMESTAMP
                     ''',
                     (normalized_id, title, summary_tweet, summary_long, status, source_url, website_slug, reason)
@@ -1337,15 +1343,22 @@ def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
 
 def get_all_problematic_bills(limit: int = 50) -> List[Dict[str, Any]]:
     """
-    Retrieve all bills currently marked as problematic.
-    Used by the orchestrator recovery loop to re-check whether
-    previously problematic bills now have valid data (e.g. title, full text).
+    Retrieve problematic bills that are eligible for a single recheck.
+
+    Eligibility rules:
+      - ``problematic = TRUE``
+      - ``recheck_attempted`` is FALSE (or NULL) — only one recheck allowed
+      - ``problematic_marked_at`` is at least 15 days ago
+
+    Bills that have already been rechecked (``recheck_attempted = TRUE``) are
+    permanently locked out until manually cleared.
 
     Args:
         limit: Maximum number of problematic bills to return.
 
     Returns:
-        List of bill dictionaries ordered by date_processed DESC.
+        List of bill dictionaries ordered by problematic_marked_at ASC
+        (oldest first, so the longest-waiting bills get rechecked first).
     """
     try:
         with db_connect() as conn:
@@ -1353,7 +1366,10 @@ def get_all_problematic_bills(limit: int = 50) -> List[Dict[str, Any]]:
                 cursor.execute('''
                     SELECT * FROM bills
                     WHERE problematic = TRUE
-                    ORDER BY date_processed DESC
+                      AND (recheck_attempted IS NULL OR recheck_attempted = FALSE)
+                      AND problematic_marked_at IS NOT NULL
+                      AND problematic_marked_at <= NOW() - INTERVAL '15 days'
+                    ORDER BY problematic_marked_at ASC
                     LIMIT %s
                 ''', (limit,))
                 return [dict(row) for row in cursor.fetchall()]
@@ -1365,6 +1381,7 @@ def get_all_problematic_bills(limit: int = 50) -> List[Dict[str, Any]]:
 def unmark_bill_as_problematic(bill_id: str) -> bool:
     """
     Clear the problematic flag on a bill so it becomes eligible for processing again.
+    Also resets the recheck-tracking fields so the bill starts fresh.
 
     Args:
         bill_id: The bill identifier (will be normalized).
@@ -1379,7 +1396,9 @@ def unmark_bill_as_problematic(bill_id: str) -> bool:
                 cursor.execute('''
                     UPDATE bills
                     SET problematic = FALSE,
-                        problem_reason = NULL
+                        problem_reason = NULL,
+                        problematic_marked_at = NULL,
+                        recheck_attempted = FALSE
                     WHERE bill_id = %s
                 ''', (normalized_id,))
                 if cursor.rowcount == 1:
@@ -1390,6 +1409,38 @@ def unmark_bill_as_problematic(bill_id: str) -> bool:
                     return False
     except Exception as e:
         logger.error(f"Error unmarking bill {normalized_id} as non-problematic: {e}")
+        return False
+
+
+def mark_recheck_attempted(bill_id: str) -> bool:
+    """
+    Record that the single allowed recheck has been performed for a
+    problematic bill.  After this, the bill is permanently locked out
+    from future automatic rechecks (``recheck_attempted = TRUE``).
+
+    Args:
+        bill_id: The bill identifier (will be normalized).
+
+    Returns:
+        True if the update succeeded, False otherwise.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE bills
+                    SET recheck_attempted = TRUE
+                    WHERE bill_id = %s
+                ''', (normalized_id,))
+                if cursor.rowcount == 1:
+                    logger.info(f"Marked recheck_attempted=TRUE for bill {normalized_id}.")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to mark recheck_attempted.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error marking recheck_attempted for bill {normalized_id}: {e}")
         return False
 
 

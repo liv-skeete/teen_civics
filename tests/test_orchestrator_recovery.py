@@ -11,6 +11,7 @@ Covers:
 """
 import unittest
 from unittest.mock import patch, MagicMock, call
+from datetime import datetime, timedelta, timezone
 import sys
 import os
 
@@ -164,6 +165,8 @@ class TestOrchestratorProblematicRecovery(unittest.TestCase):
                 "problem_reason": "No title available from API or DB",
                 "published": False,
                 "summary_tweet": "",
+                "problematic_marked_at": datetime.now(timezone.utc) - timedelta(days=16),
+                "recheck_attempted": False,
             }
         ]
         mock_enrich.return_value = {
@@ -190,7 +193,8 @@ class TestOrchestratorProblematicRecovery(unittest.TestCase):
         }
 
         with patch(PATCH_SUMMARIZE) as mock_sum, \
-             patch(PATCH_INSERT, return_value=True):
+             patch(PATCH_INSERT, return_value=True), \
+             patch('src.orchestrator.mark_recheck_attempted', return_value=True) as mock_mark_recheck:
             mock_sum.return_value = {
                 "tweet": "Recovered tweet", "long": "Long", "overview": "Overview",
                 "detailed": "Detailed\nTeen impact score: 5/10",
@@ -199,6 +203,7 @@ class TestOrchestratorProblematicRecovery(unittest.TestCase):
             result = main(dry_run=True)
 
         self.assertEqual(result, 0)
+        mock_mark_recheck.assert_called_once_with("hr100-119")
         mock_unmark.assert_called_once_with("hr100-119")
         mock_update_title.assert_called_once_with("hr100-119", "Recovered Bill Title")
         mock_update_ft.assert_called_once_with("hr100-119", "B" * 200)
@@ -225,6 +230,8 @@ class TestOrchestratorProblematicRecovery(unittest.TestCase):
                 "problematic": True,
                 "problem_reason": "No title available from API or DB",
                 "published": False,
+                "problematic_marked_at": datetime.now(timezone.utc) - timedelta(days=20),
+                "recheck_attempted": False,
             }
         ]
         # Enrichment still returns no title
@@ -234,9 +241,11 @@ class TestOrchestratorProblematicRecovery(unittest.TestCase):
             "full_text": "C" * 200,
         }
 
-        result = main(dry_run=True)
+        with patch('src.orchestrator.mark_recheck_attempted', return_value=True) as mock_mark_recheck:
+            result = main(dry_run=True)
 
         self.assertEqual(result, 0)
+        mock_mark_recheck.assert_called_once_with("s200-119")
         # unmark should NOT have been called — bill is still bad
         mock_unmark.assert_not_called()
 
@@ -262,13 +271,17 @@ class TestOrchestratorProblematicRecovery(unittest.TestCase):
                 "problematic": True,
                 "problem_reason": "No valid full text available",
                 "published": False,
+                "problematic_marked_at": datetime.now(timezone.utc) - timedelta(days=20),
+                "recheck_attempted": False,
             }
         ]
         mock_enrich.side_effect = Exception("API timeout")
 
-        result = main(dry_run=True)
+        with patch('src.orchestrator.mark_recheck_attempted', return_value=True) as mock_mark_recheck:
+            result = main(dry_run=True)
 
         self.assertEqual(result, 0)
+        mock_mark_recheck.assert_called_once_with("hr300-119")
         mock_unmark.assert_not_called()
 
     @patch(PATCH_SLEEP)

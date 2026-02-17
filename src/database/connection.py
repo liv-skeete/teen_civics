@@ -448,6 +448,8 @@ def init_db_tables() -> None:
                     poll_results_no INTEGER DEFAULT 0,
                     problematic BOOLEAN DEFAULT FALSE,
                     problem_reason TEXT,
+                    problematic_marked_at TIMESTAMP,
+                    recheck_attempted BOOLEAN DEFAULT FALSE,
                     teen_impact_score INTEGER,
                     sponsor_name TEXT,
                     sponsor_party TEXT,
@@ -497,6 +499,24 @@ def init_db_tables() -> None:
                 # Index for public queries that exclude hidden bills
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_hidden ON bills (hidden);")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_published_hidden_date ON bills (published, hidden, date_processed DESC);")
+
+                # Auto-migrate: add recheck-tracking columns if missing
+                if "problematic_marked_at" not in bill_columns:
+                    logger.info("Migrating: adding 'problematic_marked_at' column to bills table")
+                    cursor.execute("ALTER TABLE bills ADD COLUMN problematic_marked_at TIMESTAMP;")
+                    cursor.execute("""
+                        UPDATE bills
+                        SET problematic_marked_at = CURRENT_TIMESTAMP
+                        WHERE problematic = TRUE AND problematic_marked_at IS NULL
+                    """)
+                if "recheck_attempted" not in bill_columns:
+                    logger.info("Migrating: adding 'recheck_attempted' column to bills table")
+                    cursor.execute("ALTER TABLE bills ADD COLUMN recheck_attempted BOOLEAN DEFAULT FALSE;")
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_bills_problematic_recheck
+                    ON bills (problematic, recheck_attempted, problematic_marked_at)
+                    WHERE problematic = TRUE;
+                """)
 
                 # Trigger to auto-update updated_at
                 cursor.execute("""
