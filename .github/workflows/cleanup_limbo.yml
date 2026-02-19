@@ -19,6 +19,7 @@ name: "Cleanup Limbo Bills"
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    environment: staging
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
