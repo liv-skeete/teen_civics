@@ -36,7 +36,7 @@ from src.database.db import (
     get_all_problematic_bills, unmark_bill_as_problematic,
     update_bill_title, update_bill_full_text,
     mark_recheck_attempted,
-    get_unposted_count, get_problematic_count,
+    get_unposted_count, get_problematic_count, get_post_ready_count,
 )
 from src.utils.validation import validate_bill_data
 
@@ -271,9 +271,10 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
             return 0
 
         # ── Reservoir + Healing metrics ─────────────────────────────────────
+        post_ready_n = get_post_ready_count()
         unposted_n = get_unposted_count()
         problematic_n = get_problematic_count()
-        logger.info(f"📦 Reservoir: {unposted_n} unposted bills | 🩹 {problematic_n} problematic bills")
+        logger.info(f"📦 Reservoir: {post_ready_n} post-ready | {unposted_n} unposted total | 🩹 {problematic_n} problematic")
 
         # ── Phase 0: Healing priority ───────────────────────────────────────
         # If problematic count > 50 OR env says retry-only, run Phase 4 first
@@ -310,11 +311,11 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
                 return 0
 
         # ── Reservoir decision (before any external API calls) ─────────────
-        # If we already have > 10 unposted bills, skip Congress.gov scrape
+        # If we already have > 10 POST-READY bills, skip Congress.gov scrape
         # entirely and post directly from the DB backlog.
-        skip_feed_scrape = unposted_n > 10
+        skip_feed_scrape = post_ready_n > 10
         if skip_feed_scrape:
-            logger.info(f"📦 Reservoir full ({unposted_n} > 10). Skipping Congress.gov scrape, posting from backlog.")
+            logger.info(f"📦 Reservoir full ({post_ready_n} post-ready > 10). Skipping Congress.gov scrape, posting from backlog.")
 
             # Go straight to DB fallback (equivalent to Phase 3c)
             logger.info("📭 Checking DB for unposted bills (reservoir path)...")
@@ -337,7 +338,7 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
 
         else:
             # ── Phase 1+2+3: Scrape → Filter → Process (reservoir low) ─────
-            logger.info(f"📦 Reservoir low ({unposted_n} ≤ 10). Will scrape Congress.gov to replenish.")
+            logger.info(f"📦 Reservoir low ({post_ready_n} post-ready ≤ 10). Will scrape Congress.gov to replenish.")
 
             MAX_SCRAPE_ATTEMPTS = 2  # Cap re-scrapes to avoid infinite loops
             for scrape_attempt in range(1, MAX_SCRAPE_ATTEMPTS + 1):

@@ -1262,7 +1262,7 @@ def select_and_lock_unposted_bill() -> Optional[Dict[str, Any]]:
         return None
 
 def get_unposted_count() -> int:
-    """Return the number of non-problematic, unpublished bills in the DB."""
+    """Return the number of non-problematic, unpublished bills in the DB (any state)."""
     try:
         with db_connect() as conn:
             with conn.cursor() as cursor:
@@ -1274,6 +1274,38 @@ def get_unposted_count() -> int:
                 return cursor.fetchone()[0]
     except Exception as e:
         logger.error(f"Error counting unposted bills: {e}")
+        return 0
+
+
+def get_post_ready_count() -> int:
+    """Return the number of bills that are ready to post right now.
+
+    A bill is post-ready when it is:
+      - not published
+      - not problematic
+      - has a non-empty summary_tweet (len >= 20)
+      - has non-empty full_text
+      - has a non-null / non-empty status
+    This mirrors the checks in ``process_single_bill``'s FINAL GATE so the
+    reservoir decision accurately reflects how many bills can actually be posted.
+    """
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    SELECT COUNT(*) FROM bills
+                    WHERE published = FALSE
+                      AND (problematic IS NULL OR problematic = FALSE)
+                      AND summary_tweet IS NOT NULL
+                      AND LENGTH(TRIM(summary_tweet)) >= 20
+                      AND full_text IS NOT NULL
+                      AND LENGTH(TRIM(full_text)) >= 100
+                      AND status IS NOT NULL
+                      AND TRIM(status) != ''
+                ''')
+                return cursor.fetchone()[0]
+    except Exception as e:
+        logger.error(f"Error counting post-ready bills: {e}")
         return 0
 
 
