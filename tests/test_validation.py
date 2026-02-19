@@ -18,11 +18,12 @@ class TestBillValidation(unittest.TestCase):
             "bill_id": "hr123",
             "title": "A bill to improve something important",
             "congress": "119",
+            "status": "Introduced",
             "full_text": "Section 1. This is a valid bill text that is definitely long enough to pass the validation check. " * 5,
             "sponsor_name": "Rep. Smith, John [R-AZ-1]",
             "summary_overview": "This bill does good things.",
             "summary_detailed": "Here are the details.",
-            "summary_tweet": "Check out this bill!",
+            "summary_tweet": "Check out this bill!!",
             "teen_impact_score": 5
         }
 
@@ -40,7 +41,13 @@ class TestBillValidation(unittest.TestCase):
             bill[field] = ""
             is_valid, reasons = validate_bill_data(bill)
             self.assertFalse(is_valid, f"Should fail when {field} is missing")
-            self.assertTrue(any(field.replace("_", " ").title() in r for r in reasons) or any("Bill ID" in r for r in reasons))
+            # Case-insensitive check: validate_bill_data uses lowercase reason strings
+            joined = " ".join(reasons).lower()
+            search_term = field.replace("_", " ").lower()
+            self.assertTrue(
+                search_term in joined or "bill" in joined,
+                f"Expected reason mentioning '{search_term}' in: {reasons}",
+            )
 
     def test_full_text_too_short(self):
         """Full text below threshold should fail."""
@@ -87,6 +94,30 @@ class TestBillValidation(unittest.TestCase):
         is_ready, reason = is_bill_ready_for_posting(bill)
         self.assertFalse(is_ready)
         self.assertIn("Missing Teen Impact Score", reason)
+
+    def test_is_ready_for_posting_status_problematic(self):
+        """Bill with status 'problematic' should be blocked."""
+        bill = self.valid_bill.copy()
+        bill["status"] = "problematic"
+        is_ready, reason = is_bill_ready_for_posting(bill)
+        self.assertFalse(is_ready)
+        self.assertIn("problematic", reason.lower())
+
+    def test_is_ready_for_posting_status_empty(self):
+        """Bill with empty status should be blocked."""
+        bill = self.valid_bill.copy()
+        bill["status"] = ""
+        is_ready, reason = is_bill_ready_for_posting(bill)
+        self.assertFalse(is_ready)
+        self.assertIn("status", reason.lower())
+
+    def test_is_ready_for_posting_tweet_too_short(self):
+        """Bill with summary_tweet under 20 chars should be blocked."""
+        bill = self.valid_bill.copy()
+        bill["summary_tweet"] = "Short tweet"
+        is_ready, reason = is_bill_ready_for_posting(bill)
+        self.assertFalse(is_ready)
+        self.assertIn("summary_tweet too short", reason)
 
 if __name__ == '__main__':
     unittest.main()

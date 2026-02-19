@@ -1280,14 +1280,25 @@ def get_unposted_count() -> int:
 def get_post_ready_count() -> int:
     """Return the number of bills that are ready to post right now.
 
-    A bill is post-ready when it is:
-      - not published
-      - not problematic
-      - has a non-empty summary_tweet (len >= 20)
-      - has non-empty full_text
-      - has a non-null / non-empty status
-    This mirrors the checks in ``process_single_bill``'s FINAL GATE so the
-    reservoir decision accurately reflects how many bills can actually be posted.
+    The SQL here mirrors every check in
+    ``is_bill_ready_for_posting()`` (src/utils/validation.py) so the
+    reservoir decision accurately reflects how many bills can actually be
+    posted.  Keep these two in sync — is_bill_ready_for_posting() is the
+    canonical source of truth; this SQL is the DB-side approximation.
+
+    Criteria (must ALL be true):
+      1. published = FALSE
+      2. problematic IS NULL or FALSE
+      3. status IS NOT NULL, non-empty, and != 'problematic'
+      4. title IS NOT NULL and non-empty
+      5. bill_id IS NOT NULL and non-empty
+      6. congress_session IS NOT NULL and non-empty
+      7. full_text length >= 100
+      8. sponsor_name IS NOT NULL and non-empty
+      9. summary_tweet length >= 20
+     10. summary_overview IS NOT NULL and non-empty
+     11. summary_detailed IS NOT NULL and non-empty
+     12. teen_impact_score IS NOT NULL
     """
     try:
         with db_connect() as conn:
@@ -1296,12 +1307,30 @@ def get_post_ready_count() -> int:
                     SELECT COUNT(*) FROM bills
                     WHERE published = FALSE
                       AND (problematic IS NULL OR problematic = FALSE)
-                      AND summary_tweet IS NOT NULL
-                      AND LENGTH(TRIM(summary_tweet)) >= 20
-                      AND full_text IS NOT NULL
-                      AND LENGTH(TRIM(full_text)) >= 100
+                      -- status must be present and not 'problematic'
                       AND status IS NOT NULL
                       AND TRIM(status) != ''
+                      AND LOWER(TRIM(status)) != 'problematic'
+                      -- structural fields (validate_bill_data)
+                      AND title IS NOT NULL
+                      AND TRIM(title) != ''
+                      AND bill_id IS NOT NULL
+                      AND TRIM(bill_id) != ''
+                      AND congress_session IS NOT NULL
+                      AND TRIM(congress_session) != ''
+                      AND full_text IS NOT NULL
+                      AND LENGTH(TRIM(full_text)) >= 100
+                      AND sponsor_name IS NOT NULL
+                      AND TRIM(sponsor_name) != ''
+                      -- summary quality
+                      AND summary_tweet IS NOT NULL
+                      AND LENGTH(TRIM(summary_tweet)) >= 20
+                      AND summary_overview IS NOT NULL
+                      AND TRIM(summary_overview) != ''
+                      AND summary_detailed IS NOT NULL
+                      AND TRIM(summary_detailed) != ''
+                      -- teen impact score
+                      AND teen_impact_score IS NOT NULL
                 ''')
                 return cursor.fetchone()[0]
     except Exception as e:

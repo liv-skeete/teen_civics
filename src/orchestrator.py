@@ -38,7 +38,7 @@ from src.database.db import (
     mark_recheck_attempted,
     get_unposted_count, get_problematic_count, get_post_ready_count,
 )
-from src.utils.validation import validate_bill_data
+from src.utils.validation import validate_bill_data, is_bill_ready_for_posting
 
 # NOTE: Substack posting is disabled (Cloudflare blocks datacenter IPs).
 # Implementation archived in archives/orchestrator_pre_substack.py
@@ -736,30 +736,17 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             bill_data["website_slug"] = slug
             logger.info(f"🔗 Set website_slug for {bill_id}: {slug}")
 
-        # ── HARD VALIDATION GATE ──
-        # Final check before ANY posting: bill MUST have complete data.
-        # This catches bills that leak through from DB fallback paths or
-        # incomplete enrichment regardless of which phase called us.
-        is_complete, missing_reasons = validate_bill_data(bill_data)
-        if not is_complete:
-            reason_str = "; ".join(missing_reasons)
-            logger.error(f"🚫 FINAL GATE: Bill {bill_id} has incomplete data: {reason_str}. Blocking from posting.")
-            mark_bill_as_problematic(bill_id, f"Final gate: {reason_str}")
+        # ── FINAL GATE ──
+        # Single source of truth: is_bill_ready_for_posting() checks
+        # structural data, status != 'problematic', summary quality,
+        # tweet ≥ 20 chars, error phrases, and teen_impact_score.
+        gate_ok, gate_reason = is_bill_ready_for_posting(bill_data)
+        if not gate_ok:
+            logger.error(f"🚫 FINAL GATE: Bill {bill_id} not ready — {gate_reason}. Blocking from posting.")
+            mark_bill_as_problematic(bill_id, f"Final gate: {gate_reason}")
             return 1
 
-        # Also block if status is literally "problematic"
-        bill_status = (bill_data.get("status") or "").strip().lower()
-        if bill_status == "problematic":
-            logger.error(f"🚫 FINAL GATE: Bill {bill_id} status is 'problematic'. Blocking from posting.")
-            mark_bill_as_problematic(bill_id, "Status is still 'problematic'")
-            return 1
-
-        # Block if summary_tweet is too short or looks like a placeholder
         summary_tweet = (bill_data.get("summary_tweet") or "").strip()
-        if len(summary_tweet) < 20:
-            logger.error(f"🚫 FINAL GATE: Bill {bill_id} has no usable summary_tweet ({len(summary_tweet)} chars). Blocking.")
-            mark_bill_as_problematic(bill_id, f"summary_tweet too short ({len(summary_tweet)} chars)")
-            return 1
 
         formatted_tweet = format_bill_tweet(bill_data)
         logger.info(f"📝 Formatted tweet length: {len(formatted_tweet)} characters")
