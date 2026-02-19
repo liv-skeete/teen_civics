@@ -1,0 +1,45 @@
+name: "Cleanup Limbo Bills"
+
+"on":
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply changes (mark limbo bills as problematic)"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      limit:
+        description: "Max bills to scan"
+        required: false
+        default: "500"
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run cleanup (dry-run or apply)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          ARGS="--limit ${{ github.event.inputs.limit }}"
+          if [ "${{ github.event.inputs.apply }}" = "true" ]; then
+            ARGS="$ARGS --apply"
+          fi
+          PYTHONPATH=. python3 scripts/cleanup_limbo_bills.py $ARGS
