@@ -226,8 +226,9 @@ def main() -> None:
     conn.autocommit = False  # explicit transaction control
 
     try:
-        # If dry-run, set connection to read-only for safety
+        # If dry-run, use autocommit + read-only for safety
         if not args.apply:
+            conn.autocommit = True
             conn.set_session(readonly=True)
             logger.info("Session set to READ-ONLY (dry-run mode).")
 
@@ -243,8 +244,6 @@ def main() -> None:
         print_report(len(bills), ready, not_ready, args.apply)
 
         if args.apply and not_ready:
-            # Switch to read-write for the update pass
-            conn.set_session(readonly=False)
             marked = 0
             failed = 0
             for bill, reason in not_ready:
