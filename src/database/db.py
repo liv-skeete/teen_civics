@@ -12,6 +12,7 @@ TODO: Future improvements (SAVE FOR LATER):
 import os
 import logging
 import re
+import functools
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Iterator, Tuple
 from contextlib import contextmanager
@@ -26,6 +27,21 @@ import psycopg2.extras
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# ── Simulate mode flag (set by orchestrator when --simulate is used) ────────
+_SIMULATE = False
+
+
+def simulate_safe(fn):
+    """Decorator that short-circuits DB write functions when _SIMULATE is True.
+    Logs what would have happened and returns True (success) without touching DB."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if _SIMULATE:
+            logger.info(f"🧪 SIMULATE: {fn.__name__}({args!r}, {kwargs!r}) — skipped (read-only)")
+            return True
+        return fn(*args, **kwargs)
+    return wrapper
 
 # Bill ID pattern for exact matching
 BILL_ID_REGEX = re.compile(r'^[a-z]+[0-9]+(?:-[0-9]+)?$', re.IGNORECASE)
@@ -143,6 +159,7 @@ def has_posted_today() -> bool:
         # On error, return False to allow posting (fail open)
         return False
 
+@simulate_safe
 def insert_bill(bill_data: Dict[str, Any]) -> bool:
     """
     Insert a new bill record into the database.
@@ -208,6 +225,7 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
         logger.error(f"Error inserting bill: {e}")
         return False
 
+@simulate_safe
 def update_tweet_info(bill_id: str, tweet_url: str) -> bool:
     """
     Mark a bill as published after successful posting to social platforms.
@@ -432,6 +450,7 @@ def get_bill_by_slug(slug: str, include_hidden: bool = False) -> Optional[Dict[s
         logger.error(f"Error retrieving bill by slug {slug}: {e}")
         return None
 
+@simulate_safe
 def update_poll_results(bill_id: str, vote_type: str, previous_vote: Optional[str] = None) -> bool:
     """
     Update poll results for a bill based on user vote.
@@ -1242,6 +1261,34 @@ def select_and_lock_unposted_bill() -> Optional[Dict[str, Any]]:
         logger.error(f"Error selecting and locking unposted bill: {e}")
         return None
 
+def get_unposted_count() -> int:
+    """Return the number of non-problematic, unpublished bills in the DB."""
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    SELECT COUNT(*) FROM bills
+                    WHERE published = FALSE
+                    AND (problematic IS NULL OR problematic = FALSE)
+                ''')
+                return cursor.fetchone()[0]
+    except Exception as e:
+        logger.error(f"Error counting unposted bills: {e}")
+        return 0
+
+
+def get_problematic_count() -> int:
+    """Return the total number of bills marked problematic."""
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM bills WHERE problematic = TRUE")
+                return cursor.fetchone()[0]
+    except Exception as e:
+        logger.error(f"Error counting problematic bills: {e}")
+        return 0
+
+
 def generate_website_slug(title: str, bill_id: str) -> str:
     """
     Generate a URL-friendly slug from a bill title and ID.
@@ -1274,6 +1321,7 @@ def generate_website_slug(title: str, bill_id: str) -> str:
 
 
 
+@simulate_safe
 def mark_bill_as_problematic(bill_id: str, reason: str) -> bool:
     """
     Mark a bill as problematic to prevent it from being processed again.
@@ -1378,6 +1426,7 @@ def get_all_problematic_bills(limit: int = 50) -> List[Dict[str, Any]]:
         return []
 
 
+@simulate_safe
 def unmark_bill_as_problematic(bill_id: str) -> bool:
     """
     Clear the problematic flag on a bill so it becomes eligible for processing again.
@@ -1412,6 +1461,7 @@ def unmark_bill_as_problematic(bill_id: str) -> bool:
         return False
 
 
+@simulate_safe
 def mark_recheck_attempted(bill_id: str) -> bool:
     """
     Record that the single allowed recheck has been performed for a
@@ -1444,6 +1494,7 @@ def mark_recheck_attempted(bill_id: str) -> bool:
         return False
 
 
+@simulate_safe
 def update_bill_title(bill_id: str, title: str) -> bool:
     """
     Update the title (and recalculated short_title) for a specific bill.
@@ -1477,6 +1528,7 @@ def update_bill_title(bill_id: str, title: str) -> bool:
         return False
 
 
+@simulate_safe
 def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str, term_dictionary: str = "", subject_tags: str = "") -> bool:
     """
     Update the summaries for a specific bill.
@@ -1504,6 +1556,7 @@ def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str
         logger.error(f"Error updating summaries for bill {normalized_id}: {e}")
         return False
 
+@simulate_safe
 def update_bill_full_text(bill_id: str, full_text: str, text_format: str = "") -> bool:
     """
     Update the full text for a specific bill.
@@ -1527,6 +1580,7 @@ def update_bill_full_text(bill_id: str, full_text: str, text_format: str = "") -
     except Exception as e:
         logger.error(f"Error updating full text for bill {normalized_id}: {e}")
         return False
+@simulate_safe
 def update_bill_teen_impact_score(bill_id: str, teen_impact_score: int) -> bool:
     """
     Update the teen impact score for a specific bill.
@@ -1549,6 +1603,7 @@ def update_bill_teen_impact_score(bill_id: str, teen_impact_score: int) -> bool:
         return False
 
 
+@simulate_safe
 def update_bill_sponsor(bill_id: str, sponsor_name: str, sponsor_party: str, sponsor_state: str) -> bool:
     """
     Update the sponsor information for a specific bill.

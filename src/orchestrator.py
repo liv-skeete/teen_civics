@@ -11,6 +11,7 @@ import json
 import time as time_module  # For time.sleep()
 from typing import Dict, Any, Optional
 from datetime import datetime, time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import pytz
 from dotenv import load_dotenv
 
@@ -35,6 +36,7 @@ from src.database.db import (
     get_all_problematic_bills, unmark_bill_as_problematic,
     update_bill_title, update_bill_full_text,
     mark_recheck_attempted,
+    get_unposted_count, get_problematic_count,
 )
 from src.utils.validation import validate_bill_data
 
@@ -129,39 +131,191 @@ def derive_status_from_tracker(tracker: Any) -> tuple[str, str]:
 
     return status_text, normalized
 
-def main(dry_run: bool = False) -> int:
+# ── Per-bill enrichment timeout ──────────────────────────────────────────────
+ENRICHMENT_TIMEOUT_SECONDS = int(os.getenv("ENRICHMENT_TIMEOUT_SECONDS", "120"))
+
+def enrich_with_timeout(bill_id: str, timeout: int = ENRICHMENT_TIMEOUT_SECONDS) -> Optional[Dict]:
+    """
+    Wrap enrich_single_bill() with a timeout so one slow scrape cannot kill
+    the entire workflow run.  Returns None on timeout.
+    """
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(enrich_single_bill, bill_id)
+        try:
+            return future.result(timeout=timeout)
+        except FuturesTimeoutError:
+            logger.warning(f"⏰ Enrichment for {bill_id} timed out after {timeout}s. Skipping.")
+            return None
+        except Exception as e:
+            logger.warning(f"❌ Enrichment failed for {bill_id}: {e}")
+            return None
+
+
+def _recheck_problematic_bill(
+    pbid: str,
+    prob_bill: Dict[str, Any],
+    dry_run: bool,
+) -> Optional[int]:
+    """
+    Shared recheck helper for Phase 4 problematic-bill recovery.
+    Returns 0 if the bill was successfully posted, 1 if it failed processing,
+    or None if it could not be recovered (still problematic / enrichment failed).
+    """
+    prob_reason = prob_bill.get("problem_reason", "")
+    logger.info(f"   🔎 Re-checking {pbid} (reason: {prob_reason})")
+
+    # Mark recheck_attempted BEFORE the attempt so even on crash
+    # this bill won't be retried indefinitely.
+    mark_recheck_attempted(pbid)
+
+    # Re-enrich from the API (with timeout)
+    enriched = enrich_with_timeout(pbid)
+
+    if not enriched:
+        logger.info(f"   ⏭️  Enrichment still returns None for {pbid}. Locked out from future rechecks.")
+        return None
+
+    # Derive REAL legislative status from tracker BEFORE validation
+    # so the stale DB status='problematic' does not leak into validation.
+    tracker_data = enriched.get("tracker") or []
+    derived_status_text, derived_normalized_status = derive_status_from_tracker(tracker_data)
+    enriched["status"] = derived_status_text or prob_bill.get("status", "Introduced")
+    enriched["normalized_status"] = derived_normalized_status or prob_bill.get("normalized_status", "introduced")
+
+    # Check if the bill now passes shared validation rules
+    new_title = (enriched.get("title") or "").strip()
+    old_title = (prob_bill.get("title") or "").strip()
+
+    is_valid_now, validation_reasons = validate_bill_data(enriched)
+
+    if not is_valid_now:
+        reason_str = "; ".join(validation_reasons)
+        logger.info(f"   ⏭️  {pbid} still problematic after recheck: {reason_str}. Locked out from future rechecks.")
+        return None
+
+    # Bill has improved — update DB fields and unmark
+    logger.info(f"   ✅ {pbid} now has valid data. Unmarking problematic.")
+
+    if new_title and new_title != old_title:
+        update_bill_title(pbid, new_title)
+
+    new_ft = (enriched.get("full_text") or "").strip()
+    if len(new_ft) >= 100:
+        update_bill_full_text(pbid, new_ft)
+
+    unmark_bill_as_problematic(pbid)
+
+    # Attempt to process and post the recovered bill
+    logger.info(f"   🚀 Attempting to process recovered bill {pbid}...")
+    refreshed = get_bill_by_id(pbid)
+    if refreshed:
+        result = process_single_bill(
+            {**enriched, "bill_id": pbid},
+            refreshed,
+            dry_run,
+        )
+        return result
+    return None
+
+
+def main(dry_run: bool = False, simulate: bool = False) -> int:
     """
     Main orchestrator function.
-    
+
     Uses a lazy enrichment strategy:
-    1. Phase 1 (Fast): Fetch just the bill IDs from "Texts Received Today" (~10s)
-    2. Phase 2 (Fast): Filter out bills already in DB (already posted)
-    3. Phase 3 (Lazy): Enrich candidate bills ONE AT A TIME until one posts successfully
+    1. Phase 0 (Pre): If problematic count > 50, run Phase 4 healing first (capped at 10)
+    2. Phase 1 (Fast): Fetch just the bill IDs from "Texts Received Today" (~10s)
+    3. Phase 2 (Fast): Filter out bills already in DB (already posted)
+    4. Phase 3 (Lazy): Enrich candidate bills ONE AT A TIME until one posts successfully
+       - Reservoir logic: if unposted backlog > 10, skip new feed inserts & post from backlog
+    5. Phase 4 (Recovery): Re-check eligible problematic bills (15-day delay, single attempt)
+
+    Flags:
+      --dry-run   : skip social-media posting, but still write to DB
+      --simulate  : zero DB writes; log what would have happened (Step 4)
     """
+    # ── Simulate-mode bookkeeping ────────────────────────────────────────────
+    sim_log: Dict[str, list] = {"would_post": [], "would_mark_problematic": [], "would_recheck": []}
+
+    if simulate:
+        logger.info("🧪 SIMULATE MODE: zero DB writes will occur.")
+        # Set the DB module into simulate (read-only) mode
+        import src.database.db as _db_mod
+        _db_mod._SIMULATE = True
+
+    # Read env vars for problematic-recheck tuning
+    retry_problematic_only = os.getenv("RETRY_PROBLEMATIC_ONLY", "false").lower() == "true"
+    retry_problematic_limit = int(os.getenv("RETRY_PROBLEMATIC_LIMIT", "10"))
+
     try:
         logger.info("🚀 Starting orchestrator...")
-        logger.info(f"📊 Dry-run mode: {dry_run}")
+        logger.info(f"📊 Dry-run mode: {dry_run} | Simulate mode: {simulate}")
 
         et_tz = pytz.timezone('America/New_York')
         current_time_et = datetime.now(et_tz).time()
-        
+
         scan_type = "MANUAL"
         if time(8, 30) <= current_time_et <= time(9, 30):
             scan_type = "MORNING"
         elif time(22, 0) <= current_time_et <= time(23, 0):
             scan_type = "EVENING"
-        
+
         logger.info(f"⏰ Scan type: {scan_type}")
 
         logger.info("🗄️ Initializing database...")
         init_db()
         logger.info("✅ Database initialization complete")
 
-        if not dry_run and scan_type == "EVENING" and has_posted_today():
+        if not dry_run and not simulate and scan_type == "EVENING" and has_posted_today():
             logger.info("🛑 DUPLICATE PREVENTION: A bill was already posted today. Skipping evening scan.")
             return 0
 
+        # ── Reservoir + Healing metrics ─────────────────────────────────────
+        unposted_n = get_unposted_count()
+        problematic_n = get_problematic_count()
+        logger.info(f"📦 Reservoir: {unposted_n} unposted bills | 🩹 {problematic_n} problematic bills")
+
+        # ── Phase 0: Healing priority ───────────────────────────────────────
+        # If problematic count > 50 OR env says retry-only, run Phase 4 first
+        # (capped at retry_problematic_limit per run to stay within timeout)
+        if problematic_n > 50 or retry_problematic_only:
+            logger.info(f"🩹 Phase 0: Healing priority triggered (problematic={problematic_n}, retry_only={retry_problematic_only})")
+            phase0_start = time_module.time()
+            prob_bills = get_all_problematic_bills(limit=retry_problematic_limit)
+            logger.info(f"   Found {len(prob_bills)} problematic bills eligible for recheck (cap {retry_problematic_limit}).")
+            recovered_0 = 0
+            for pb in prob_bills:
+                pbid = pb.get("bill_id", "")
+                if simulate:
+                    sim_log["would_recheck"].append(pbid)
+                    logger.info(f"   🧪 SIMULATE: would recheck {pbid}")
+                    continue
+                rc = _recheck_problematic_bill(pbid, pb, dry_run)
+                if rc == 0:
+                    recovered_0 += 1
+                    phase0_elapsed = time_module.time() - phase0_start
+                    logger.info(f"⏱️ Phase 0: Posted recovered bill {pbid} in {phase0_elapsed:.1f}s")
+                    if not retry_problematic_only:
+                        return 0  # posted successfully, done
+                elif rc is None:
+                    pass  # still problematic
+                else:
+                    logger.info(f"   ⏭️  Recovered bill {pbid} failed processing, continuing...")
+
+            phase0_elapsed = time_module.time() - phase0_start
+            logger.info(f"⏱️ Phase 0: Healing done — recovered {recovered_0} in {phase0_elapsed:.1f}s")
+
+            if retry_problematic_only:
+                logger.info("🛑 RETRY_PROBLEMATIC_ONLY=true — skipping normal feed processing.")
+                return 0
+
         # ── Phase 1+2+3: Scrape → Filter → Process (with re-scrape retry) ─
+        # Reservoir decision: if we already have > 10 unposted bills, skip
+        # enriching new feed bills and just post from the backlog.
+        skip_new_inserts = unposted_n > 10
+        if skip_new_inserts:
+            logger.info(f"📦 Reservoir full ({unposted_n} > 10). Will skip new feed inserts and post from backlog.")
+
         MAX_SCRAPE_ATTEMPTS = 2  # Cap re-scrapes to avoid infinite loops
         for scrape_attempt in range(1, MAX_SCRAPE_ATTEMPTS + 1):
             logger.info(f"🔄 Scrape attempt {scrape_attempt}/{MAX_SCRAPE_ATTEMPTS}")
@@ -183,7 +337,6 @@ def main(dry_run: bool = False) -> int:
             logger.info("🔍 Phase 2: Filtering candidates against database...")
             candidate_ids = []
             db_hit_bills = []  # Bills in DB but not yet posted (can skip enrichment)
-            problematic_from_feed = []  # Problematic bills that appeared in today's feed (re-check candidates)
             for bid in bill_ids:
                 bid = normalize_bill_id(bid)
                 if bill_already_posted(bid):
@@ -192,23 +345,23 @@ def main(dry_run: bool = False) -> int:
                 existing = get_bill_by_id(bid)
                 if existing:
                     if existing.get("problematic"):
-                        # Skip bills whose single recheck has already been attempted
-                        if existing.get("recheck_attempted"):
-                            logger.info(f"   🔒 {bid} already rechecked once and still problematic. Permanently skipping.")
-                            continue
-                        logger.info(f"   🔄 {bid} marked problematic but in today's feed. Queuing for re-check.")
-                        problematic_from_feed.append((bid, existing))
+                        # Problematic bills are handled ONLY in Phase 4 (scheduled recheck).
+                        # Do NOT recheck from the feed — consolidated to Phase 4 only.
+                        logger.info(f"   🔒 {bid} is problematic. Skipping (recheck handled by Phase 4).")
                         continue
                     logger.info(f"   🎯 {bid} in DB but not posted. Adding as priority candidate.")
                     db_hit_bills.append((bid, existing))
                 else:
+                    if skip_new_inserts:
+                        logger.info(f"   📦 {bid} is new but reservoir is full. Skipping insert.")
+                        continue
                     logger.info(f"   🆕 {bid} is new. Adding to enrichment candidates.")
                     candidate_ids.append(bid)
             phase2_elapsed = time_module.time() - phase2_start
-            logger.info(f"⏱️ Phase 2: Filtered to {len(db_hit_bills)} DB hits + {len(candidate_ids)} new + {len(problematic_from_feed)} problematic-recheck in {phase2_elapsed:.1f}s")
+            logger.info(f"⏱️ Phase 2: Filtered to {len(db_hit_bills)} DB hits + {len(candidate_ids)} new in {phase2_elapsed:.1f}s")
 
             # If no candidates after filtering and we can re-scrape, do so
-            if not db_hit_bills and not candidate_ids and not problematic_from_feed and scrape_attempt < MAX_SCRAPE_ATTEMPTS:
+            if not db_hit_bills and not candidate_ids and scrape_attempt < MAX_SCRAPE_ATTEMPTS:
                 logger.info("📭 All feed bills filtered out. Will re-scrape after short delay...")
                 time_module.sleep(5)
                 continue
@@ -220,6 +373,10 @@ def main(dry_run: bool = False) -> int:
             # 3a) Try DB-hit bills first (already have data, no enrichment needed)
             for bid, existing_data in db_hit_bills:
                 logger.info(f"⚙️ Processing DB candidate: {bid}")
+                if simulate:
+                    sim_log["would_post"].append(bid)
+                    logger.info(f"   🧪 SIMULATE: would process {bid}")
+                    continue
                 result = process_single_bill({"bill_id": bid}, existing_data, dry_run)
                 if result == 0:
                     phase3_elapsed = time_module.time() - phase3_start
@@ -229,91 +386,11 @@ def main(dry_run: bool = False) -> int:
                 else:
                     logger.info(f"⏭️  DB candidate {bid} failed processing, trying next...")
 
-            # 3a½) Re-check problematic bills that appeared in today's feed.
-            #       Only eligible if 15+ days since marked AND not yet rechecked.
-            #       Each bill gets exactly ONE recheck; after that it's locked out.
-            for bid, prob_data in problematic_from_feed:
-                prob_reason = prob_data.get("problem_reason", "")
-
-                # Enforce 15-day cooling-off period per bill
-                marked_at = prob_data.get("problematic_marked_at")
-                if marked_at:
-                    from datetime import timezone
-                    now_utc = datetime.now(timezone.utc)
-                    if hasattr(marked_at, 'tzinfo') and marked_at.tzinfo is None:
-                        marked_at = marked_at.replace(tzinfo=timezone.utc)
-                    days_since = (now_utc - marked_at).days
-                    if days_since < 15:
-                        logger.info(f"   ⏳ {bid} marked problematic only {days_since}d ago (need 15d). Skipping recheck.")
-                        continue
-
-                logger.info(f"🔄 Re-enriching problematic feed bill {bid} (reason: {prob_reason})")
-
-                # Mark recheck_attempted BEFORE the attempt so even if it crashes,
-                # the bill won't be retried endlessly.
-                mark_recheck_attempted(bid)
-
-                try:
-                    enriched = enrich_single_bill(bid)
-                except Exception as e:
-                    logger.warning(f"   ❌ Re-enrichment failed for {bid}: {e}")
-                    continue
-
-                if not enriched:
-                    logger.info(f"   ⏭️  Enrichment still returns None for {bid}. Locked out from future rechecks.")
-                    continue
-
-                # Re-evaluate whether the bill now passes validation
-                new_title = (enriched.get("title") or "").strip()
-                old_title = (prob_data.get("title") or "").strip()
-                
-                # Check validation using the shared utility
-                # Pass 'enriched' which has the latest API data
-                is_valid_now, validation_reasons = validate_bill_data(enriched)
-
-                if not is_valid_now:
-                    reason_str = "; ".join(validation_reasons)
-                    logger.info(f"   ⏭️  {bid} still problematic after recheck: {reason_str}. Locked out from future rechecks.")
-                    continue
-
-                # Bill data has improved — update DB and unmark problematic
-                logger.info(f"   ✅ {bid} now has valid data. Unmarking problematic and processing.")
-                
-                # Update individual fields if they improved
-                if new_title and new_title != old_title:
-                    update_bill_title(bid, new_title)
-                
-                # Full text update is handled implicitly by validation check + below
-                new_ft = (enriched.get("full_text") or "").strip()
-                if len(new_ft) >= 100:
-                    update_bill_full_text(bid, new_ft)
-                    
-                unmark_bill_as_problematic(bid)
-
-                # Try to process and post the recovered bill
-                refreshed = get_bill_by_id(bid)
-                if refreshed:
-                    result = process_single_bill(
-                        {**enriched, "bill_id": bid},
-                        refreshed,
-                        dry_run
-                    )
-                    if result == 0:
-                        phase3_elapsed = time_module.time() - phase3_start
-                        logger.info(f"⏱️ Phase 3: Successfully posted recovered feed bill {bid} in {phase3_elapsed:.1f}s")
-                        return 0
-                    else:
-                        logger.info(f"   ⏭️  Recovered feed bill {bid} failed processing, trying next...")
-
-            # 3b) Enrich new candidates one at a time
+            # 3b) Enrich new candidates one at a time (with timeout)
             for bid in candidate_ids:
                 logger.info(f"🔧 Enriching new candidate: {bid}")
                 enrich_start = time_module.time()
-                try:
-                    enriched = enrich_single_bill(bid)
-                except Exception as e:
-                    logger.warning(f"❌ Enrichment failed for {bid}: {e}")
-                    continue
+                enriched = enrich_with_timeout(bid)
                 enrich_elapsed = time_module.time() - enrich_start
                 logger.info(f"⏱️ Enriched {bid} in {enrich_elapsed:.1f}s")
 
@@ -321,17 +398,23 @@ def main(dry_run: bool = False) -> int:
                     logger.warning(f"⏭️  Enrichment returned None for {bid}, skipping.")
                     continue
 
-                # Validate full text before processing
-                ft = (enriched.get("full_text") or "").strip()
                 # Use shared validator for new feed candidates
                 is_valid, validation_reasons = validate_bill_data(enriched)
                 if not is_valid:
                     reason_str = "; ".join(validation_reasons)
                     logger.info(f"   🚫 {bid} incomplete data: {reason_str}. Marking problematic.")
-                    mark_bill_as_problematic(bid, f"Validation failed: {reason_str}")
+                    if simulate:
+                        sim_log["would_mark_problematic"].append(bid)
+                        logger.info(f"   🧪 SIMULATE: would mark {bid} problematic")
+                    else:
+                        mark_bill_as_problematic(bid, f"Validation failed: {reason_str}")
                     continue
 
                 logger.info(f"⚙️ Processing enriched candidate: {bid}")
+                if simulate:
+                    sim_log["would_post"].append(bid)
+                    logger.info(f"   🧪 SIMULATE: would process {bid}")
+                    continue
                 result = process_single_bill(enriched, None, dry_run)
                 if result == 0:
                     phase3_elapsed = time_module.time() - phase3_start
@@ -347,11 +430,15 @@ def main(dry_run: bool = False) -> int:
             if unposted:
                 bid = unposted['bill_id']
                 logger.info(f"   🔄 Found and locked unposted bill in DB: {bid}")
-                result = process_single_bill({"bill_id": bid}, unposted, dry_run)
-                if result == 0:
-                    phase3_elapsed = time_module.time() - phase3_start
-                    logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
-                    return 0
+                if simulate:
+                    sim_log["would_post"].append(bid)
+                    logger.info(f"   🧪 SIMULATE: would process {bid}")
+                else:
+                    result = process_single_bill({"bill_id": bid}, unposted, dry_run)
+                    if result == 0:
+                        phase3_elapsed = time_module.time() - phase3_start
+                        logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
+                        return 0
 
             phase3_elapsed = time_module.time() - phase3_start
             logger.info(f"⏱️ Phase 3: All candidates exhausted in {phase3_elapsed:.1f}s (scrape attempt {scrape_attempt})")
@@ -366,78 +453,47 @@ def main(dry_run: bool = False) -> int:
             break
 
         # ── Phase 4: Problematic-bill recovery (single recheck, 15-day delay) ─
-        # get_all_problematic_bills now only returns bills where:
+        # Consolidated recheck path — feed-based recheck (old Phase 3a½) removed.
+        # get_all_problematic_bills returns bills where:
         #   - problematic_marked_at is 15+ days ago
         #   - recheck_attempted is FALSE
         # Each bill gets exactly ONE recheck attempt here.
         logger.info("🔍 Phase 4: Re-checking eligible problematic bills (15-day delay, single attempt)...")
         phase4_start = time_module.time()
-        problematic_bills = get_all_problematic_bills(limit=20)
-        logger.info(f"   Found {len(problematic_bills)} problematic bills eligible for recheck.")
+        problematic_bills = get_all_problematic_bills(limit=retry_problematic_limit)
+        logger.info(f"   Found {len(problematic_bills)} problematic bills eligible for recheck (cap {retry_problematic_limit}).")
 
         recovered_count = 0
         for prob_bill in problematic_bills:
             pbid = prob_bill.get("bill_id", "")
-            prob_reason = prob_bill.get("problem_reason", "")
-            logger.info(f"   🔎 Re-checking {pbid} (reason: {prob_reason})")
-
-            # Mark recheck_attempted BEFORE the attempt so even on crash
-            # this bill won't be retried indefinitely.
-            mark_recheck_attempted(pbid)
-
-            # Re-enrich from the API to see if title/full_text are now available
-            try:
-                enriched = enrich_single_bill(pbid)
-            except Exception as e:
-                logger.warning(f"   ❌ Re-enrichment failed for {pbid}: {e}. Locked out from future rechecks.")
+            if simulate:
+                sim_log["would_recheck"].append(pbid)
+                logger.info(f"   🧪 SIMULATE: would recheck {pbid}")
                 continue
 
-            if not enriched:
-                logger.info(f"   ⏭️  Enrichment still returns None for {pbid}. Locked out from future rechecks.")
-                continue
-
-            # Check if the bill now passes shared validation rules
-            new_title = (enriched.get("title") or "").strip()
-            old_title = (prob_bill.get("title") or "").strip()
-            
-            is_valid_now, validation_reasons = validate_bill_data(enriched)
-
-            if not is_valid_now:
-                reason_str = "; ".join(validation_reasons)
-                logger.info(f"   ⏭️  {pbid} still problematic after recheck: {reason_str}. Locked out from future rechecks.")
-                continue
-
-            # Bill has improved — update DB fields and unmark
-            logger.info(f"   ✅ {pbid} now has valid data. Unmarking problematic.")
-            recovered_count += 1
-
-            if new_title and new_title != old_title:
-                update_bill_title(pbid, new_title)
-
-            new_ft = (enriched.get("full_text") or "").strip()
-            if len(new_ft) >= 100:
-                update_bill_full_text(pbid, new_ft)
-
-            unmark_bill_as_problematic(pbid)
-
-            # Attempt to process and post the recovered bill
-            logger.info(f"   🚀 Attempting to process recovered bill {pbid}...")
-            refreshed = get_bill_by_id(pbid)
-            if refreshed:
-                result = process_single_bill(
-                    {**enriched, "bill_id": pbid},
-                    refreshed,
-                    dry_run
-                )
-                if result == 0:
-                    phase4_elapsed = time_module.time() - phase4_start
-                    logger.info(f"⏱️ Phase 4: Successfully posted recovered bill {pbid} in {phase4_elapsed:.1f}s")
-                    return 0
-                else:
-                    logger.info(f"   ⏭️  Recovered bill {pbid} failed processing, continuing...")
+            rc = _recheck_problematic_bill(pbid, prob_bill, dry_run)
+            if rc == 0:
+                recovered_count += 1
+                phase4_elapsed = time_module.time() - phase4_start
+                logger.info(f"⏱️ Phase 4: Successfully posted recovered bill {pbid} in {phase4_elapsed:.1f}s")
+                return 0
+            elif rc is None:
+                pass  # still problematic
+            else:
+                logger.info(f"   ⏭️  Recovered bill {pbid} failed processing, continuing...")
 
         phase4_elapsed = time_module.time() - phase4_start
         logger.info(f"⏱️ Phase 4: Checked {len(problematic_bills)} problematic bills, recovered {recovered_count}, in {phase4_elapsed:.1f}s")
+
+        # ── Simulate summary ────────────────────────────────────────────────
+        if simulate:
+            logger.info("=" * 60)
+            logger.info("🧪 SIMULATE REPORT")
+            logger.info(f"   Would post:              {sim_log['would_post']}")
+            logger.info(f"   Would mark problematic:  {sim_log['would_mark_problematic']}")
+            logger.info(f"   Would recheck:           {sim_log['would_recheck']}")
+            logger.info("=" * 60)
+
         logger.info("📭 No bills could be posted this run (all phases exhausted).")
         return 0  # Return success so workflow doesn't fail
 
@@ -825,5 +881,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="TeenCivics Orchestrator")
     parser.add_argument("--dry-run", action="store_true", help="Run without posting to Twitter or updating DB")
+    parser.add_argument("--simulate", action="store_true",
+                        help="Full pipeline run with ZERO database writes. Logs what would happen.")
     args = parser.parse_args()
-    sys.exit(main(dry_run=args.dry_run))
+    sys.exit(main(dry_run=args.dry_run, simulate=args.simulate))

@@ -54,10 +54,9 @@ def validate_bill_data(bill: Dict[str, Any]) -> Tuple[bool, List[str]]:
     if not sponsor_name:
         reasons.append("Missing sponsor information")
 
-    # 6. Status must not be 'problematic' or empty
-    status = str(bill.get("status") or "").strip().lower()
-    if status == "problematic":
-        reasons.append("Status is 'problematic'")
+    # 6. (Removed: status=='problematic' check is now ONLY in orchestrator's
+    #     FINAL GATE at process_single_bill().  validate_bill_data() should
+    #     evaluate legislative completeness, not DB metadata flags.)
 
     if reasons:
         return False, reasons

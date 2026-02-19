@@ -152,8 +152,9 @@ jobs:
           # Retry problematic bills first, then proceed with normal scan
           python src/orchestrator.py
       env:
-        RETRY_PROBLEMATIC_LIMIT: "5"
+        RETRY_PROBLEMATIC_LIMIT: "10"
         RETRY_PROBLEMATIC_ONLY: "false"
+        ENRICHMENT_TIMEOUT_SECONDS: "120"
         CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
         VENICE_API_KEY: ${{ secrets.VENICE_API_KEY }}
         VENICE_BASE_URL: https://api.venice.ai/api/v1
