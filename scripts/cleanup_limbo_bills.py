@@ -74,19 +74,24 @@ def abort_if_production(db_url: str) -> None:
 
 
 def fetch_limbo_bills(conn, limit: int = 500) -> List[Dict[str, Any]]:
-    """Fetch all unpublished, non-problematic bills from the DB."""
+    """Fetch all unpublished, non-problematic bills from the DB.
+
+    Args:
+        limit: Max rows to return.  0 or negative means no limit.
+    """
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(
-            """
+        query = """
             SELECT *
             FROM bills
             WHERE published = FALSE
               AND (problematic IS NULL OR problematic = FALSE)
             ORDER BY date_introduced DESC NULLS LAST
-            LIMIT %s
-            """,
-            (limit,),
-        )
+        """
+        if limit > 0:
+            query += " LIMIT %s"
+            cur.execute(query, (limit,))
+        else:
+            cur.execute(query)
         return [dict(row) for row in cur.fetchall()]
 
 
