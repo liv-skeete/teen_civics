@@ -123,14 +123,16 @@ def mark_as_problematic(conn, bill_id: str, reason: str) -> bool:
                 """
                 UPDATE bills
                 SET problematic = TRUE,
-                    problematic_reason = %s,
-                    updated_at = NOW()
+                    problem_reason = %s,
+                    problematic_marked_at = COALESCE(problematic_marked_at, CURRENT_TIMESTAMP)
                 WHERE bill_id = %s
                 """,
                 (reason, bill_id),
             )
+        conn.commit()
         return True
     except Exception as e:
+        conn.rollback()
         logger.error(f"Failed to mark {bill_id} as problematic: {e}")
         return False
 
@@ -256,7 +258,6 @@ def main() -> None:
                     failed += 1
                     logger.warning(f"  ✗ Failed to mark {bid}")
 
-            conn.commit()
             print(f"\n  📝 APPLY complete: {marked} bills marked problematic, {failed} failures.\n")
         elif args.apply and not not_ready:
             print("\n  All bills are post-ready. Nothing to mark.\n")
