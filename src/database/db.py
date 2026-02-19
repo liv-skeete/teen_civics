@@ -1246,7 +1246,7 @@ def select_and_lock_unposted_bill() -> Optional[Dict[str, Any]]:
                     SELECT * FROM bills
                     WHERE published = FALSE
                     AND (problematic IS NULL OR problematic = FALSE)
-                    ORDER BY date_introduced DESC
+                    ORDER BY date_processed ASC NULLS LAST, date_introduced DESC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 ''')

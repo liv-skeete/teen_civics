@@ -708,6 +708,8 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 "source_url": selected_bill.get("source_url", ""),
                 "website_slug": generate_website_slug(selected_bill.get("title", ""), bill_id),
                 "published": False,
+                # Full text from enrichment — must be persisted for FINAL GATE and summaries
+                "full_text": selected_bill.get("full_text", ""),
                 "normalized_status": derived_normalized_status,
                 "teen_impact_score": teen_impact_score,
                 # Sponsor data from API
