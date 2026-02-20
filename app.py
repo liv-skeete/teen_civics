@@ -105,9 +105,11 @@ from src.database.db import (
     record_individual_vote,
     record_vote_and_update_poll,
     get_voter_votes,
+    update_bill_arguments,
 )
 from src.processors.summarizer import summarize_title
 from src.processors.reasoning_generator import generate_reasoning
+from src.processors.argument_generator import generate_bill_arguments
 from src.utils.sponsor_formatter import format_sponsor_sentence
 
 # --- Request ID + security headers ---
@@ -586,6 +588,45 @@ def bill_detail(slug: str):
         bill = get_bill_by_slug(slug)
         if not bill:
             abort(404)
+
+        # ── Lazy-load arguments for Tell Your Rep ────────────────────────
+        # If this bill has summaries but no stored arguments, generate them
+        # on-the-fly and persist to DB so future visitors get instant results.
+        has_support = (bill.get("argument_support") or "").strip()
+        has_oppose = (bill.get("argument_oppose") or "").strip()
+        has_summaries = (bill.get("summary_overview") or "").strip() or (bill.get("summary_detailed") or "").strip()
+
+        if not (has_support and has_oppose) and has_summaries:
+            bill_id = bill.get("bill_id", "")
+            try:
+                logger.info(f"Lazy-generating arguments for bill {bill_id} (slug={slug})")
+                args = generate_bill_arguments(
+                    bill_title=bill.get("title", ""),
+                    summary_overview=bill.get("summary_overview", "") or "",
+                    summary_detailed=bill.get("summary_detailed", "") or "",
+                )
+                new_support = args.get("support", "").strip()
+                new_oppose = args.get("oppose", "").strip()
+                if new_support and new_oppose and len(new_support) >= 20 and len(new_oppose) >= 20:
+                    # Persist to DB for future visitors
+                    update_bill_arguments(bill_id, new_support, new_oppose)
+                    # Update the in-memory bill dict so this request renders them
+                    bill["argument_support"] = new_support
+                    bill["argument_oppose"] = new_oppose
+                    logger.info(
+                        f"Lazy-load complete for {bill_id}: "
+                        f"support={len(new_support)}ch, oppose={len(new_oppose)}ch"
+                    )
+                else:
+                    logger.warning(
+                        f"Lazy-generated arguments too short for {bill_id}, not persisting "
+                        f"(support={len(new_support)}ch, oppose={len(new_oppose)}ch)"
+                    )
+            except Exception as e:
+                logger.warning(f"Lazy argument generation failed for {bill_id}: {e}")
+                # Non-fatal: page still renders, Tell Your Rep falls back to
+                # on-the-fly generation in generate_email endpoint
+
         return render_template("bill.html", bill=bill)
     except HTTPException:
         # Re-raise HTTP exceptions (404, etc) as-is, don't convert to 500
@@ -1742,7 +1783,14 @@ def rep_lookup():
 @limiter.limit("10 per minute")
 @csrf.exempt
 def pre_generate_reasoning():
-    """Pre-warm the reasoning cache when a user votes, before they enter their ZIP."""
+    """Pre-check that stored arguments exist for this bill/vote.
+
+    Previously this pre-warmed an in-memory reasoning cache.  Now arguments
+    are stored in the DB at insert time, so this endpoint simply confirms the
+    stored argument is present (or generates on-the-fly if missing for older
+    bills).  The result is NOT cached in-memory; the generate_email endpoint
+    reads directly from the DB row.
+    """
     try:
         data = request.get_json()
         if not data:
@@ -1761,18 +1809,27 @@ def pre_generate_reasoning():
         if not bill:
             return jsonify({"error": "Bill not found."}), 404
 
+        # Check if stored arguments already exist
+        arg_key = "argument_support" if vote == "yes" else "argument_oppose"
+        stored = (bill.get(arg_key) or "").strip()
+        if stored and len(stored) >= 20:
+            return jsonify({"status": "ok", "source": "stored"})
+
+        # For older bills without stored arguments, generate on-the-fly
+        # (non-blocking — result used later by generate_email endpoint)
         bill_title = bill.get("title", bill_id)
         summary_overview = bill.get("summary_overview", "") or ""
+        summary_detailed = bill.get("summary_detailed", "") or ""
+        try:
+            generate_bill_arguments(
+                bill_title=bill_title,
+                summary_overview=summary_overview,
+                summary_detailed=summary_detailed,
+            )
+        except Exception:
+            pass  # Non-fatal — generate_email has its own fallback chain
 
-        # Generate reasoning (result gets cached in _reasoning_cache)
-        generate_reasoning(
-            vote=vote,
-            bill_title=bill_title,
-            summary_overview=summary_overview,
-            bill_id=bill_id,
-        )
-
-        return jsonify({"status": "ok"})
+        return jsonify({"status": "ok", "source": "generated"})
 
     except Exception as e:
         logger.error(f"Error in pre_generate_reasoning: {e}", exc_info=True)
@@ -1814,14 +1871,48 @@ def generate_email():
         # Extract last name from rep name for salutation
         rep_last_name = rep_name.split()[-1] if rep_name else "Representative"
 
-        # Generate persuasive reasoning using AI (with template fallback)
-        reasoning = generate_reasoning(
-            vote=vote,
-            bill_title=bill_title,
-            summary_overview=summary_overview,
-            bill_id=bill_id,
-            summary_detailed=summary_detailed,
-        )
+        # ── Resolve reasoning text via stored arguments → fallback chain ──
+        # Priority: stored DB arguments → generate on-the-fly → reasoning_generator → generic
+        reasoning = None
+        arg_key = "argument_support" if vote == "yes" else "argument_oppose"
+        stored_arg = (bill.get(arg_key) or "").strip()
+
+        if stored_arg and len(stored_arg) >= 20:
+            # Use pre-computed argument from DB (fastest path)
+            reasoning = stored_arg
+            logger.debug(f"Using stored {arg_key} for {bill_id}")
+        else:
+            # No stored argument — try generating on-the-fly, then fallback
+            try:
+                fresh_args = generate_bill_arguments(
+                    bill_title=bill_title,
+                    summary_overview=summary_overview,
+                    summary_detailed=summary_detailed,
+                )
+                fresh = fresh_args.get("support" if vote == "yes" else "oppose", "").strip()
+                if fresh and len(fresh) >= 20:
+                    reasoning = fresh
+                    logger.info(f"Generated fresh argument for {bill_id}")
+            except Exception as e:
+                logger.warning(f"On-the-fly argument generation failed: {e}")
+
+            if not reasoning:
+                # Fall back to lightweight reasoning_generator
+                try:
+                    reasoning = generate_reasoning(
+                        vote=vote,
+                        bill_title=bill_title,
+                        summary_overview=summary_overview,
+                        bill_id=bill_id,
+                        summary_detailed=summary_detailed,
+                    )
+                except Exception as e:
+                    logger.warning(f"reasoning_generator failed: {e}")
+
+            if not reasoning or len(reasoning.strip()) < 20:
+                # Absolute last resort: generic template
+                from src.processors.reasoning_generator import _fallback_generation
+                reasoning = _fallback_generation(vote, bill_title, summary_overview)
 
         # Build subject
         vote_label = "Yes" if vote == "yes" else "No"

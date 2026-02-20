@@ -190,8 +190,9 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     website_slug, tags, published, full_text,
                     normalized_status, teen_impact_score,
                     sponsor_name, sponsor_party, sponsor_state,
-                    subject_tags
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    subject_tags,
+                    argument_support, argument_oppose
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     bill_data.get('bill_id'),
                     bill_data.get('title'),
@@ -214,7 +215,9 @@ def insert_bill(bill_data: Dict[str, Any]) -> bool:
                     bill_data.get('sponsor_name'),
                     bill_data.get('sponsor_party'),
                     bill_data.get('sponsor_state'),
-                    bill_data.get('subject_tags')
+                    bill_data.get('subject_tags'),
+                    bill_data.get('argument_support'),
+                    bill_data.get('argument_oppose'),
                 ))
         logger.info(f"Successfully inserted bill {bill_data.get('bill_id')}")
         return True
@@ -1696,6 +1699,45 @@ def update_bill_sponsor(bill_id: str, sponsor_name: str, sponsor_party: str, spo
                 return cursor.rowcount > 0
     except Exception as e:
         logger.error(f"Error updating sponsor for bill {normalized_id}: {e}")
+        return False
+
+
+def update_bill_arguments(bill_id: str, argument_support: str, argument_oppose: str) -> bool:
+    """
+    Update only the argument_support and argument_oppose columns for a bill.
+
+    Used by the lazy-load path in bill_detail() to persist arguments that
+    were generated on-the-fly so future visitors get instant results.
+
+    Args:
+        bill_id: The bill identifier (e.g., 'hr1234-119')
+        argument_support: Pre-generated support argument (≤500 chars)
+        argument_oppose: Pre-generated oppose argument (≤500 chars)
+
+    Returns:
+        bool: True if update succeeded, False otherwise
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE bills
+                    SET argument_support = %s,
+                        argument_oppose = %s
+                    WHERE bill_id = %s
+                    """,
+                    (argument_support, argument_oppose, normalized_id),
+                )
+                if cursor.rowcount == 1:
+                    logger.info(f"Stored lazy-generated arguments for bill {normalized_id}")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to update arguments.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error updating arguments for bill {normalized_id}: {e}")
         return False
 
 
