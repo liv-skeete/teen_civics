@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status, fetch_bill_ids_from_texts_received_today, enrich_single_bill
 from src.processors.summarizer import summarize_bill_enhanced
-from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content
+from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content, is_twitter_configured
 from src.publishers.facebook_publisher import FacebookPublisher
 from src.database.db import (
     bill_already_posted, get_bill_by_id, insert_bill, update_tweet_info,
@@ -805,73 +805,93 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             logger.info(f"🔵 Tweet content:\n{formatted_tweet}")
             return 0
 
-        logger.info("🚀 Posting tweet...")
-        success, tweet_url = post_tweet(formatted_tweet)
+        # ── Post to all configured platforms ──
+        any_posted = False
+        tweet_url = None
 
-        if success:
-            logger.info(f"✅ Tweet posted: {tweet_url}")
-            
-            # Post to Bluesky (if configured)
-            try:
-                from src.publishers.bluesky_publisher import BlueskyPublisher
-                bluesky = BlueskyPublisher()
-                if bluesky.is_configured():
-                    logger.info("🦋 Posting to Bluesky...")
-                    # Use Bluesky's own format (shorter URLs for 300-char limit)
-                    bsky_post = bluesky.format_post(bill_data)
-                    bsky_success, bsky_url = bluesky.post(bsky_post)
-                    if bsky_success:
-                        logger.info(f"✅ Bluesky posted: {bsky_url}")
-                    else:
-                        logger.warning("⚠️ Bluesky posting failed (non-fatal)")
-                else:
-                    logger.info("ℹ️ Bluesky not configured, skipping")
-            except ImportError:
-                logger.info("ℹ️ Bluesky publisher not available, skipping")
-            except Exception as e:
-                logger.warning(f"⚠️ Bluesky posting error (non-fatal): {e}")
-            
-            # Post to Threads (if configured)
-            try:
-                from src.publishers.threads_publisher import ThreadsPublisher
-                threads = ThreadsPublisher()
-                if threads.is_configured():
-                    logger.info("🧵 Posting to Threads...")
-                    threads_post = threads.format_post(bill_data)
-                    threads_success, threads_url = threads.post(threads_post)
-                    if threads_success:
-                        logger.info(f"✅ Threads posted: {threads_url}")
-                    else:
-                        logger.warning("⚠️ Threads posting failed (non-fatal)")
-                else:
-                    logger.info("ℹ️ Threads not configured, skipping")
-            except ImportError:
-                logger.info("ℹ️ Threads publisher not available, skipping")
-            except Exception as e:
-                logger.warning(f"⚠️ Threads posting error (non-fatal): {e}")
+        # Twitter
+        if not is_twitter_configured():
+            logger.info("ℹ️ Twitter not configured, skipping")
+        else:
+            logger.info("🚀 Posting tweet...")
+            tw_success, tw_url = post_tweet(formatted_tweet)
+            if tw_success:
+                logger.info(f"✅ Tweet posted: {tw_url}")
+                any_posted = True
+                tweet_url = tw_url
+            else:
+                logger.error("❌ Twitter posting failed")
 
-            # Post to Facebook (if configured)
-            try:
-                facebook = FacebookPublisher()
-                if facebook.is_configured():
-                    logger.info("📘 Posting to Facebook...")
-                    facebook_post = facebook.format_post(bill_data)
-                    facebook_success, facebook_url = facebook.post(facebook_post)
-                    if facebook_success:
-                        logger.info(f"✅ Facebook posted: {facebook_url}")
-                    else:
-                        logger.warning("⚠️ Facebook posting failed (non-fatal)")
+        # Bluesky
+        try:
+            from src.publishers.bluesky_publisher import BlueskyPublisher
+            bluesky = BlueskyPublisher()
+            if bluesky.is_configured():
+                logger.info("🦋 Posting to Bluesky...")
+                bsky_post = bluesky.format_post(bill_data)
+                bsky_success, bsky_url = bluesky.post(bsky_post)
+                if bsky_success:
+                    logger.info(f"✅ Bluesky posted: {bsky_url}")
+                    any_posted = True
+                    if not tweet_url:
+                        tweet_url = bsky_url
                 else:
-                    logger.info("ℹ️ Facebook not configured, skipping")
-            except ImportError:
-                logger.info("ℹ️ Facebook publisher not available, skipping")
-            except Exception as e:
-                logger.warning(f"⚠️ Facebook posting error (non-fatal): {e}")
-            
+                    logger.warning("⚠️ Bluesky posting failed (non-fatal)")
+            else:
+                logger.info("ℹ️ Bluesky not configured, skipping")
+        except ImportError:
+            logger.info("ℹ️ Bluesky publisher not available, skipping")
+        except Exception as e:
+            logger.warning(f"⚠️ Bluesky posting error (non-fatal): {e}")
+
+        # Threads
+        try:
+            from src.publishers.threads_publisher import ThreadsPublisher
+            threads = ThreadsPublisher()
+            if threads.is_configured():
+                logger.info("🧵 Posting to Threads...")
+                threads_post = threads.format_post(bill_data)
+                threads_success, threads_url = threads.post(threads_post)
+                if threads_success:
+                    logger.info(f"✅ Threads posted: {threads_url}")
+                    any_posted = True
+                    if not tweet_url:
+                        tweet_url = threads_url
+                else:
+                    logger.warning("⚠️ Threads posting failed (non-fatal)")
+            else:
+                logger.info("ℹ️ Threads not configured, skipping")
+        except ImportError:
+            logger.info("ℹ️ Threads publisher not available, skipping")
+        except Exception as e:
+            logger.warning(f"⚠️ Threads posting error (non-fatal): {e}")
+
+        # Facebook
+        try:
+            facebook = FacebookPublisher()
+            if facebook.is_configured():
+                logger.info("📘 Posting to Facebook...")
+                facebook_post = facebook.format_post(bill_data)
+                facebook_success, facebook_url = facebook.post(facebook_post)
+                if facebook_success:
+                    logger.info(f"✅ Facebook posted: {facebook_url}")
+                    any_posted = True
+                    if not tweet_url:
+                        tweet_url = facebook_url
+                else:
+                    logger.warning("⚠️ Facebook posting failed (non-fatal)")
+            else:
+                logger.info("ℹ️ Facebook not configured, skipping")
+        except ImportError:
+            logger.info("ℹ️ Facebook publisher not available, skipping")
+        except Exception as e:
+            logger.warning(f"⚠️ Facebook posting error (non-fatal): {e}")
+
+        # ── Mark bill as published if at least one platform succeeded ──
+        if any_posted:
             logger.info("💾 Updating database with tweet information...")
-            if update_tweet_info(bill_id, tweet_url):
+            if update_tweet_info(bill_id, tweet_url or "posted-no-url"):
                 logger.info("✅ Database updated successfully")
-                
                 logger.info("🎉 Orchestrator completed successfully!")
                 return 0
             else:
@@ -879,7 +899,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 mark_bill_as_problematic(bill_id, "update_tweet_info() returned False")
                 return 1
         else:
-            logger.error("❌ Failed to post tweet. The bill will be retried in the next run.")
+            logger.error("❌ No platforms posted successfully. The bill will be retried in the next run.")
             return 1
 
     except Exception as e:

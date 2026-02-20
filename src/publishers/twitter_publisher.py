@@ -102,6 +102,15 @@ else:
 logger.info(f"API v1 initialized: {api_v1 is not None}")
 logger.info(f"API v2 initialized: {client_v2 is not None}")
 
+def is_twitter_configured() -> bool:
+    """Check if all required Twitter API credentials are present and non-empty."""
+    required = [TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET]
+    configured = all(required)
+    if not configured:
+        logger.warning("Twitter: Missing one or more required credentials (API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET)")
+    return configured
+
+
 def post_tweet(text: str) -> tuple[bool, str | None]:
     """
     Post a tweet with the given text.
