@@ -6,7 +6,7 @@
 
   // --- Config ---
   const DEBUG = false;
-  const API_BASE = (window.APP_ROOT || "");
+  const API_BASE = (window.APP_ROOT || (window.location.pathname || "").startsWith("/beta") ? "/beta" : "");
 
   // --- Internal state (per-widget) ---
   const fetchedOnce = new WeakSet();     // prevents double result fetches

@@ -5,7 +5,7 @@
 (() => {
   "use strict";
 
-  const API_BASE = (window.APP_ROOT || "");
+  const API_BASE = (window.APP_ROOT || (window.location.pathname || "").startsWith("/beta") ? "/beta" : "");
 
   // --- Debug Logging ---
   const hostname = window.location.hostname;
