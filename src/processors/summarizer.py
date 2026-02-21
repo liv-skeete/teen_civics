@@ -19,10 +19,12 @@ load_dotenv()
 # Venice AI Configuration
 VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
 
-# Model configuration - Venice AI uses claude-sonnet-4-6 (with dashes)
-# Venice does NOT support 'thinking' extra_body — all calls are standard.
-PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-4-6")
-FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-opus-4-6")
+# Model configuration — Venice AI model names use dashes.
+# claude-sonnet-4-6 is a thinking-only model on Venice that requires
+# thinking params Venice doesn't support via extra_body, so we use
+# claude-opus-4-6 (which works without thinking params) as primary.
+PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-opus-4-6")
+FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-sonnet-4-6")
 
 VALID_MODELS = {
     "claude-sonnet-4-5",
