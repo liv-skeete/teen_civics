@@ -58,15 +58,33 @@ if config.logging.file_path:
     logger.info(f"Logging configured to file: {config.logging.file_path}")
 
 # ---- Flask app ----
-# Support sub-path deployment (e.g. /beta on staging).
-# Set URL_PREFIX="/beta" on the Railway staging service.
-# This makes url_for('static', ...) generate /beta/static/... paths.
-_url_prefix = os.environ.get('URL_PREFIX', '')
-app = Flask(
-    __name__,
-    static_url_path=(_url_prefix + '/static') if _url_prefix else '/static',
-)
+app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+# Support sub-path deployment (e.g. /beta on staging).
+# Railway strips /beta from PATH_INFO before forwarding to Flask, so Flask
+# routes work as normal (/api/vote, /static/...).  We just need url_for() to
+# emit /beta/... URLs so the browser can find them.  Setting SCRIPT_NAME in
+# the WSGI environ achieves this without touching Flask's routing.
+# Set URL_PREFIX=/beta on the Railway staging service.
+_url_prefix = os.environ.get('URL_PREFIX', '')
+if _url_prefix:
+    class _PrefixMiddleware:
+        """Injects SCRIPT_NAME so url_for() generates sub-path-prefixed URLs."""
+        def __init__(self, wsgi_app, prefix):
+            self.app = wsgi_app
+            self.prefix = prefix
+
+        def __call__(self, environ, start_response):
+            environ['SCRIPT_NAME'] = self.prefix
+            # Railway already strips the prefix from PATH_INFO, so we only
+            # strip it ourselves when it's still present (local testing).
+            path = environ.get('PATH_INFO', '')
+            if path.startswith(self.prefix):
+                environ['PATH_INFO'] = path[len(self.prefix):] or '/'
+            return self.app(environ, start_response)
+
+    app.wsgi_app = _PrefixMiddleware(app.wsgi_app, _url_prefix)
 
 app.config["DEBUG"] = config.flask.debug
 
