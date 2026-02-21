@@ -1,16 +1,41 @@
+from typing import Optional
+import logging
 import re
 import time
-import logging
-from typing import Optional
+import os
+from datetime import datetime
 
-from src.processors.summarizer import _get_venice_client, PREFERRED_MODEL
+from src.processors.summarizer import _get_venice_client
+from src.config import get_config
 
 logger = logging.getLogger(__name__)
 
-# To avoid circular imports if app.py imports this, 
-# we keep cache here or pass it in. For simplicity, local Module-level cache.
+# Configurable model name
+PREFERRED_MODEL = os.getenv("ARGUMENT_MODEL", "claude-sonnet-4-6")
+# Check env for model name overrides or use sensible defaults
+VALID_MODELS = ["claude-sonnet-3-5", "claude-sonnet-4-6", "claude-opus-4-6", "llama-3.3-70b", "deepseek-r1-671b"]
+
+# In-memory LRU cache for reasoning
+# Key: "bill_id-vote" -> { "reasoning": str, "timestamp": float }
 _reasoning_cache = {}
-REASONING_CACHE_TTL = 86400 * 7  # 7 days
+REASONING_CACHE_TTL = 3600 * 24  # 24 hours
+REASONING_CACHE_MAX_SIZE = 1000
+
+def _evict_cache():
+    """Evict old cache entries."""
+    now = time.time()
+    expired = [k for k, v in _reasoning_cache.items() if now - v["timestamp"] > REASONING_CACHE_TTL]
+    for k in expired:
+        del _reasoning_cache[k]
+    
+    # If still too big, remove oldest
+    if len(_reasoning_cache) > REASONING_CACHE_MAX_SIZE:
+        # Sort by timestamp
+        sorted_keys = sorted(_reasoning_cache.keys(), key=lambda k: _reasoning_cache[k]["timestamp"])
+        # Remove oldest 20%
+        for i in range(int(REASONING_CACHE_MAX_SIZE * 0.2)):
+            del _reasoning_cache[sorted_keys[i]]
+
 
 def clean_text_for_fallback(text: str) -> str:
     """Clean text for use in fallback template."""
@@ -37,18 +62,18 @@ def _fallback_generation(vote: str, bill_title: str, summary_overview: str) -> s
 
     topic_clean = clean_text_for_fallback(topic).rstrip(".,;:")
 
-    # Stronger fallback templates with values-based arguments
+    # Updated (2026-02-21): Standard "I SUPPORT/OPPOSE" text to match argument generator.
     if vote == "yes":
         return (
-            f"I SUPPORT this bill because it takes necessary steps to address {topic_clean}. "
-            f"As a constituent, I believe this legislation will provide essential benefits "
-            f"and opportunities for our community that cannot be ignored."
+            "it addresses an important issue and would benefit American communities. "
+            "After reviewing the full text and summary of this legislation, I believe it "
+            "is a necessary step forward and encourage you to support its passage."
         )
     else:
         return (
-            f"I OPPOSE this bill because the approach to {topic_clean} is flawed and potentially harmful. "
-            f"I am concerned about the negative impact on my community and believe we need "
-            f"a solution that better protects the interests of all constituents."
+            "the potential costs and unintended consequences outweigh the benefits. "
+            "After reviewing the full text and summary of this legislation, I believe "
+            "there are better alternatives and encourage you to oppose this legislation."
         )
 
 def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_id: Optional[str] = None, summary_detailed: Optional[str] = None) -> str:

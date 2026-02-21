@@ -1,177 +1,180 @@
-"""
-Argument generator for bill support/oppose reasoning.
-
-Generates pre-computed argument text for both sides of a bill,
-stored at insert time so the email-generation endpoint never
-blocks on an AI call.
-
-Fallback chain (per side):
-  1. Opus 4.6 via Venice AI
-  2. Sonnet 4.6 via Venice AI
-  3. Extract key provisions from summary_detailed as bullet points
-  4. Generic template (absolute last resort)
-"""
-
-import os
-import re
-import json
-import time
+from typing import Dict
 import logging
-from typing import Dict, Any, Optional, Tuple
+import re
+import os
+import time
+from typing import Optional, List, Dict, Any
 
-from src.processors.summarizer import _get_venice_client, FALLBACK_MODEL
+from src.database.db import get_bill_by_id, update_bill_arguments
+from src.processors.summarizer import _get_venice_client
 
+# ── Logging ─────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
 
 # ── Model configuration ─────────────────────────────────────────────────────
 ARGUMENT_MODEL = os.getenv("ARGUMENT_MODEL", "claude-opus-4-6")
 ARGUMENT_FALLBACK = os.getenv("ARGUMENT_FALLBACK", "claude-sonnet-4-6")
 
-# Hard character limit for congressional contact-form fields
+# Maximum characters per argument to ensure it fits in email forms
 MAX_ARGUMENT_CHARS = 500
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def _truncate_at_sentence(text: str, limit: int = MAX_ARGUMENT_CHARS) -> str:
-    """Truncate *text* to the last complete sentence that fits under *limit* chars.
-
-    A "sentence boundary" is a period, exclamation mark, or question mark
-    followed by a space or end-of-string.  If no sentence boundary exists
-    under *limit*, hard-cut at *limit* on the last word boundary.
-    """
-    if len(text) <= limit:
+def _truncate_at_sentence(text: str, max_length: int) -> str:
+    """Truncate text at the last sentence boundary before max_length."""
+    if len(text) <= max_length:
         return text
-
-    # Find all sentence-ending positions within the limit
-    truncated = text[:limit]
-    # Look for last sentence boundary (. ! ?) followed by space or end
-    last_sentence = -1
-    for m in re.finditer(r'[.!?](?:\s|$)', truncated):
-        last_sentence = m.end()
-
-    if last_sentence > 0 and last_sentence >= limit * 0.3:
-        return truncated[:last_sentence].rstrip()
-
-    # No good sentence boundary — cut at last word boundary
-    last_space = truncated.rfind(' ')
-    if last_space > 0 and last_space >= limit * 0.5:
-        return truncated[:last_space].rstrip() + '.'
-    return truncated.rstrip() + '.'
-
-
-def _build_argument_prompt(vote: str, bill_title: str,
-                           summary_overview: str,
-                           summary_detailed: str) -> Tuple[str, str]:
-    """Return (system_prompt, user_prompt) for the argument generation call."""
-    system_prompt = (
-        "You are a civic-engagement assistant helping a young constituent "
-        "draft a persuasive argument for contacting their member of Congress.\n\n"
-        "RULES:\n"
-        "1. Output ONLY a JSON object with two keys: \"support\" and \"oppose\".\n"
-        "2. Each value is 1-3 sentences (max 450 characters) making a SPECIFIC, "
-        "evidence-based argument.\n"
-        "3. Start each argument with a lowercase letter (it follows 'because ').\n"
-        "4. Name WHO is affected and HOW.\n"
-        "5. Use concrete values: safety, fairness, opportunity, accountability, "
-        "freedom, fiscal responsibility.\n"
-        "6. Do NOT summarize the bill — ARGUE for or against it.\n"
-        "7. No bullet points, no markdown, no quotation marks.\n"
-        "8. No preamble or explanation outside the JSON object.\n"
-    )
-
-    context_parts = [f"Bill Title: {bill_title}"]
-    if summary_overview:
-        context_parts.append(f"Overview: {summary_overview}")
-    if summary_detailed:
-        # Truncate to avoid token explosion
-        det = summary_detailed[:1200] + ("..." if len(summary_detailed) > 1200 else "")
-        context_parts.append(f"Details: {det}")
-    context_block = "\n".join(context_parts)
-
-    user_prompt = (
-        f"{context_block}\n\n"
-        "Generate a JSON object with \"support\" and \"oppose\" keys. "
-        "Each value is the persuasive argument text (1-3 sentences, max 450 chars, "
-        "starts lowercase, follows 'because '). Make REAL arguments with specific "
-        "consequences, impacts, or principles. Mention who benefits or gets hurt."
-    )
-    return system_prompt, user_prompt
+    
+    # Cut to limit
+    truncated = text[:max_length]
+    
+    # Find last sentence ending punctuation
+    last_punct = -1
+    for char in ['.', '!', '?']:
+        pos = truncated.rfind(char)
+        if pos > last_punct:
+            last_punct = pos
+            
+    if last_punct > 0:
+        return truncated[:last_punct+1]
+        
+    # If no punctuation, just return truncated
+    return truncated.rstrip() + "."
 
 
-def _parse_arguments_json(raw: str) -> Optional[Dict[str, str]]:
-    """Try to extract {support, oppose} from raw AI output."""
-    # Strip markdown code fences if present
-    cleaned = re.sub(r'^```(?:json)?\s*', '', raw.strip())
-    cleaned = re.sub(r'\s*```$', '', cleaned)
-
-    try:
-        data = json.loads(cleaned)
-        if isinstance(data, dict) and "support" in data and "oppose" in data:
-            return {
-                "support": str(data["support"]).strip(),
-                "oppose": str(data["oppose"]).strip(),
-            }
-    except (json.JSONDecodeError, TypeError, KeyError):
-        pass
-
-    # Fallback: try to find JSON object in the text
-    m = re.search(r'\{[^{}]*"support"\s*:\s*"[^"]*"[^{}]*"oppose"\s*:\s*"[^"]*"[^{}]*\}', raw, re.DOTALL)
-    if m:
-        try:
-            data = json.loads(m.group(0))
-            return {
-                "support": str(data["support"]).strip(),
-                "oppose": str(data["oppose"]).strip(),
-            }
-        except (json.JSONDecodeError, TypeError, KeyError):
-            pass
-
-    return None
-
-
-def _call_ai_for_arguments(model: str, bill_title: str,
-                           summary_overview: str,
-                           summary_detailed: str) -> Optional[Dict[str, str]]:
-    """Call Venice AI with *model* and return parsed {support, oppose} or None."""
-    system_prompt, user_prompt = _build_argument_prompt(
-        "both", bill_title, summary_overview, summary_detailed
-    )
+def _call_venice_argument_generation(prompt: str, model: str) -> Optional[str]:
+    """Call Venice AI to generate argument text."""
     try:
         client = _get_venice_client()
-        start = time.time()
+        start_time = time.time()
+        
+        # Thinking models usage for better reasoning
         response = client.chat.completions.create(
             model=model,
             max_tokens=1024,
             temperature=0.7,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {"role": "user", "content": prompt}
             ],
             timeout=20.0,
             extra_body={"thinking": {"enabled": True, "budget_tokens": 4096}},
         )
-        duration = time.time() - start
-        logger.info(f"Argument generation ({model}) completed in {duration:.2f}s")
-
-        raw = response.choices[0].message.content.strip()
-        result = _parse_arguments_json(raw)
-        if result:
-            # Validate minimum length
-            if len(result["support"]) < 20 or len(result["oppose"]) < 20:
-                logger.warning(f"Argument text too short from {model}, discarding")
-                return None
-            return result
-        logger.warning(f"Could not parse JSON from {model} response")
-        return None
+        
+        duration = time.time() - start_time
+        logger.info(f"Argument generation ({model}) took {duration:.2f}s")
+        
+        content = response.choices[0].message.content.strip()
+        
+        # Cleanup quotes if model wrapped output in them
+        if content.startswith('"') and content.endswith('"'):
+            content = content[1:-1]
+            
+        return content
     except Exception as e:
-        logger.error(f"AI argument generation failed ({model}): {e}")
+        logger.warning(f"Argument generation failed with {model}: {e}")
         return None
 
 
-def _extract_provisions_fallback(summary_detailed: str, bill_title: str) -> Dict[str, str]:
-    """Fallback 3: extract key provisions from summary_detailed as bullet-point based arguments."""
-    if not summary_detailed or len(summary_detailed.strip()) < 50:
+def generate_bill_arguments(bill_title: str,
+                            summary_overview: str = "",
+                            summary_detailed: str = "") -> Dict[str, str]:
+    """
+    Generate persuasive arguments for supporting and opposing a bill.
+    
+    Returns:
+        Dict with keys "support" and "oppose", containing the argument text.
+        Returns empty strings if generation fails completely.
+    """
+    support_text = ""
+    oppose_text = ""
+    
+    # ── 1. Construct Metadata Block ──────────────────────────────────────────
+    # Clean text to avoid confusing the model
+    def clean(s): return re.sub(r'\s+', ' ', s or "").strip()
+    
+    context = f"BILL TITLE: {clean(bill_title)}\n"
+    if summary_overview:
+        context += f"OVERVIEW: {clean(summary_overview)}\n"
+    if summary_detailed:
+        # Truncate detailed summary to avoiding token limits
+        context += f"DETAILS: {clean(summary_detailed)[:2000]}\n"
+        
+    # ── 2. Construct Prompts ─────────────────────────────────────────────────
+    # We ask for a "because..." completion that is:
+    # - Passionate but rational
+    # - Focused on impact (who does this help/hurt?)
+    # - 1-2 sentences max
+    
+    base_prompt = (
+        f"{context}\n\n"
+        "You are a young, engaged constituent writing to your member of Congress. "
+        "Complete the sentence: 'I [SUPPORT/OPPOSE] this bill because...'\n\n"
+        "RULES:\n"
+        "1. Start directly with lowercase (e.g., 'it would ensure...', 'it fails to...').\n"
+        "2. Do NOT write 'I support' or 'because' — just the continuation.\n"
+        "3. Write 1-2 concise, persuasive sentences (under 300 chars).\n"
+        "4. Focus on specific impact: safety, fairness, cost, rights, community benefit.\n"
+        "5. No bullet points, no headers.\n"
+    )
+    
+    prompt_support = base_prompt + "\nARGUMENT FOR SUPPORT:"
+    prompt_oppose = base_prompt + "\nARGUMENT FOR OPPOSITION:"
+    
+    # ── 3. Attempt Generation (Primary Model) ────────────────────────────────
+    s_gen = _call_venice_argument_generation(prompt_support, ARGUMENT_MODEL)
+    o_gen = _call_venice_argument_generation(prompt_oppose, ARGUMENT_MODEL)
+    
+    # ── 4. Fallback Generation (Secondary Model) ─────────────────────────────
+    # If primary failed, try fallback for missing pieces
+    if not s_gen:
+        s_gen = _call_venice_argument_generation(prompt_support, ARGUMENT_FALLBACK)
+    if not o_gen:
+        o_gen = _call_venice_argument_generation(prompt_oppose, ARGUMENT_FALLBACK)
+
+    # ── 5. Process & Validation ──────────────────────────────────────────────
+    
+    def validate_and_clean(text: Optional[str]) -> Optional[str]:
+        if not text:
+            return None
+        t = text.strip()
+        # Remove common prefixes from chatty models
+        t = re.sub(r"^(because|that|it is because)\s+", "", t, flags=re.IGNORECASE)
+        # Ensure it acts as a continuation (start lowercase generally, unless proper noun)
+        if len(t) > 0 and t[0].isupper() and " " in t:
+            first_word = t.split(" ")[0]
+            if first_word.lower() not in ["i", "american", "congress", "senate", "federal"]:
+                t = t[0].lower() + t[1:]
+        return _truncate_at_sentence(t, MAX_ARGUMENT_CHARS)
+
+    support_text = validate_and_clean(s_gen)
+    oppose_text = validate_and_clean(o_gen)
+    
+    # ── 6. Fallback Strategies (Code-based) ──────────────────────────────────
+    
+    if support_text and oppose_text:
+        return {"support": support_text, "oppose": oppose_text}
+        
+    logger.warning("AI generation incomplete/failed. Attempting extractive fallback.")
+    
+    # Fallback A: Extract from summary_detailed bullet points
+    extractive = _extractive_fallback(summary_detailed, bill_title)
+    if not support_text:
+        support_text = extractive["support"]
+    if not oppose_text:
+        oppose_text = extractive["oppose"]
+        
+    # Fallback B: Generic template (Absolute last resort)
+    # If extractive failed (empty summary), use generic
+    if not support_text:
+        support_text = _generic_template_fallback(bill_title)["support"]
+    if not oppose_text:
+        oppose_text = _generic_template_fallback(bill_title)["oppose"]
+        
+    return {"support": support_text, "oppose": oppose_text}
+
+
+def _extractive_fallback(summary_detailed: str, bill_title: str) -> Dict[str, str]:
+    """Fallback strategy 3: Extract key phrases from the detailed summary."""
+    if not summary_detailed or len(summary_detailed) < 50:
         return _generic_template_fallback(bill_title)
 
     # Extract bullet points from the detailed summary
@@ -219,70 +222,25 @@ def _extract_provisions_fallback(summary_detailed: str, bill_title: str) -> Dict
 
 def _generic_template_fallback(bill_title: str) -> Dict[str, str]:
     """Fallback 4 (absolute last resort): generic template-based arguments."""
+    logger.warning("Using hard fallback generic arguments.")
+    
     topic = bill_title or "this legislation"
     topic = re.sub(r'^(To amend|A bill to|A resolution to|Providing for)\s+', '', topic, flags=re.IGNORECASE).strip()
     if len(topic) > 80:
         topic = topic[:77] + "..."
     topic = topic.rstrip(".,;:")
 
-    support = _truncate_at_sentence(
-        f"I SUPPORT this bill because it takes necessary steps to address {topic}. "
-        f"As a constituent, I believe this legislation will provide essential benefits "
-        f"and opportunities for our community that cannot be ignored.",
-        MAX_ARGUMENT_CHARS
+    # Updated (2026-02-21): Replaced "meaningful action" text with standard "I SUPPORT/OPPOSE" text.
+    support = (
+        "it addresses an important issue and would benefit American communities. "
+        "After reviewing the full text and summary of this legislation, I believe it "
+        "is a necessary step forward and encourage you to support its passage."
     )
-    oppose = _truncate_at_sentence(
-        f"I OPPOSE this bill because the approach to {topic} is flawed and potentially harmful. "
-        f"I am concerned about the negative impact on my community and believe we need "
-        f"a solution that better protects the interests of all constituents.",
-        MAX_ARGUMENT_CHARS
+    
+    oppose = (
+        "the potential costs and unintended consequences outweigh the benefits. "
+        "After reviewing the full text and summary of this legislation, I believe "
+        "there are better alternatives and encourage you to oppose this legislation."
     )
+    
     return {"support": support, "oppose": oppose}
-
-
-# ── Public API ───────────────────────────────────────────────────────────────
-
-def generate_bill_arguments(bill_title: str,
-                            summary_overview: str = "",
-                            summary_detailed: str = "") -> Dict[str, str]:
-    """Generate support and oppose arguments for a bill.
-
-    Returns ``{"support": "...", "oppose": "..."}`` with each value
-    hard-capped at 500 characters, truncated at the last complete sentence.
-
-    Fallback chain:
-      1. Opus 4.6  (ARGUMENT_MODEL)
-      2. Sonnet 4.6  (ARGUMENT_FALLBACK)
-      3. Extract key provisions from *summary_detailed*
-      4. Generic template
-    """
-    safe_title = (bill_title or "").strip() or "this bill"
-    safe_overview = (summary_overview or "").strip()
-    safe_detailed = (summary_detailed or "").strip()
-
-    # ── Fallback 1: Primary model (Opus) ─────────────────────────────────
-    result = _call_ai_for_arguments(ARGUMENT_MODEL, safe_title, safe_overview, safe_detailed)
-    if result:
-        logger.info("✅ Arguments generated via primary model")
-        return {
-            "support": _truncate_at_sentence(result["support"]),
-            "oppose": _truncate_at_sentence(result["oppose"]),
-        }
-
-    # ── Fallback 2: Secondary model (Sonnet) ─────────────────────────────
-    logger.warning("Primary argument model failed, trying fallback model...")
-    result = _call_ai_for_arguments(ARGUMENT_FALLBACK, safe_title, safe_overview, safe_detailed)
-    if result:
-        logger.info("✅ Arguments generated via fallback model")
-        return {
-            "support": _truncate_at_sentence(result["support"]),
-            "oppose": _truncate_at_sentence(result["oppose"]),
-        }
-
-    # ── Fallback 3: Extract provisions from summary_detailed ─────────────
-    logger.warning("Both AI models failed, extracting provisions from summary...")
-    result = _extract_provisions_fallback(safe_detailed, safe_title)
-    return {
-        "support": _truncate_at_sentence(result["support"]),
-        "oppose": _truncate_at_sentence(result["oppose"]),
-    }
