@@ -517,7 +517,7 @@
       // Should not happen since we only show this after voting, but handle gracefully
       showEmailEditor(section, {
         subject: `Constituent Feedback | via TeenCivics`,
-        body: "Dear Representative,\n\nI am writing as your constituent...\n\nRespectfully,",
+        body: "Dear Representative,\n\nI am writing as your constituent...",
         mailto_url: null,
       }, primaryRep, ccReps);
       return;
@@ -580,7 +580,7 @@
       const reasonArg = vote === "yes" ? supportArg : opposeArg;
       showEmailEditor(section, {
         subject: `Constituent Feedback on ${billId} | via TeenCivics`,
-        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billLabel} on TeenCivics (https://teencivics.org), a civic education platform that helps young Americans engage with legislation.\n\nI ${stance.toUpperCase()} this bill because ${reasonArg}\n\nI urge you to consider your constituents' views on this important matter.\n\nRespectfully,`,
+        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billLabel} on TeenCivics (https://teencivics.org), a civic education platform that helps young Americans engage with legislation.\n\nI ${stance.toUpperCase()} this bill because ${reasonArg}`,
         mailto_url: null,
       }, primaryRep, ccReps);
     }

@@ -2027,12 +2027,7 @@ def generate_email():
         if reason_text and reason_text[-1] not in '.!?':
             reason_text = reason_text.rstrip(',;: ') + '.'
 
-        closing = (
-            "\n\nI urge you to consider your constituents' views on this "
-            "important matter.\n\nRespectfully,"
-        )
-
-        body = prefix + reason_text + closing
+        body = prefix + reason_text
 
         # Build mailto URL if email is available
         mailto_url = None
