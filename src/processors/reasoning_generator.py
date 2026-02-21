@@ -40,15 +40,15 @@ def _fallback_generation(vote: str, bill_title: str, summary_overview: str) -> s
     # Stronger fallback templates with values-based arguments
     if vote == "yes":
         return (
-            f"it takes meaningful action on {topic_clean}, which directly affects "
-            f"communities like mine. Passing this legislation would move us closer "
-            f"to a fairer, more accountable system for all Americans."
+            f"I SUPPORT this bill because it takes necessary steps to address {topic_clean}. "
+            f"As a constituent, I believe this legislation will provide essential benefits "
+            f"and opportunities for our community that cannot be ignored."
         )
     else:
         return (
-            f"it fails to adequately protect the interests of everyday Americans "
-            f"regarding {topic_clean}. The potential costs and unintended consequences "
-            f"outweigh the benefits, and I urge you to seek a better solution."
+            f"I OPPOSE this bill because the approach to {topic_clean} is flawed and potentially harmful. "
+            f"I am concerned about the negative impact on my community and believe we need "
+            f"a solution that better protects the interests of all constituents."
         )
 
 def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_id: Optional[str] = None, summary_detailed: Optional[str] = None) -> str:

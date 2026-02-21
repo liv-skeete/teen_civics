@@ -226,15 +226,15 @@ def _generic_template_fallback(bill_title: str) -> Dict[str, str]:
     topic = topic.rstrip(".,;:")
 
     support = _truncate_at_sentence(
-        f"it takes meaningful action on {topic}, which directly affects "
-        f"communities like mine. Passing this legislation would move us closer "
-        f"to a fairer, more accountable system for all Americans.",
+        f"I SUPPORT this bill because it takes necessary steps to address {topic}. "
+        f"As a constituent, I believe this legislation will provide essential benefits "
+        f"and opportunities for our community that cannot be ignored.",
         MAX_ARGUMENT_CHARS
     )
     oppose = _truncate_at_sentence(
-        f"it fails to adequately protect the interests of everyday Americans "
-        f"regarding {topic}. The potential costs and unintended consequences "
-        f"outweigh the benefits, and I urge you to seek a better solution.",
+        f"I OPPOSE this bill because the approach to {topic} is flawed and potentially harmful. "
+        f"I am concerned about the negative impact on my community and believe we need "
+        f"a solution that better protects the interests of all constituents.",
         MAX_ARGUMENT_CHARS
     )
     return {"support": support, "oppose": oppose}
