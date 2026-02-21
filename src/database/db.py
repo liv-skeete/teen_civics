@@ -1739,45 +1739,6 @@ def update_bill_sponsor(bill_id: str, sponsor_name: str, sponsor_party: str, spo
         return False
 
 
-def update_bill_arguments(bill_id: str, argument_support: str, argument_oppose: str) -> bool:
-    """
-    Update only the argument_support and argument_oppose columns for a bill.
-
-    Used by the lazy-load path in bill_detail() to persist arguments that
-    were generated on-the-fly so future visitors get instant results.
-
-    Args:
-        bill_id: The bill identifier (e.g., 'hr1234-119')
-        argument_support: Pre-generated support argument (≤500 chars)
-        argument_oppose: Pre-generated oppose argument (≤500 chars)
-
-    Returns:
-        bool: True if update succeeded, False otherwise
-    """
-    normalized_id = normalize_bill_id(bill_id)
-    try:
-        with db_connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE bills
-                    SET argument_support = %s,
-                        argument_oppose = %s
-                    WHERE bill_id = %s
-                    """,
-                    (argument_support, argument_oppose, normalized_id),
-                )
-                if cursor.rowcount == 1:
-                    logger.info(f"Stored lazy-generated arguments for bill {normalized_id}")
-                    return True
-                else:
-                    logger.warning(f"Could not find bill {normalized_id} to update arguments.")
-                    return False
-    except Exception as e:
-        logger.error(f"Error updating arguments for bill {normalized_id}: {e}")
-        return False
-
-
 def get_bills_without_sponsor(limit: int = 100) -> List[Dict[str, Any]]:
     """
     Get bills that don't have sponsor information populated.
