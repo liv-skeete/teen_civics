@@ -60,6 +60,24 @@ if config.logging.file_path:
 # ---- Flask app ----
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+# Support sub-path deployment (e.g. /beta on staging).
+# Set SCRIPT_NAME env var on the Railway staging service to "/beta".
+# This WSGI middleware makes url_for() generate /beta/static/... paths.
+_script_name = os.environ.get('SCRIPT_NAME', '')
+if _script_name:
+    class _PrefixMiddleware:
+        def __init__(self, wsgi_app, prefix):
+            self.app = wsgi_app
+            self.prefix = prefix
+        def __call__(self, environ, start_response):
+            environ['SCRIPT_NAME'] = self.prefix
+            path = environ.get('PATH_INFO', '')
+            if path.startswith(self.prefix):
+                environ['PATH_INFO'] = path[len(self.prefix):] or '/'
+            return self.app(environ, start_response)
+    app.wsgi_app = _PrefixMiddleware(app.wsgi_app, _script_name)
+
 app.config["DEBUG"] = config.flask.debug
 
 # SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY, otherwise generate (dev)
