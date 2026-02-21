@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status, fetch_bill_ids_from_texts_received_today, enrich_single_bill
 from src.processors.summarizer import summarize_bill_enhanced
+from src.processors.argument_generator import generate_bill_arguments
 from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content, is_twitter_configured
 from src.publishers.facebook_publisher import FacebookPublisher
 from src.database.db import (
@@ -618,6 +619,24 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                             "subject_tags": summary.get("subject_tags", ""),
                         })
                         logger.info("💾 Database summaries updated (regen).")
+
+                        # ── Generate arguments on regen path ──
+                        logger.info(f"💬 Generating support/oppose arguments for {bill_id} (regen)...")
+                        try:
+                            args = generate_bill_arguments(
+                                bill_title=bill_data.get("title", ""),
+                                summary_overview=bill_data.get("summary_overview", ""),
+                                summary_detailed=bill_data.get("summary_detailed", ""),
+                            )
+                            bill_data["argument_support"] = args.get("support", "")
+                            bill_data["argument_oppose"] = args.get("oppose", "")
+                            from src.database.db import update_bill_arguments as _uba
+                            _uba(bill_id, bill_data["argument_support"], bill_data["argument_oppose"])
+                            logger.info(f"✅ Arguments generated & persisted for {bill_id} (regen) "
+                                        f"(support={len(bill_data['argument_support'])} chars, "
+                                        f"oppose={len(bill_data['argument_oppose'])} chars)")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Argument generation failed for {bill_id} (regen): {e}")
                     else:
                         logger.error("❌ Failed to update summaries in DB after regeneration.")
                         mark_bill_as_problematic(bill_id, "update_bill_summaries failed (regen)")
@@ -719,7 +738,25 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                 # Subject tags from AI summarizer
                 "subject_tags": summary.get("subject_tags", ""),
             }
-            
+
+            # ── Generate arguments (support/oppose) after summarization ──
+            logger.info(f"💬 Generating support/oppose arguments for {bill_id}...")
+            try:
+                args = generate_bill_arguments(
+                    bill_title=bill_data.get("title", ""),
+                    summary_overview=bill_data.get("summary_overview", ""),
+                    summary_detailed=bill_data.get("summary_detailed", ""),
+                )
+                bill_data["argument_support"] = args.get("support", "")
+                bill_data["argument_oppose"] = args.get("oppose", "")
+                logger.info(f"✅ Arguments generated for {bill_id} "
+                            f"(support={len(bill_data['argument_support'])} chars, "
+                            f"oppose={len(bill_data['argument_oppose'])} chars)")
+            except Exception as e:
+                logger.warning(f"⚠️ Argument generation failed for {bill_id}: {e} — inserting without arguments")
+                bill_data["argument_support"] = ""
+                bill_data["argument_oppose"] = ""
+
             # Warn about missing metadata to help debug future issues
             if not bill_data.get("congress_session"):
                 logger.warning(f"⚠️ Bill {bill_id} missing congress_session - will display 'N/A' on site")

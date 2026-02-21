@@ -575,8 +575,8 @@
       if (billTitle && needsThe(billTitle)) {
         billLabel = `the ${billLabel}`;
       }
-      const supportArg = `it would make a real difference for families and young people in our community, and passing it sends a clear message that Congress is listening to the people it serves.`;
-      const opposeArg = `it risks harming the people it claims to help, and my community deserves a solution that actually addresses the root problem instead of creating new ones.`;
+      const supportArg = `I SUPPORT this bill. After reviewing the full text and summary of this legislation, I believe it addresses an important issue and would benefit American communities. I encourage you to support its passage.`;
+      const opposeArg = `I OPPOSE this bill. After reviewing the full text and summary of this legislation, I believe the potential costs and unintended consequences outweigh the benefits. I encourage you to oppose this legislation and pursue better alternatives.`;
       const reasonArg = vote === "yes" ? supportArg : opposeArg;
       showEmailEditor(section, {
         subject: `Constituent Feedback on ${billId} | via TeenCivics`,

@@ -1621,6 +1621,43 @@ def update_bill_summaries(bill_id: str, overview: str, detailed: str, tweet: str
         return False
 
 @simulate_safe
+def update_bill_arguments(bill_id: str, argument_support: str, argument_oppose: str) -> bool:
+    """
+    Update the pre-generated argument text for a specific bill.
+
+    Called lazily by the generate-email endpoint when stored arguments are
+    missing, so the next request for the same bill is instant.
+
+    Args:
+        bill_id: The bill identifier (will be normalized).
+        argument_support: Persuasive text for supporting the bill (≤500 chars).
+        argument_oppose: Persuasive text for opposing the bill (≤500 chars).
+
+    Returns:
+        True if the update succeeded, False otherwise.
+    """
+    normalized_id = normalize_bill_id(bill_id)
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                UPDATE bills
+                SET argument_support = %s,
+                    argument_oppose = %s
+                WHERE bill_id = %s
+                ''', (argument_support, argument_oppose, normalized_id))
+                if cursor.rowcount == 1:
+                    logger.info(f"Successfully updated arguments for bill {normalized_id}")
+                    return True
+                else:
+                    logger.warning(f"Could not find bill {normalized_id} to update arguments.")
+                    return False
+    except Exception as e:
+        logger.error(f"Error updating arguments for bill {normalized_id}: {e}")
+        return False
+
+
+@simulate_safe
 def update_bill_full_text(bill_id: str, full_text: str, text_format: str = "") -> bool:
     """
     Update the full text for a specific bill.

@@ -130,19 +130,21 @@ def generate_reasoning(vote: str, bill_title: str, summary_overview: str, bill_i
         # 2. Call AI API
         client = _get_venice_client()
         
-        # We use a short timeout (5-8s) to ensure the UI doesn't hang indefinitely if the AI is slow.
-        # Note: The OpenAI client library may not respect a 'timeout' param in .create() depending on version,
-        # but modern versions do. If it fails, we fall back.
+        # Venice thinking-model params: explicit budget_tokens required for
+        # reasoning models; raised max_tokens so the response isn't clipped
+        # after the thinking budget is consumed, and a 15 s timeout to keep
+        # the UI responsive while still giving the model enough headroom.
         start_time = time.time()
         response = client.chat.completions.create(
             model=PREFERRED_MODEL,
-            max_tokens=250,
+            max_tokens=1024,
             temperature=0.7,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            timeout=8.0 
+            timeout=15.0,
+            extra_body={"thinking": {"enabled": True, "budget_tokens": 4096}},
         )
         duration = time.time() - start_time
         logger.info(f"AI reasoning generated in {duration:.2f}s")

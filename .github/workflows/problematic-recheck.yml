@@ -1,0 +1,57 @@
+# Runs every 15 days in DRY-RUN mode (no DB writes).
+# To enable writes, change the script invocation to include --allow-writes
+# (only after manual review and approval).
+name: Problematic Bill Recheck (Every 15 Days)
+
+on:
+  schedule:
+    # 1st and 16th of each month at 10:00 AM UTC (~every 15 days)
+    - cron: '0 10 1,16 * *'
+  workflow_dispatch: {}
+
+jobs:
+  recheck-problematic-bills:
+    runs-on: ubuntu-latest
+    # Always use the staging environment — never production
+    environment: staging
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Secret scan
+        run: python scripts/secret_scan.py
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run problematic-bill recheck (DRY-RUN)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
+          VENICE_API_KEY: ${{ secrets.VENICE_API_KEY }}
+          PYTHONPATH: .
+        run: |
+          echo "Running periodic problematic-bill recheck in DRY-RUN mode"
+          echo "(no database writes will occur)"
+          echo ""
+          python scripts/problematic_recheck_periodic.py 2>&1 | tee recheck-output.txt
+          echo ""
+          echo "Recheck complete — see output above for summary"
+
+      - name: Upload recheck output as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recheck-output-${{ github.run_id }}
+          path: recheck-output.txt
+          retention-days: 30

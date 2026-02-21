@@ -543,7 +543,11 @@ def _try_parse_json_with_fallback(text: str) -> Dict[str, Any]:
         }
 
 def _call_venice_once(client: OpenAI, model: str, system: str, user: str):
-    """Single API call to Venice AI (OpenAI-compatible)."""
+    """Single API call to Venice AI (OpenAI-compatible).
+
+    Passes explicit Venice thinking params so reasoning models allocate a
+    dedicated thinking budget before generating output.
+    """
     return client.chat.completions.create(
         model=model,
         max_tokens=4096,
@@ -552,6 +556,8 @@ def _call_venice_once(client: OpenAI, model: str, system: str, user: str):
             {"role": "system", "content": system},
             {"role": "user", "content": user}
         ],
+        timeout=30.0,
+        extra_body={"thinking": {"enabled": True, "budget_tokens": 8192}},
     )
 
 def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
@@ -1034,14 +1040,19 @@ def summarize_title(bill_title: str) -> str:
         
         user_prompt = f"Summarize the following bill title: \"{bill_title}\""
         
+        # Title summarisation is a lightweight call; still pass thinking
+        # params because PREFERRED_MODEL is a thinking model on Venice,
+        # but use a small budget_tokens to keep latency low.
         response = client.chat.completions.create(
             model=PREFERRED_MODEL,
-            max_tokens=100,
+            max_tokens=256,
             temperature=0.5,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ]
+            ],
+            timeout=10.0,
+            extra_body={"thinking": {"enabled": True, "budget_tokens": 4096}},
         )
         
         summarized_title = _extract_text_from_response(response)
