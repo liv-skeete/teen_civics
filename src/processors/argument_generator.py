@@ -16,7 +16,7 @@ ARGUMENT_MODEL = os.getenv("ARGUMENT_MODEL", "claude-opus-4-6")
 ARGUMENT_FALLBACK = os.getenv("ARGUMENT_FALLBACK", "claude-sonnet-4-6")
 
 # Maximum characters per argument to ensure it fits in email forms
-MAX_ARGUMENT_CHARS = 500
+MAX_ARGUMENT_CHARS = 250
 
 
 def _truncate_at_sentence(text: str, max_length: int) -> str:
@@ -111,7 +111,7 @@ def generate_bill_arguments(bill_title: str,
         "CRITICAL RULES:\n"
         "1. Start directly with lowercase (e.g., 'it would protect...', 'it threatens...').\n"
         "2. Do NOT write 'I support', 'I oppose', or 'because' — just the continuation.\n"
-        "3. Write 1-2 concise, persuasive sentences (under 300 chars).\n"
+        "3. Write 1-2 sentences, max 200 characters.\n"
         "4. Make a REAL ARGUMENT — state a specific consequence, impact, or principle.\n"
         "5. Name WHO is affected and HOW (e.g., 'students', 'working families', 'my generation').\n"
         "6. Appeal to concrete values: safety, fairness, opportunity, accountability, freedom, fiscal responsibility.\n"
@@ -123,7 +123,7 @@ def generate_bill_arguments(bill_title: str,
     prompt_support = (
         f"{context}\n\n"
         f"{system_prompt}\n"
-        "Write 1-2 persuasive sentences (max 300 chars) arguing why I SUPPORT this bill.\n\n"
+        "Write 1-2 sentences (max 200 chars) arguing why I SUPPORT this bill.\n\n"
         "BAD example (just restates the bill): 'it would create new regulations for companies.'\n"
         "GOOD example (makes an argument): 'it would finally hold corporations accountable for pollution "
         "that harms communities like mine, and every day we delay costs lives.'\n\n"
@@ -135,7 +135,7 @@ def generate_bill_arguments(bill_title: str,
     prompt_oppose = (
         f"{context}\n\n"
         f"{system_prompt}\n"
-        "Write 1-2 persuasive sentences (max 300 chars) arguing why I OPPOSE this bill.\n\n"
+        "Write 1-2 sentences (max 200 chars) arguing why I OPPOSE this bill.\n\n"
         "BAD example (just restates the bill): 'it would change current healthcare policy.'\n"
         "GOOD example (makes an argument): 'it would strip protections from millions of working "
         "families without offering any real alternative, putting my community at risk.'\n\n"

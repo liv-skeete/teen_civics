@@ -108,7 +108,6 @@ from src.database.db import (
     update_bill_arguments,
 )
 from src.processors.summarizer import summarize_title
-from src.processors.reasoning_generator import generate_reasoning
 from src.processors.argument_generator import generate_bill_arguments
 from src.utils.sponsor_formatter import format_sponsor_sentence
 
@@ -1744,7 +1743,11 @@ def rep_lookup():
 @limiter.limit("10 per minute")
 @csrf.exempt
 def pre_generate_reasoning():
-    """Pre-warm the reasoning cache when a user votes, before they enter their ZIP."""
+    """Pre-warm the argument cache when a user votes, before they enter their ZIP.
+
+    Delegates to generate_bill_arguments() so both sides are generated in one
+    pass and persisted to the DB for future requests.
+    """
     try:
         data = request.get_json()
         if not data:
@@ -1763,22 +1766,49 @@ def pre_generate_reasoning():
         if not bill:
             return jsonify({"error": "Bill not found."}), 404
 
+        # If arguments already stored, nothing to pre-generate
+        if bill.get("argument_support") and bill.get("argument_oppose"):
+            return jsonify({"status": "ok"})
+
         bill_title = bill.get("title", bill_id)
         summary_overview = bill.get("summary_overview", "") or ""
+        summary_detailed = bill.get("summary_detailed", "") or ""
 
-        # Generate reasoning (result gets cached in _reasoning_cache)
-        generate_reasoning(
-            vote=vote,
+        # Generate both sides (canonical path)
+        args = generate_bill_arguments(
             bill_title=bill_title,
             summary_overview=summary_overview,
-            bill_id=bill_id,
+            summary_detailed=summary_detailed,
         )
+
+        # Persist so generate_email() hits the fast DB path
+        bill_number = bill.get("bill_id", bill_id)
+        if args.get("support") and args.get("oppose"):
+            try:
+                update_bill_arguments(
+                    bill_id=bill_number,
+                    argument_support=args["support"],
+                    argument_oppose=args["oppose"],
+                )
+            except Exception as store_err:
+                logger.warning(f"Failed to store pre-generated arguments for {bill_number}: {store_err}")
 
         return jsonify({"status": "ok"})
 
     except Exception as e:
         logger.error(f"Error in pre_generate_reasoning: {e}", exc_info=True)
         return jsonify({"error": "An unexpected error occurred."}), 500
+
+
+def _truncate_at_sentence(text: str, max_length: int) -> str:
+    """Truncate text at the last sentence boundary before max_length."""
+    if len(text) <= max_length:
+        return text
+    truncated = text[:max_length]
+    last_punct = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+    if last_punct > 0:
+        return truncated[:last_punct + 1]
+    return truncated.rstrip() + "."
 
 
 @app.route("/api/generate-email", methods=["POST"])
@@ -1791,8 +1821,7 @@ def generate_email():
       1. Read stored argument_support / argument_oppose from the DB row.
       2. If missing, generate via generate_bill_arguments(), persist via
          update_bill_arguments(), then use the result.
-      3. If argument generation fails, fall back to generate_reasoning().
-      4. If reasoning also fails, use a generic template.
+      3. If generation fails completely, use a generic template.
     """
     try:
         data = request.get_json()
@@ -1870,20 +1899,6 @@ def generate_email():
                         )
             except Exception as gen_err:
                 logger.error(f"generate_bill_arguments failed for bill {bill_number}: {gen_err}")
-
-        # ── Fallback: generate_reasoning() ───────────────────────────────
-        if not reasoning:
-            logger.info(f"Falling back to generate_reasoning() for bill {bill_number}")
-            try:
-                reasoning = generate_reasoning(
-                    vote=vote,
-                    bill_title=bill_title,
-                    summary_overview=summary_overview,
-                    bill_id=bill_id,
-                    summary_detailed=summary_detailed,
-                )
-            except Exception as reason_err:
-                logger.error(f"generate_reasoning failed for bill {bill_number}: {reason_err}")
 
         # ── Fallback: generic template ───────────────────────────────────
         if not reasoning or not reasoning.strip():
@@ -1978,8 +1993,15 @@ def generate_email():
             f"I {stance} this bill because "
         )
 
-        # Use the argument/reasoning text as-is (it should be a complete sentence)
+        # ── Dynamic truncation to keep total email ≤ 500 chars ───────
+        EMAIL_CHAR_LIMIT = 500
+        max_arg_length = max(100, EMAIL_CHAR_LIMIT - len(prefix))
+
         reason_text = reasoning.strip()
+
+        # Truncate to fit within email character limit
+        if len(reason_text) > max_arg_length:
+            reason_text = _truncate_at_sentence(reason_text, max_arg_length)
 
         # Only ensure it ends with punctuation
         if reason_text and reason_text[-1] not in '.!?':
