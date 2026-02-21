@@ -47,7 +47,6 @@ def _call_venice_argument_generation(prompt: str, model: str) -> Optional[str]:
         client = _get_venice_client()
         start_time = time.time()
         
-        # Thinking models usage for better reasoning
         response = client.chat.completions.create(
             model=model,
             max_tokens=1024,
@@ -56,7 +55,6 @@ def _call_venice_argument_generation(prompt: str, model: str) -> Optional[str]:
                 {"role": "user", "content": prompt}
             ],
             timeout=20.0,
-            extra_body={"thinking": {"enabled": True, "budget_tokens": 4096}},
         )
         
         duration = time.time() - start_time
@@ -80,9 +78,13 @@ def generate_bill_arguments(bill_title: str,
     """
     Generate persuasive arguments for supporting and opposing a bill.
     
+    This is the single canonical generator for all argument text in the app.
+    Called by the orchestrator (Phase 3), by generate_email() for lazy-fill,
+    and by reasoning_generator as a delegate.
+    
     Returns:
         Dict with keys "support" and "oppose", containing the argument text.
-        Returns empty strings if generation fails completely.
+        Returns generic template text if generation fails completely.
     """
     support_text = ""
     oppose_text = ""
@@ -99,25 +101,48 @@ def generate_bill_arguments(bill_title: str,
         context += f"DETAILS: {clean(summary_detailed)[:2000]}\n"
         
     # ── 2. Construct Prompts ─────────────────────────────────────────────────
-    # We ask for a "because..." completion that is:
-    # - Passionate but rational
-    # - Focused on impact (who does this help/hurt?)
-    # - 1-2 sentences max
+    # Consolidated prompt: merges the best of argument_generator + reasoning_generator.
+    # Demands genuine persuasive argumentation (not summaries), names who is
+    # affected, appeals to concrete values, and sounds like a real person.
     
-    base_prompt = (
-        f"{context}\n\n"
-        "You are a young, engaged constituent writing to your member of Congress. "
-        "Complete the sentence: 'I [SUPPORT/OPPOSE] this bill because...'\n\n"
-        "RULES:\n"
-        "1. Start directly with lowercase (e.g., 'it would ensure...', 'it fails to...').\n"
-        "2. Do NOT write 'I support' or 'because' — just the continuation.\n"
+    system_prompt = (
+        "You are a passionate young constituent writing to your member of Congress. "
+        "Your job is to complete the sentence: 'I [support/oppose] this bill because...'\n\n"
+        "CRITICAL RULES:\n"
+        "1. Start directly with lowercase (e.g., 'it would protect...', 'it threatens...').\n"
+        "2. Do NOT write 'I support', 'I oppose', or 'because' — just the continuation.\n"
         "3. Write 1-2 concise, persuasive sentences (under 300 chars).\n"
-        "4. Focus on specific impact: safety, fairness, cost, rights, community benefit.\n"
-        "5. No bullet points, no headers.\n"
+        "4. Make a REAL ARGUMENT — state a specific consequence, impact, or principle.\n"
+        "5. Name WHO is affected and HOW (e.g., 'students', 'working families', 'my generation').\n"
+        "6. Appeal to concrete values: safety, fairness, opportunity, accountability, freedom, fiscal responsibility.\n"
+        "7. NEVER just describe or summarize the bill. ARGUE for/against it.\n"
+        "8. No bullet points, no headers, no quotation marks.\n"
+        "9. Sound like a real person who genuinely cares, not a form letter.\n"
     )
     
-    prompt_support = base_prompt + "\nARGUMENT FOR SUPPORT:"
-    prompt_oppose = base_prompt + "\nARGUMENT FOR OPPOSITION:"
+    prompt_support = (
+        f"{context}\n\n"
+        f"{system_prompt}\n"
+        "Write 1-2 persuasive sentences (max 300 chars) arguing why I SUPPORT this bill.\n\n"
+        "BAD example (just restates the bill): 'it would create new regulations for companies.'\n"
+        "GOOD example (makes an argument): 'it would finally hold corporations accountable for pollution "
+        "that harms communities like mine, and every day we delay costs lives.'\n\n"
+        "Your argument must explain a SPECIFIC BENEFIT or PROBLEM IT SOLVES. "
+        "Mention who benefits and why it matters.\n"
+        "ARGUMENT FOR SUPPORT:"
+    )
+    
+    prompt_oppose = (
+        f"{context}\n\n"
+        f"{system_prompt}\n"
+        "Write 1-2 persuasive sentences (max 300 chars) arguing why I OPPOSE this bill.\n\n"
+        "BAD example (just restates the bill): 'it would change current healthcare policy.'\n"
+        "GOOD example (makes an argument): 'it would strip protections from millions of working "
+        "families without offering any real alternative, putting my community at risk.'\n\n"
+        "Your argument must explain a SPECIFIC HARM, RISK, or FLAW. "
+        "Mention who gets hurt and why a better approach is needed.\n"
+        "ARGUMENT FOR OPPOSITION:"
+    )
     
     # ── 3. Attempt Generation (Primary Model) ────────────────────────────────
     s_gen = _call_venice_argument_generation(prompt_support, ARGUMENT_MODEL)
@@ -138,32 +163,34 @@ def generate_bill_arguments(bill_title: str,
         t = text.strip()
         # Remove common prefixes from chatty models
         t = re.sub(r"^(because|that|it is because)\s+", "", t, flags=re.IGNORECASE)
+        # Remove accidental "I support/oppose" prefixes
+        t = re.sub(r"^(i\s+support\s+.*?because\s+|i\s+oppose\s+.*?because\s+)", "", t, flags=re.IGNORECASE).strip()
         # Ensure it acts as a continuation (start lowercase generally, unless proper noun)
         if len(t) > 0 and t[0].isupper() and " " in t:
             first_word = t.split(" ")[0]
-            if first_word.lower() not in ["i", "american", "congress", "senate", "federal"]:
+            # Common proper nouns to protect
+            protected = {
+                "I", "American", "Congress", "Senate", "House", "Federal",
+                "Government", "Constitution", "America", "United", "States",
+                "President", "Supreme", "Court", "Democrat", "Republican",
+                "Bill", "Act",
+            }
+            if first_word.rstrip('.,;:') not in protected:
                 t = t[0].lower() + t[1:]
+        # Remove textual artifacts
+        t = t.replace('"', '').replace("'", "'")
+        # Quality check
+        if len(t) < 20:
+            return None
         return _truncate_at_sentence(t, MAX_ARGUMENT_CHARS)
 
     support_text = validate_and_clean(s_gen)
     oppose_text = validate_and_clean(o_gen)
     
-    # ── 6. Fallback Strategies (Code-based) ──────────────────────────────────
+    # ── 6. Generic Template Fallback (last resort) ───────────────────────────
+    # If AI generation failed completely, use a generic template.
+    # (Extractive fallback removed — generic templates are more reliable.)
     
-    if support_text and oppose_text:
-        return {"support": support_text, "oppose": oppose_text}
-        
-    logger.warning("AI generation incomplete/failed. Attempting extractive fallback.")
-    
-    # Fallback A: Extract from summary_detailed bullet points
-    extractive = _extractive_fallback(summary_detailed, bill_title)
-    if not support_text:
-        support_text = extractive["support"]
-    if not oppose_text:
-        oppose_text = extractive["oppose"]
-        
-    # Fallback B: Generic template (Absolute last resort)
-    # If extractive failed (empty summary), use generic
     if not support_text:
         support_text = _generic_template_fallback(bill_title)["support"]
     if not oppose_text:
@@ -172,56 +199,13 @@ def generate_bill_arguments(bill_title: str,
     return {"support": support_text, "oppose": oppose_text}
 
 
-def _extractive_fallback(summary_detailed: str, bill_title: str) -> Dict[str, str]:
-    """Fallback strategy 3: Extract key phrases from the detailed summary."""
-    if not summary_detailed or len(summary_detailed) < 50:
-        return _generic_template_fallback(bill_title)
-
-    # Extract bullet points from the detailed summary
-    lines = summary_detailed.split('\n')
-    provisions = []
-    for line in lines:
-        line = line.strip()
-        if line.startswith(('•', '-', '–')) and len(line) > 10:
-            # Strip the bullet character and clean
-            clean = re.sub(r'^[•\-–]\s*', '', line).strip()
-            # Remove markdown bold
-            clean = re.sub(r'\*+', '', clean)
-            if clean and len(clean) > 10:
-                provisions.append(clean)
-
-    if not provisions:
-        # Try to extract from paragraph text — take first 2 substantive sentences
-        sentences = re.split(r'(?<=[.!?])\s+', summary_detailed)
-        for s in sentences:
-            s = s.strip()
-            s = re.sub(r'\*+', '', s)
-            if len(s) > 20 and not any(skip in s.lower() for skip in ['teen impact', 'score:', 'overview']):
-                provisions.append(s)
-            if len(provisions) >= 3:
-                break
-
-    if not provisions:
-        return _generic_template_fallback(bill_title)
-
-    # Build arguments from extracted provisions
-    key_points = "; ".join(provisions[:3])
-
-    support = _truncate_at_sentence(
-        f"this bill addresses critical needs by {key_points.lower()}. "
-        f"These provisions would create meaningful improvements for communities that need them most.",
-        MAX_ARGUMENT_CHARS
-    )
-    oppose = _truncate_at_sentence(
-        f"while the stated goals are understandable, the approach in this bill — {key_points.lower()} — "
-        f"raises concerns about unintended consequences, costs, and whether better alternatives exist.",
-        MAX_ARGUMENT_CHARS
-    )
-    return {"support": support, "oppose": oppose}
+def _extractive_fallback(bill_title: str, summary_text: str = "") -> Dict[str, str]:
+    """Legacy stub — delegates to generic template fallback."""
+    return _generic_template_fallback(bill_title)
 
 
 def _generic_template_fallback(bill_title: str) -> Dict[str, str]:
-    """Fallback 4 (absolute last resort): generic template-based arguments."""
+    """Absolute last resort: generic template-based arguments."""
     logger.warning("Using hard fallback generic arguments.")
     
     topic = bill_title or "this legislation"
@@ -230,7 +214,6 @@ def _generic_template_fallback(bill_title: str) -> Dict[str, str]:
         topic = topic[:77] + "..."
     topic = topic.rstrip(".,;:")
 
-    # Updated (2026-02-21): Replaced "meaningful action" text with standard "I SUPPORT/OPPOSE" text.
     support = (
         "it addresses an important issue and would benefit American communities. "
         "After reviewing the full text and summary of this legislation, I believe it "
