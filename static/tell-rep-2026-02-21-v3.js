@@ -606,10 +606,19 @@
       editorSection.remove();
     }
 
-    // Fetch new email content and rebuild editor
-    await generateEmail(section, billId, primaryRep, ccReps);
+    // Show drafting indicator while regenerating
+    const draftingIndicator = document.createElement("div");
+    draftingIndicator.className = "tell-rep-drafting";
+    draftingIndicator.textContent = "✍️ Updating your message…";
+    resultsArea.appendChild(draftingIndicator);
 
-    showToast("Message updated for your new vote.");
+    try {
+      // Fetch new email content and rebuild editor
+      await generateEmail(section, billId, primaryRep, ccReps);
+      showToast("Message updated for your new vote.");
+    } finally {
+      if (draftingIndicator.parentNode) draftingIndicator.remove();
+    }
   }
 
   // --- Email Editor UI ---
