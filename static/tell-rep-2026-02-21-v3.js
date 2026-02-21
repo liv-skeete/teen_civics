@@ -580,7 +580,7 @@
       const reasonArg = vote === "yes" ? supportArg : opposeArg;
       showEmailEditor(section, {
         subject: `Constituent Feedback on ${billId} | via TeenCivics`,
-        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billLabel} on teencivics.org, a platform for young Americans to engage with legislation.\n\nI ${stance.toUpperCase()} this bill because ${reasonArg}`,
+        body: `Dear Representative ${primaryRep.name ? primaryRep.name.split(" ").pop() : ""},\n\nAs your constituent, I reviewed ${billLabel} on TeenCivics.org, a platform for young Americans to engage with legislation.\n\nI ${stance.toUpperCase()} this bill because ${reasonArg}`,
         mailto_url: null,
       }, primaryRep, ccReps);
     }
