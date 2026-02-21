@@ -39,6 +39,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://www.googletagmanager.com">
 
+  <!-- Set APP_ROOT for /beta-prefixed staging so JS calls the correct API base -->
+  <script>
+    (function() {
+      try {
+        var path = window.location.pathname || "";
+        window.APP_ROOT = path.startsWith("/beta") ? "/beta" : "";
+      } catch (e) {
+        window.APP_ROOT = "";
+      }
+    })();
+  </script>
+
   <!-- No-flash theme initializer: set data-theme before CSS loads -->
   <script>
     (function() {
@@ -178,7 +190,7 @@
   </button>
 
   <!-- JavaScript with cache busting and proper defer -->
-  <script defer src="{{ url_for('static', filename='script.js', v='2026-02-05-v2') }}"></script>
+  <script defer src="{{ url_for('static', filename='script.js', v='2026-02-21-v1') }}"></script>
   <script defer src="{{ url_for('static', filename='theme.js', v='2026-02-05-v2') }}"></script>
 
   <!-- Fallback: ensure floating theme toggle works even if theme.js is cached/old -->

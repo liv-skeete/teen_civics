@@ -6,6 +6,7 @@
 
   // --- Config ---
   const DEBUG = false;
+  const API_BASE = (window.APP_ROOT || "");
 
   // --- Internal state (per-widget) ---
   const fetchedOnce = new WeakSet();     // prevents double result fetches
@@ -109,7 +110,7 @@
     disablePollOptions(options);
     showLoadingMessage(messageContainer, "Recording your vote...");
 
-    fetch("/api/vote", {
+    fetch(API_BASE + "/api/vote", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Request-ID": randReqId() },
       body: JSON.stringify({
@@ -139,7 +140,7 @@
       highlightCurrentVote(options, voteType);
 
       // Pre-warm reasoning cache in background (don't await, don't block UI)
-      fetch('/api/pre-generate-reasoning', {
+      fetch(API_BASE + '/api/pre-generate-reasoning', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bill_id: billId, vote: voteType })
@@ -187,7 +188,7 @@
 
     showLoadingMessage(messageContainer, "Loading results...");
 
-    return widgetFetch(widget, `/api/poll-results/${billId}`)
+    return widgetFetch(widget, API_BASE + `/api/poll-results/${billId}`)
       .then(async (response) => {
         let data = {};
         try { data = await response.json(); } catch (_) {}
@@ -459,7 +460,7 @@
   // are restored before poll widgets initialize.
   async function syncVotesFromServer() {
     try {
-      const response = await fetch("/api/my-votes", {
+      const response = await fetch(API_BASE + "/api/my-votes", {
         credentials: "same-origin",           // send voter_id cookie
         headers: { "Cache-Control": "no-store" }
       });
