@@ -19,13 +19,16 @@ load_dotenv()
 # Venice AI Configuration
 VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
 
-# Model configuration - Venice AI uses claude-sonnet-45
-PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-45")
-FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-opus-45")
+# Model configuration - Venice AI uses claude-sonnet-46
+# no need to use 'thinking' mode if it is causing issues
+PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-46")
+FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-opus-46")
 
 VALID_MODELS = {
     "claude-sonnet-45",
     "claude-opus-45",
+    "claude-sonnet-46",
+    "claude-opus-46",
 }
 
 def _ensure_api_key() -> str:
@@ -45,7 +48,7 @@ def _get_venice_client() -> OpenAI:
 
 def _build_enhanced_system_prompt() -> str:
     """
-    System prompt for Claude Sonnet 4.5 to summarize bills for teens.
+    System prompt for Claude Sonnet 4.6 to summarize bills for teens.
     All classification logic (teen impact scoring) is in the prompt, not Python code.
     """
     return (
