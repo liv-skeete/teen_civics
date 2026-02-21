@@ -2014,8 +2014,7 @@ def generate_email():
         prefix = (
             f"Dear Representative {rep_last_name},\n\n"
             f"As your constituent, I reviewed {bill_ref} "
-            f"on TeenCivics (https://teencivics.org), a civic education platform "
-            f"that helps young Americans engage with legislation.\n\n"
+            f"on teencivics.org, a platform for young Americans to engage with legislation.\n\n"
             f"I {stance} this bill because "
         )
 
