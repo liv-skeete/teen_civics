@@ -2019,21 +2019,20 @@ def generate_email():
             f"I {stance} this bill because "
         )
 
-        # ── Dynamic truncation to keep total email ≤ 500 chars ───────
-        EMAIL_CHAR_LIMIT = 500
-        max_arg_length = max(100, EMAIL_CHAR_LIMIT - len(prefix))
-
+        # argument_generator.py already caps arguments at MAX_ARGUMENT_CHARS
+        # (250 chars), so we don't need to truncate again here.
         reason_text = reasoning.strip()
 
-        # Truncate to fit within email character limit
-        if len(reason_text) > max_arg_length:
-            reason_text = _truncate_at_sentence(reason_text, max_arg_length)
-
-        # Only ensure it ends with punctuation
+        # Ensure argument ends with punctuation
         if reason_text and reason_text[-1] not in '.!?':
             reason_text = reason_text.rstrip(',;: ') + '.'
 
-        body = prefix + reason_text
+        closing = (
+            "\n\nI urge you to consider your constituents' views on this "
+            "important matter.\n\nRespectfully,\n\n[Your Name]"
+        )
+
+        body = prefix + reason_text + closing
 
         # Build mailto URL if email is available
         mailto_url = None
