@@ -2029,7 +2029,7 @@ def generate_email():
 
         closing = (
             "\n\nI urge you to consider your constituents' views on this "
-            "important matter.\n\nRespectfully,\n\n[Your Name]"
+            "important matter.\n\nRespectfully,"
         )
 
         body = prefix + reason_text + closing
