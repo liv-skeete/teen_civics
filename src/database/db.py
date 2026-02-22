@@ -1235,20 +1235,38 @@ def select_and_lock_unposted_bill() -> Optional[Dict[str, Any]]:
     Atomically select and lock one unposted bill to prevent race conditions.
     Uses 'SELECT FOR UPDATE SKIP LOCKED' to ensure that concurrent workers
     do not select the same bill.
-    
+
+    Only selects bills that pass the same post-readiness criteria as
+    get_post_ready_count() / is_bill_ready_for_posting(), so the FINAL GATE
+    is virtually guaranteed to pass and we don't waste a lock on an
+    incomplete bill.
+
     Returns:
         A dictionary representing the locked bill, or None if no bills are available.
     """
     try:
         with db_connect() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                # This query finds the most recently introduced bill that has not been
-                # posted, is not marked as problematic, and locks it.
-                # If the row is already locked, SKIP LOCKED ensures we don't wait.
                 cursor.execute('''
                     SELECT * FROM bills
                     WHERE published = FALSE
-                    AND (problematic IS NULL OR problematic = FALSE)
+                      AND (problematic IS NULL OR problematic = FALSE)
+                      -- status must be present and not 'problematic'
+                      AND status IS NOT NULL
+                      AND TRIM(status) != ''
+                      AND LOWER(TRIM(status)) != 'problematic'
+                      -- structural fields
+                      AND title IS NOT NULL AND TRIM(title) != ''
+                      AND bill_id IS NOT NULL AND TRIM(bill_id) != ''
+                      AND congress_session IS NOT NULL AND TRIM(congress_session) != ''
+                      AND full_text IS NOT NULL AND LENGTH(TRIM(full_text)) >= 100
+                      AND sponsor_name IS NOT NULL AND TRIM(sponsor_name) != ''
+                      -- summary quality
+                      AND summary_tweet IS NOT NULL AND LENGTH(TRIM(summary_tweet)) >= 20
+                      AND summary_overview IS NOT NULL AND TRIM(summary_overview) != ''
+                      AND summary_detailed IS NOT NULL AND TRIM(summary_detailed) != ''
+                      -- teen impact score
+                      AND teen_impact_score IS NOT NULL
                     ORDER BY date_processed ASC NULLS LAST, date_introduced DESC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
