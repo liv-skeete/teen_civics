@@ -8,6 +8,7 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Install PostgreSQL 17 client
         run: |
@@ -23,6 +24,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Error: DATABASE_URL secret is not set in repository settings."
+            exit 1
+          fi
           DATE=$(date +%Y-%m-%d)
           echo "Creating backup for $DATE..."
           /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" -F c -f backup-$DATE.dump
