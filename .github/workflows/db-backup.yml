@@ -8,7 +8,14 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    environment: production
+    strategy:
+      matrix:
+        include:
+          - environment: production
+            label: prod
+          - environment: staging
+            label: staging
+    environment: ${{ matrix.environment }}
     steps:
       - name: Install PostgreSQL 17 client
         run: |
@@ -20,23 +27,23 @@ jobs:
       - name: Verify pg_dump version
         run: /usr/lib/postgresql/17/bin/pg_dump --version
       
-      - name: Create backup
+      - name: Create backup (${{ matrix.label }})
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "Error: DATABASE_URL secret is not set in repository settings."
+            echo "Error: DATABASE_URL secret is not set for environment ${{ matrix.environment }}."
             exit 1
           fi
           DATE=$(date +%Y-%m-%d)
-          echo "Creating backup for $DATE..."
-          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" -F c -f backup-$DATE.dump
-          ls -lh backup-$DATE.dump
+          echo "Creating ${{ matrix.label }} backup for $DATE..."
+          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" -F c -f backup-${{ matrix.label }}-$DATE.dump
+          ls -lh backup-${{ matrix.label }}-$DATE.dump
           echo "Backup created successfully"
       
-      - name: Upload backup artifact
+      - name: Upload backup artifact (${{ matrix.label }})
         uses: actions/upload-artifact@v4
         with:
-          name: db-backup-${{ github.run_id }}
-          path: backup-*.dump
+          name: db-backup-${{ matrix.label }}-${{ github.run_id }}
+          path: backup-${{ matrix.label }}-*.dump
           retention-days: 30
