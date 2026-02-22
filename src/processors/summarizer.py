@@ -24,13 +24,14 @@ VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
 # thinking params Venice doesn't support via extra_body, so we use
 # claude-opus-4-6 (which works without thinking params) as primary.
 PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-opus-4-6")
-FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-sonnet-4-6")
+FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-haiku-4-5-20251001")
 
 VALID_MODELS = {
     "claude-sonnet-4-5",
     "claude-opus-4-5",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
+    "claude-haiku-4-5-20251001",
 }
 
 def _ensure_api_key() -> str:
@@ -50,7 +51,7 @@ def _get_venice_client() -> OpenAI:
 
 def _build_enhanced_system_prompt() -> str:
     """
-    System prompt for Claude Sonnet 4-6 to summarize bills for teens.
+    System prompt for Claude Opus 4-6 to summarize bills for teens.
     All classification logic (teen impact scoring) is in the prompt, not Python code.
     """
     return (

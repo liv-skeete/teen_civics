@@ -135,6 +135,14 @@ def derive_status_from_tracker(tracker: Any) -> tuple[str, str]:
 # ── Per-bill enrichment timeout ──────────────────────────────────────────────
 ENRICHMENT_TIMEOUT_SECONDS = int(os.getenv("ENRICHMENT_TIMEOUT_SECONDS", "120"))
 
+# ── Reservoir replenishment settings ─────────────────────────────────────────
+# When reservoir < 10, after a successful post, try to enrich & insert this
+# many additional non-problematic bills to build the backlog back up.
+REPLENISH_TARGET = int(os.getenv("REPLENISH_TARGET", "10"))
+# Stop replenishment if this many seconds have elapsed since run start, to
+# avoid hitting the 30-minute GitHub Actions job timeout.
+REPLENISH_TIME_BUDGET_SECONDS = int(os.getenv("REPLENISH_TIME_BUDGET_SECONDS", "1080"))  # 18 min
+
 def enrich_with_timeout(bill_id: str, timeout: int = ENRICHMENT_TIMEOUT_SECONDS) -> Optional[Dict]:
     """
     Wrap enrich_single_bill() with a timeout so one slow scrape cannot kill
@@ -243,6 +251,8 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
         # Set the DB module into simulate (read-only) mode
         import src.database.db as _db_mod
         _db_mod._SIMULATE = True
+
+    run_start = time_module.time()
 
     # Read env vars for problematic-recheck tuning
     retry_problematic_only = os.getenv("RETRY_PROBLEMATIC_ONLY", "false").lower() == "true"
@@ -445,7 +455,11 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
                     else:
                         logger.info(f"⏭️  Enriched candidate {bid} failed processing, trying next...")
 
-                # 3c) Fallback: check DB for any unposted bills
+                # All 3a+3b candidates exhausted without a successful post.
+                # Try to replenish the reservoir with any valid candidates that
+                # haven't been stored yet, so future runs have more to work with.
+                # 3c (DB fallback below) may also find bills just inserted here.
+                _replenish_reservoir(candidate_ids, run_start, dry_run, simulate, sim_log)
                 logger.info("📭 No candidates from feed succeeded. Checking DB for unposted bills...")
                 unposted = select_and_lock_unposted_bill()
                 if unposted:
@@ -522,9 +536,84 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
         return 1
 
-def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict], dry_run: bool) -> int:
+def _replenish_reservoir(
+    candidate_ids: list,
+    run_start: float,
+    dry_run: bool,
+    simulate: bool,
+    sim_log: Dict,
+) -> None:
+    """
+    After a successful post, try to enrich and insert up to REPLENISH_TARGET
+    additional non-problematic bills into the DB (without posting) so the
+    reservoir stays healthy for future runs.
+
+    Stops early if REPLENISH_TIME_BUDGET_SECONDS have elapsed since run_start
+    to avoid hitting the 30-minute GitHub Actions timeout.
+    """
+    if not candidate_ids:
+        logger.info("📦 Reservoir replenishment: no remaining candidates — skipping.")
+        return
+
+    to_try = candidate_ids[:REPLENISH_TARGET]
+    logger.info(
+        f"📦 Reservoir replenishment: will try up to {len(to_try)} of "
+        f"{len(candidate_ids)} remaining candidates "
+        f"(target={REPLENISH_TARGET}, budget={REPLENISH_TIME_BUDGET_SECONDS}s)"
+    )
+    inserted = 0
+    for bid in to_try:
+        elapsed = time_module.time() - run_start
+        if elapsed >= REPLENISH_TIME_BUDGET_SECONDS:
+            logger.info(
+                f"⏱️ Reservoir replenishment: time budget ({REPLENISH_TIME_BUDGET_SECONDS}s) "
+                f"reached after {elapsed:.0f}s — stopping early."
+            )
+            break
+        if inserted >= REPLENISH_TARGET:
+            logger.info(f"📦 Reservoir replenishment: target of {REPLENISH_TARGET} reached.")
+            break
+
+        logger.info(f"🔧 [Replenishment {inserted+1}/{len(to_try)}] Enriching {bid}...")
+        # Use a slightly tighter timeout so many slow pages don't accumulate
+        enriched = enrich_with_timeout(bid, timeout=90)
+        if not enriched:
+            logger.info(f"   ⏭️  Enrichment returned None for {bid}. Skipping.")
+            continue
+
+        is_valid, reasons = validate_bill_data(enriched)
+        if not is_valid:
+            reason_str = "; ".join(reasons)
+            logger.info(f"   🚫 {bid} invalid during replenishment: {reason_str}. Marking problematic.")
+            if simulate:
+                sim_log["would_mark_problematic"].append(bid)
+                logger.info(f"   🧪 SIMULATE: would mark {bid} problematic")
+            else:
+                mark_bill_as_problematic(bid, f"Validation failed (replenishment): {reason_str}")
+            continue
+
+        if simulate:
+            sim_log["would_post"].append(f"{bid}[reservoir]")
+            logger.info(f"   🧪 SIMULATE: would insert {bid} into reservoir (no posting)")
+            inserted += 1
+            continue
+
+        result = process_single_bill(enriched, None, dry_run, post_to_social=False)
+        if result == 0:
+            inserted += 1
+            logger.info(f"   ✅ {bid} added to reservoir ({inserted} inserted this run)")
+        else:
+            logger.info(f"   ⏭️  {bid} failed insertion during replenishment. Continuing.")
+
+    logger.info(f"📦 Reservoir replenishment complete: {inserted} bill(s) inserted.")
+
+
+def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict], dry_run: bool, post_to_social: bool = True) -> int:
     """
     Process a single bill candidate. Returns 0 on success, 1 on failure.
+
+    When post_to_social=False the bill is fully processed and inserted into the
+    DB but social-media posting is skipped (used for reservoir replenishment).
     """
     try:
         bill_id = normalize_bill_id(selected_bill.get("bill_id", ""))
@@ -793,6 +882,10 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
         if dry_run:
             logger.info("🔶 DRY-RUN MODE: Skipping tweet and DB update")
             logger.info(f"🔶 Tweet content:\n{formatted_tweet}")
+            return 0
+
+        if not post_to_social:
+            logger.info(f"📦 Reservoir replenishment: {bill_id} enriched and inserted (posting skipped).")
             return 0
 
         # Quality gate: validate tweet content before posting
