@@ -166,7 +166,31 @@ def sync_contact_forms(crawl_missing: bool = True, validate_existing: bool = Tru
     Returns summary dict:
     {"total": N, "with_contact_form": N, "crawled": N, "validated": N, "changes_detected": N}
     """
+    import os
+    
+    # Explicit upfront validation of DATABASE_URL
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        error_msg = (
+            "❌ FATAL: DATABASE_URL environment variable is NOT SET. "
+            "Cannot proceed with contact form sync. "
+            "In GitHub Actions, verify DATABASE_URL secret is configured in the production environment."
+        )
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+    
+    if not db_url.startswith(("postgresql://", "postgres://")):
+        error_msg = (
+            f"❌ FATAL: DATABASE_URL does not appear to be a valid PostgreSQL connection string. "
+            f"Expected format: postgresql://user:pass@host:port/dbname. "
+            f"Got: {db_url[:50]}..."
+        )
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+    
     logger.info("Starting rep contact form sync")
+    logger.info("✅ DATABASE_URL validation: PASSED (connection string format valid)")
+    
     legislators = fetch_legislators_json()
     if not legislators:
         logger.warning("No legislators data available; aborting sync")
@@ -229,6 +253,16 @@ def sync_contact_forms(crawl_missing: bool = True, validate_existing: bool = Tru
 
     try:
         with postgres_connect() as conn:
+            if conn is None:
+                error_msg = (
+                    "❌ FATAL: Failed to establish database connection. "
+                    "DATABASE_URL is SET but connection failed. "
+                    "Verify: (1) PostgreSQL server is reachable, "
+                    "(2) DATABASE_URL credentials are correct, "
+                    "(3) firewall allows connection to database host."
+                )
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
             with conn.cursor() as cursor:
                 for record in records:
                     # Check existing URL to detect changes
@@ -268,8 +302,24 @@ def sync_contact_forms(crawl_missing: bool = True, validate_existing: bool = Tru
             logger.info("Daily sync complete: no contact form changes detected")
         else:
             logger.info("Rep contact form sync completed with %d change(s) detected", changes_detected)
+    except RuntimeError as e:
+        # Already logged with context, just re-raise
+        raise
     except Exception as e:
-        logger.error(f"Rep contact form sync failed: {e}")
+        db_url = os.environ.get("DATABASE_URL", "").strip()
+        if not db_url:
+            error_msg = (
+                f"❌ Rep contact form sync failed with missing DATABASE_URL. "
+                f"Error: {e}"
+            )
+        else:
+            error_msg = (
+                f"❌ Rep contact form sync failed during operation. "
+                f"Error type: {type(e).__name__}. "
+                f"Message: {e}. "
+                f"This may be a network/connection issue or invalid DATABASE_URL."
+            )
+        logger.error(error_msg)
         raise
 
     return {
@@ -291,6 +341,9 @@ def get_contact_form_url(bioguide_id: str) -> Optional[str]:
 
     try:
         with postgres_connect() as conn:
+            if conn is None:
+                logger.warning("No database connection available for contact form lookup")
+                return None
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT contact_form_url FROM rep_contact_forms WHERE bioguide_id = %s",

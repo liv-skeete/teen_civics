@@ -634,6 +634,11 @@
       editorHtml = buildCopyOnlyHtml(emailData, primaryRep);
     }
 
+    // Remove any existing editor before appending (prevents duplicates from
+    // concurrent generateEmail calls or repeated showEmailEditor invocations)
+    const existingEditor = resultsArea.querySelector(".email-editor-section");
+    if (existingEditor) existingEditor.remove();
+
     // Append editor below the rep card(s)
     const editorContainer = document.createElement("div");
     editorContainer.className = "email-editor-section";

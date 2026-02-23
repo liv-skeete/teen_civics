@@ -8,6 +8,7 @@ on:
 jobs:
   sync-contact-forms:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 30
 
     steps:
@@ -22,6 +23,25 @@ jobs:
     - name: Secret scan
       run: |
         python scripts/secret_scan.py
+
+    - name: Validate DATABASE_URL environment variable
+      run: |
+        if [ -z "$DATABASE_URL" ]; then
+          echo "❌ CRITICAL: DATABASE_URL secret is NOT set in production environment"
+          echo "   Required action: Configure DATABASE_URL in GitHub Actions environment settings"
+          echo "   Or add DATABASE_URL to repository secrets"
+          exit 1
+        fi
+        # Validate it looks like a connection string (contains postgresql:// or postgres://)
+        if ! echo "$DATABASE_URL" | grep -qE '(postgresql|postgres)://'; then
+          echo "❌ CRITICAL: DATABASE_URL does not appear to be a valid PostgreSQL connection string"
+          echo "   Expected format: postgresql://user:pass@host:port/dbname"
+          echo "   Current value looks like: $(echo "$DATABASE_URL" | cut -c 1-30)..."
+          exit 1
+        fi
+        echo "✅ DATABASE_URL validation passed"
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     - name: Install dependencies
       run: |
@@ -47,4 +67,16 @@ jobs:
       if: failure()
       run: |
         echo "❌ Daily contact form sync failed after retries"
-        echo "::error::Contact form sync workflow failed. Check logs for details."
+        echo "::error::Contact form sync workflow failed"
+        echo ""
+        echo "Diagnostic checklist:"
+        echo "  1. Verify DATABASE_URL secret is set in Actions environment settings"
+        echo "  2. Verify DATABASE_URL is a valid PostgreSQL connection string"
+        echo "  3. Check 'Validate DATABASE_URL environment variable' step log for validation errors"
+        echo "  4. Check 'Run contact form sync' step log for connection or network errors"
+        echo "  5. If DATABASE_URL is set but sync fails, error type will be logged:"
+        echo "     - 'Missing secret' = DATABASE_URL not available"
+        echo "     - 'Connection failed' = Invalid URL or unreachable database"
+        echo "     - 'Network error' = External API failure"
+        echo ""
+        echo "View full logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

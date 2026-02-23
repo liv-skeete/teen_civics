@@ -13,8 +13,10 @@ jobs:
         include:
           - environment: production
             label: prod
+            secret_name: DATABASE_URL
           - environment: staging
             label: staging
+            secret_name: STAGING_DATABASE_URL
     environment: ${{ matrix.environment }}
     steps:
       - name: Install PostgreSQL 17 client
@@ -30,16 +32,36 @@ jobs:
       - name: Create backup (${{ matrix.label }})
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "Error: DATABASE_URL secret is not set for environment ${{ matrix.environment }}."
+          # Determine which DB URL to use
+          if [ "${{ matrix.label }}" = "staging" ] && [ -n "$STAGING_DATABASE_URL" ]; then
+            DB_URL="$STAGING_DATABASE_URL"
+          else
+            DB_URL="$DATABASE_URL"
+          fi
+          
+          if [ -z "$DB_URL" ]; then
+            echo "❌ Error: DATABASE_URL secret is not set for environment ${{ matrix.environment }}."
+            echo "For staging, set STAGING_DATABASE_URL secret. For production, set DATABASE_URL secret."
             exit 1
           fi
+          
           DATE=$(date +%Y-%m-%d)
-          echo "Creating ${{ matrix.label }} backup for $DATE..."
-          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" -F c -f backup-${{ matrix.label }}-$DATE.dump
-          ls -lh backup-${{ matrix.label }}-$DATE.dump
-          echo "Backup created successfully"
+          echo "✅ Creating ${{ matrix.label }} backup for $DATE..."
+          
+          # pg_dump accepts libpq connection strings directly
+          # Database host is specified in the DATABASE_URL/STAGING_DATABASE_URL connection string
+          
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" -F c -f backup-${{ matrix.label }}-$DATE.dump 2>&1
+          
+          if [ $? -eq 0 ]; then
+            ls -lh backup-${{ matrix.label }}-$DATE.dump
+            echo "✅ Backup created successfully"
+          else
+            echo "❌ Backup failed. Verify DATABASE_URL is a valid PostgreSQL connection string."
+            exit 1
+          fi
       
       - name: Upload backup artifact (${{ matrix.label }})
         uses: actions/upload-artifact@v4
