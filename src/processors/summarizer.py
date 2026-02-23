@@ -24,14 +24,15 @@ VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
 # thinking params Venice doesn't support via extra_body, so we use
 # claude-opus-4-6 (which works without thinking params) as primary.
 PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-opus-4-6")
-FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "claude-haiku-4-5-20251001")
+FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "llama-3.3-70b")
 
 VALID_MODELS = {
     "claude-sonnet-4-5",
     "claude-opus-4-5",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
-    "claude-haiku-4-5-20251001",
+    "llama-3.3-70b",
+    "hermes-3-llama-3.1-405b",
 }
 
 def _ensure_api_key() -> str:
@@ -558,7 +559,7 @@ def _call_venice_once(client: OpenAI, model: str, system: str, user: str):
             {"role": "system", "content": system},
             {"role": "user", "content": user}
         ],
-        timeout=30.0,
+        timeout=90.0,
     )
 
 def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
