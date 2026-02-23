@@ -25,7 +25,7 @@ load_dotenv()
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status, fetch_bill_ids_from_texts_received_today, enrich_single_bill
+from src.fetchers.feed_parser import fetch_and_enrich_bills, normalize_status, fetch_bill_ids_from_texts_received_today, fetch_bill_ids_from_api, enrich_single_bill
 from src.processors.summarizer import summarize_bill_enhanced
 from src.processors.argument_generator import generate_bill_arguments
 from src.publishers.twitter_publisher import post_tweet, format_bill_tweet, validate_tweet_content, is_twitter_configured
@@ -329,23 +329,28 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
             logger.info(f"📦 Reservoir full ({post_ready_n} post-ready > 10). Skipping Congress.gov scrape, posting from backlog.")
 
             # Go straight to DB fallback (equivalent to Phase 3c)
+            # Try up to 5 DB bills so one bad bill doesn't block the whole run
             logger.info("📭 Checking DB for unposted bills (reservoir path)...")
-            unposted = select_and_lock_unposted_bill()
-            if unposted:
+            DB_RESERVOIR_LIMIT = 5
+            for _res_attempt in range(DB_RESERVOIR_LIMIT):
+                unposted = select_and_lock_unposted_bill()
+                if not unposted:
+                    logger.info("📭 No more unposted bills available in DB despite reservoir count.")
+                    break
                 bid = unposted['bill_id']
-                logger.info(f"   🔄 Found and locked unposted bill in DB: {bid}")
+                logger.info(f"   🔄 Found and locked unposted bill in DB: {bid} (attempt {_res_attempt + 1}/{DB_RESERVOIR_LIMIT})")
                 if simulate:
                     sim_log["would_post"].append(bid)
                     logger.info(f"   🧪 SIMULATE: would process {bid}")
+                    break
                 else:
                     result = process_single_bill({"bill_id": bid}, unposted, dry_run)
                     if result == 0:
                         logger.info(f"✅ Successfully processed backlog bill {bid}")
                         return 0
                     else:
-                        logger.info(f"⏭️  Backlog bill {bid} failed processing.")
-            else:
-                logger.info("📭 No unposted bills available in DB despite reservoir count.")
+                        logger.info(f"⏭️  Backlog bill {bid} failed processing, trying next...")
+                        continue
 
         else:
             # ── Phase 1+2+3: Scrape → Filter → Process (reservoir low) ─────
@@ -461,19 +466,28 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
                 # 3c (DB fallback below) may also find bills just inserted here.
                 _replenish_reservoir(candidate_ids, run_start, dry_run, simulate, sim_log)
                 logger.info("📭 No candidates from feed succeeded. Checking DB for unposted bills...")
-                unposted = select_and_lock_unposted_bill()
-                if unposted:
+                # Try up to 5 DB fallback bills instead of just 1
+                DB_FALLBACK_LIMIT = 5
+                for _db_attempt in range(DB_FALLBACK_LIMIT):
+                    unposted = select_and_lock_unposted_bill()
+                    if not unposted:
+                        logger.info("📭 No more unposted bills available in DB.")
+                        break
                     bid = unposted['bill_id']
-                    logger.info(f"   🔄 Found and locked unposted bill in DB: {bid}")
+                    logger.info(f"   🔄 Found and locked unposted bill in DB: {bid} (attempt {_db_attempt + 1}/{DB_FALLBACK_LIMIT})")
                     if simulate:
                         sim_log["would_post"].append(bid)
                         logger.info(f"   🧪 SIMULATE: would process {bid}")
+                        break
                     else:
                         result = process_single_bill({"bill_id": bid}, unposted, dry_run)
                         if result == 0:
                             phase3_elapsed = time_module.time() - phase3_start
                             logger.info(f"⏱️ Phase 3: Successfully processed {bid} in {phase3_elapsed:.1f}s")
                             return 0
+                        else:
+                            logger.info(f"   ⏭️  DB fallback bill {bid} failed, trying next...")
+                            continue
 
                 phase3_elapsed = time_module.time() - phase3_start
                 logger.info(f"⏱️ Phase 3: All candidates exhausted in {phase3_elapsed:.1f}s (scrape attempt {scrape_attempt})")
@@ -863,6 +877,33 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             slug = generate_website_slug(bill_data.get("title", ""), bill_id)
             bill_data["website_slug"] = slug
             logger.info(f"🔗 Set website_slug for {bill_id}: {slug}")
+
+        # ── Status backfill for DB-path bills ──
+        # If the bill has no status (common for older DB rows), derive it
+        # from tracker data or default to "Introduced" so the final gate
+        # doesn't reject an otherwise valid bill.
+        if not (bill_data.get("status") or "").strip():
+            tracker_data = bill_data.get("tracker") or selected_bill.get("tracker") or []
+            if tracker_data:
+                derived_status_text, derived_normalized = derive_status_from_tracker(tracker_data)
+            else:
+                derived_status_text, derived_normalized = "Introduced", "introduced"
+            bill_data["status"] = derived_status_text
+            bill_data["normalized_status"] = derived_normalized
+            logger.info(f"🧭 Backfilled missing status for {bill_id}: '{derived_status_text}' ({derived_normalized})")
+            # Persist to DB so future runs don't hit this again
+            try:
+                from src.database.db import db_connect
+                with db_connect() as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute(
+                            "UPDATE bills SET status = %s, normalized_status = %s WHERE bill_id = %s",
+                            (derived_status_text, derived_normalized, bill_id)
+                        )
+                        conn.commit()
+                        logger.info(f"💾 Status persisted to DB for {bill_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to persist status backfill for {bill_id}: {e}")
 
         # ── FINAL GATE ──
         # Single source of truth: is_bill_ready_for_posting() checks

@@ -193,26 +193,68 @@ def construct_bill_url(congress: str, bill_type: str, bill_number: str) -> str:
         return f"https://www.congress.gov/search?q={bill_type}{bill_number}"
     return f"https://www.congress.gov/bill/{congress}th-congress/{bill_type_slug}/{bill_number}"
 
+def fetch_bill_ids_from_api(limit: int = 20) -> List[str]:
+    """
+    Fetch recent bill IDs directly from the Congress.gov API.
+    This is used as a fallback when the 'Texts Received Today' page scrape
+    fails (e.g., Cloudflare blocks, timeouts).
+
+    Queries the 119th Congress bills sorted by updateDate descending
+    so we get the most recently active bills.
+
+    Args:
+        limit: Maximum number of bill IDs to return.
+
+    Returns:
+        List of normalized bill IDs like ['hr1234-119', 's567-119'].
+    """
+    api_key = os.getenv('CONGRESS_API_KEY')
+    if not api_key:
+        logger.warning("CONGRESS_API_KEY not set; cannot use API fallback for bill IDs")
+        return []
+
+    bill_ids: List[str] = []
+    try:
+        url = f"https://api.congress.gov/v3/bill/119?sort=updateDate+desc&limit={limit}&api_key={api_key}"
+        logger.info(f"📡 API fallback: fetching recent bill IDs from Congress API (limit={limit})")
+        resp = requests.get(url, headers={"Accept": "application/json"}, timeout=30)
+        resp.raise_for_status()
+        bills = resp.json().get('bills', [])
+        for b in bills:
+            bill_type = (b.get('type') or '').lower()
+            bill_number = b.get('number')
+            congress = b.get('congress')
+            if bill_type and bill_number and congress:
+                bill_id = f"{bill_type}{bill_number}-{congress}"
+                bill_ids.append(bill_id)
+        logger.info(f"📡 API fallback: found {len(bill_ids)} bill IDs")
+    except Exception as e:
+        logger.warning(f"📡 API fallback failed: {e}")
+
+    return bill_ids
+
+
 def fetch_bill_ids_from_texts_received_today() -> List[str]:
     """
     Scrapes the 'Bill Texts Received Today' page to find bills that have new texts.
     Uses Playwright for reliable scraping (works in both local and CI environments).
     Falls back to requests with hardened headers if Playwright is unavailable.
+    If both scraping methods fail, falls back to the Congress.gov API.
     """
     url = "https://www.congress.gov/bill-texts-received-today"
     logger.info(f"Scraping for bill IDs from {url}")
     logger.info(f"Playwright available: {PLAYWRIGHT_AVAILABLE}")
 
-    # 1) Try Playwright first (works in both local and CI environments)
-    # Note: CI check removed - Playwright is installed in CI and should be used
-    # to avoid Cloudflare 403 blocks that occur with requests-based fallback
+    # 1) Try Playwright first — use domcontentloaded instead of networkidle
+    #    to avoid hanging on Cloudflare challenge scripts. Reduced timeouts
+    #    to keep the run within the 30-minute budget.
     if PLAYWRIGHT_AVAILABLE:
         logger.info("Attempting to use Playwright for scraping...")
         max_retries = 2
-        base_timeout = 30000  # ms
+        base_timeout = 15000  # ms — reduced from 30 000
         for attempt in range(max_retries):
             try:
-                timeout = base_timeout * (attempt + 1)
+                timeout = base_timeout * (attempt + 1)  # 15 s, then 30 s
                 logger.info(f"Playwright attempt {attempt + 1}/{max_retries} with timeout {timeout}ms")
                 with sync_playwright() as p:
                     browser = p.chromium.launch(headless=True)
@@ -223,12 +265,12 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
                             locale='en-US'
                         )
                         page = context.new_page()
-                        time.sleep(1)  # small delay
-                        page.goto(url, timeout=timeout, wait_until='networkidle')
+                        time.sleep(0.5)  # small delay (reduced from 1 s)
+                        page.goto(url, timeout=timeout, wait_until='domcontentloaded')
 
-                        # Best-effort wait for table presence
+                        # Best-effort wait for table presence (short)
                         try:
-                            page.wait_for_selector("table.item_table", timeout=min(timeout, 10000))
+                            page.wait_for_selector("table.item_table", timeout=min(timeout, 8000))
                         except Exception:
                             pass
 
@@ -238,13 +280,14 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
                         bill_ids: List[str] = []
                         table = soup.find('table', class_='item_table')
                         if not table:
-                            logger.info("No bill texts table found on page (may be empty today).")
-                            return []
+                            logger.info("No bill texts table found on page (may be empty today or Cloudflare blocked).")
+                            # Don't return [] yet — let the API fallback run
+                            break
 
                         tbody = table.find('tbody')
                         if not tbody:
                             logger.info("No table body found in bill texts page.")
-                            return []
+                            break
 
                         for row in tbody.find_all('tr'):
                             strong_tag = row.find('strong')
@@ -257,8 +300,12 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
                                     bill_id = f"{bill_type}{bill_number}-{congress}"
                                     bill_ids.append(bill_id)
 
-                        logger.info(f"Found {len(bill_ids)} bills on 'Texts Received Today' page: {bill_ids}")
-                        return bill_ids
+                        if bill_ids:
+                            logger.info(f"Found {len(bill_ids)} bills on 'Texts Received Today' page: {bill_ids}")
+                            return bill_ids
+                        else:
+                            logger.info("Playwright loaded page but found 0 bill rows. Will try API fallback.")
+                            break
                     finally:
                         try:
                             context.close()
@@ -297,13 +344,13 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
             bill_ids: List[str] = []
             table = soup.find('table', class_='item_table')
             if not table:
-                logger.info("No bill texts table found on page (may be empty today).")
-                return []
+                logger.info("No bill texts table found on page (requests fallback).")
+                break  # Don't return [] — fall through to API fallback
 
             tbody = table.find('tbody')
             if not tbody:
-                logger.info("No table body found in bill texts page.")
-                return []
+                logger.info("No table body found in bill texts page (requests fallback).")
+                break
 
             for row in tbody.find_all('tr'):
                 strong_tag = row.find('strong')
@@ -316,8 +363,12 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
                         bill_id = f"{bill_type}{bill_number}-{congress}"
                         bill_ids.append(bill_id)
 
-            logger.info(f"Found {len(bill_ids)} bills on 'Texts Received Today' page: {bill_ids}")
-            return bill_ids
+            if bill_ids:
+                logger.info(f"Found {len(bill_ids)} bills on 'Texts Received Today' page (requests): {bill_ids}")
+                return bill_ids
+            else:
+                logger.info("Requests loaded page but found 0 bill rows.")
+                break
 
         except requests.RequestException as e:
             logger.warning(f"403/Request failure scraping '{url}' (attempt {attempt + 1}/{max_retries}): {e}")
@@ -325,7 +376,11 @@ def fetch_bill_ids_from_texts_received_today() -> List[str]:
                 logger.info("Retrying in 2 seconds...")
                 time.sleep(2)
                 continue
-            return []
+            # Fall through to API fallback
+
+    # 3) API fallback — Congress.gov API never returns 403 and is always available
+    logger.info("🔄 Both scraping methods failed or returned 0 bills. Using Congress API fallback...")
+    return fetch_bill_ids_from_api(limit=20)
 
 def fetch_and_enrich_bills(limit: int = 5) -> List[Dict[str, Any]]:
     """
