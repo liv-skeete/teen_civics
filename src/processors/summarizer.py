@@ -24,13 +24,14 @@ VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
 # thinking params Venice doesn't support via extra_body, so we use
 # claude-opus-4-6 (which works without thinking params) as primary.
 PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-opus-4-6")
-FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "llama-3.3-70b")
+FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "kimi-k2-5")
 
 VALID_MODELS = {
     "claude-sonnet-4-5",
     "claude-opus-4-5",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
+    "kimi-k2-5",
     "llama-3.3-70b",
     "hermes-3-llama-3.1-405b",
 }

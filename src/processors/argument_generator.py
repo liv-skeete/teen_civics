@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # ── Model configuration ─────────────────────────────────────────────────────
 ARGUMENT_MODEL = os.getenv("ARGUMENT_MODEL", "claude-opus-4-6")
-ARGUMENT_FALLBACK = os.getenv("ARGUMENT_FALLBACK", "llama-3.3-70b")
+ARGUMENT_FALLBACK = os.getenv("ARGUMENT_FALLBACK", "kimi-k2-5")
 
 # Maximum characters per argument to ensure it fits in email forms
 MAX_ARGUMENT_CHARS = 250
