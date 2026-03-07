@@ -212,6 +212,45 @@ def _recheck_problematic_bill(
     if len(new_ft) >= 100:
         update_bill_full_text(pbid, new_ft)
 
+    # ── Persist derived status to DB BEFORE unmarking ──
+    # Without this, the DB row keeps status='problematic' / normalized_status=NULL
+    # and the refreshed row read below inherits the stale values, causing
+    # bills to appear with "Unknown" status on the website.
+    status_persisted = False
+    try:
+        from src.database.db import db_connect as _db_connect
+        with _db_connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE bills
+                       SET status = %s,
+                           normalized_status = %s,
+                           sponsor_name = COALESCE(NULLIF(sponsor_name, ''), %s),
+                           sponsor_party = COALESCE(NULLIF(sponsor_party, ''), %s),
+                           sponsor_state = COALESCE(NULLIF(sponsor_state, ''), %s),
+                           congress_session = COALESCE(NULLIF(congress_session, ''), %s)
+                       WHERE bill_id = %s""",
+                    (
+                        enriched.get("status", "Introduced"),
+                        enriched.get("normalized_status", "introduced"),
+                        enriched.get("sponsor_name", ""),
+                        enriched.get("sponsor_party", ""),
+                        enriched.get("sponsor_state", ""),
+                        str(enriched.get("congress", "")),
+                        pbid,
+                    ),
+                )
+                conn.commit()
+                status_persisted = True
+                logger.info(f"   💾 Persisted status='{enriched.get('status')}' "
+                            f"normalized_status='{enriched.get('normalized_status')}' for {pbid}")
+    except Exception as e:
+        logger.warning(f"   ⚠️ Failed to persist status for {pbid}: {e}")
+
+    if not status_persisted:
+        logger.warning(f"   🚫 Skipping unmark for {pbid} — status persistence failed, bill stays problematic")
+        return None
+
     unmark_bill_as_problematic(pbid)
 
     # Attempt to process and post the recovered bill
@@ -243,6 +282,11 @@ def main(dry_run: bool = False, simulate: bool = False) -> int:
       --dry-run   : skip social-media posting, but still write to DB
       --simulate  : zero DB writes; log what would have happened (Step 4)
     """
+    # ── Freeze check ─────────────────────────────────────────────────────────
+    if os.getenv("DAILY_BILLS_FROZEN", "").lower() == "true":
+        logger.info("🧊 DAILY_BILLS_FROZEN is set to true — workflow is frozen. Exiting immediately.")
+        return 0
+
     # ── Simulate-mode bookkeeping ────────────────────────────────────────────
     sim_log: Dict[str, list] = {"would_post": [], "would_mark_problematic": [], "would_recheck": []}
 
@@ -879,18 +923,24 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             logger.info(f"🔗 Set website_slug for {bill_id}: {slug}")
 
         # ── Status backfill for DB-path bills ──
-        # If the bill has no status (common for older DB rows), derive it
-        # from tracker data or default to "Introduced" so the final gate
-        # doesn't reject an otherwise valid bill.
-        if not (bill_data.get("status") or "").strip():
+        # If the bill has no status OR no normalized_status (common for older
+        # DB rows), derive both from tracker data or default to "Introduced"
+        # so the final gate doesn't reject an otherwise valid bill and the
+        # website never shows "Unknown".
+        needs_status = not (bill_data.get("status") or "").strip()
+        needs_normalized = not (bill_data.get("normalized_status") or "").strip()
+        if needs_status or needs_normalized:
             tracker_data = bill_data.get("tracker") or selected_bill.get("tracker") or []
             if tracker_data:
                 derived_status_text, derived_normalized = derive_status_from_tracker(tracker_data)
             else:
                 derived_status_text, derived_normalized = "Introduced", "introduced"
-            bill_data["status"] = derived_status_text
-            bill_data["normalized_status"] = derived_normalized
-            logger.info(f"🧭 Backfilled missing status for {bill_id}: '{derived_status_text}' ({derived_normalized})")
+            if needs_status:
+                bill_data["status"] = derived_status_text
+            if needs_normalized:
+                bill_data["normalized_status"] = derived_normalized
+            logger.info(f"🧭 Backfilled missing status/normalized_status for {bill_id}: "
+                        f"'{bill_data['status']}' ({bill_data['normalized_status']})")
             # Persist to DB so future runs don't hit this again
             try:
                 from src.database.db import db_connect
@@ -898,7 +948,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     with conn.cursor() as cursor:
                         cursor.execute(
                             "UPDATE bills SET status = %s, normalized_status = %s WHERE bill_id = %s",
-                            (derived_status_text, derived_normalized, bill_id)
+                            (bill_data["status"], bill_data["normalized_status"], bill_id)
                         )
                         conn.commit()
                         logger.info(f"💾 Status persisted to DB for {bill_id}")
