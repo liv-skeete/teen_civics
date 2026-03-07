@@ -159,6 +159,9 @@ def derive_tracker_from_actions(actions: List[Dict[str, Any]]) -> List[Dict[str,
     """
     Derive tracker progression from bill actions.
     
+    Scans ALL actions (not just the latest) to find the most advanced
+    status keyword match.
+    
     Args:
         actions: List of action dictionaries from API
         
@@ -179,18 +182,23 @@ def derive_tracker_from_actions(actions: List[Dict[str, Any]]) -> List[Dict[str,
     
     # Sort actions by date descending
     sorted_actions = sorted(actions, key=lambda x: x.get('actionDate', ''), reverse=True)
-    latest_action = sorted_actions[0].get('text', '').lower()
     
-    if "became public law" in latest_action or "signed by president" in latest_action:
-        steps[4]['selected'] = True
-    elif "passed house" in latest_action or "agreed to in house" in latest_action:
-        steps[2]['selected'] = True
-    elif "passed senate" in latest_action or "agreed to in senate" in latest_action:
-        steps[1]['selected'] = True
-    elif "to president" in latest_action:
-        steps[3]['selected'] = True
-    else:
-        steps[0]['selected'] = True
+    # Scan ALL actions to find the most advanced status keyword match
+    best_step_index = 0  # Default to "Introduced"
+    
+    for action in sorted_actions:
+        action_text = action.get('text', '').lower()
+        
+        if "became public law" in action_text or "signed by president" in action_text:
+            best_step_index = max(best_step_index, 4)
+        elif "to president" in action_text:
+            best_step_index = max(best_step_index, 3)
+        elif "passed house" in action_text or "agreed to in house" in action_text:
+            best_step_index = max(best_step_index, 2)
+        elif "passed senate" in action_text or "agreed to in senate" in action_text or "agreed to" in action_text:
+            best_step_index = max(best_step_index, 1)
+    
+    steps[best_step_index]['selected'] = True
     
     # Mark all previous steps as completed (selected True for previous)
     for i in range(len(steps)):
