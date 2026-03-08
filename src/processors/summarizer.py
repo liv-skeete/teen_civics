@@ -20,10 +20,7 @@ load_dotenv()
 VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
 
 # Model configuration — Venice AI model names use dashes.
-# claude-sonnet-4-6 is a thinking-only model on Venice that requires
-# thinking params Venice doesn't support via extra_body, so we use
-# claude-opus-4-6 (which works without thinking params) as primary.
-PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-opus-4-6")
+PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-4-6")
 FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "kimi-k2-5")
 
 VALID_MODELS = {
@@ -607,6 +604,67 @@ def _model_call_with_fallback(client: OpenAI, system: str, user: str) -> str:
         raise last_err
     raise RuntimeError("No response from Venice AI")
 
+
+def _summarize_large_bill_in_chunks(client: OpenAI, bill: Dict[str, Any], system: str) -> Dict[str, Any]:
+    """Summarize large bill text via chunk summaries and final synthesis."""
+    full_text = str(bill.get("full_text") or "")
+    chunk_size = 10000
+    overlap = 1000
+
+    chunks: List[str] = []
+    start = 0
+    while start < len(full_text):
+        end = min(start + chunk_size, len(full_text))
+        chunks.append(full_text[start:end])
+        if end >= len(full_text):
+            break
+        start = end - overlap
+
+    logger.info(f"Large bill detected ({len(full_text)} chars); summarizing in {len(chunks)} chunks")
+
+    partial_summaries: List[str] = []
+    total_chunks = len(chunks)
+
+    for index, chunk in enumerate(chunks, start=1):
+        chunk_bill = dict(bill)
+        chunk_bill["full_text"] = chunk
+        chunk_user = (
+            f"This is part {index} of {total_chunks} of a long bill. Summarize this section:\n\n"
+            f"{_build_user_prompt(chunk_bill)}"
+        )
+        partial_raw = _model_call_with_fallback(client, system, chunk_user)
+        partial_parsed = _try_parse_json_with_fallback(partial_raw)
+
+        partial_sections: List[str] = []
+
+        partial_overview = _normalize_structured_text(partial_parsed.get("overview", ""))
+        if partial_overview:
+            partial_sections.append(f"Part {index} of {total_chunks} overview:\n{partial_overview}")
+
+        partial_detailed = _normalize_structured_text(partial_parsed.get("detailed", ""))
+        if partial_detailed:
+            partial_sections.append(f"Part {index} of {total_chunks} detailed:\n{partial_detailed}")
+
+        partial_tweet = str(partial_parsed.get("tweet", "")).strip()
+        if partial_tweet:
+            partial_sections.append(f"Part {index} of {total_chunks} tweet:\n{partial_tweet}")
+
+        partial_subject_tags = str(partial_parsed.get("subject_tags", "")).strip()
+        if partial_subject_tags:
+            partial_sections.append(f"Part {index} of {total_chunks} subject_tags:\n{partial_subject_tags}")
+
+        if partial_sections:
+            partial_summaries.append("\n\n".join(partial_sections))
+        elif partial_raw.strip():
+            partial_summaries.append(f"Part {index} of {total_chunks} raw summary:\n{partial_raw.strip()}")
+
+    final_bill = dict(bill)
+    final_bill["full_text"] = "\n\n".join(partial_summaries)
+
+    final_raw = _model_call_with_fallback(client, system, _build_user_prompt(final_bill))
+    return _try_parse_json_with_fallback(final_raw)
+
+
 def _normalize_structured_text(value: Any) -> str:
     """Normalize structured text that may arrive as list or string."""
     if isinstance(value, (list, tuple)):
@@ -955,17 +1013,25 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     client = _get_venice_client()
     
     system = _build_enhanced_system_prompt()
-    user = _build_user_prompt(bill)
+    full_text = str(bill.get("full_text") or "")
     
     # Primary attempt
     try:
-        raw = _model_call_with_fallback(client, system, user)
-        parsed = _try_parse_json_with_fallback(raw)
+        if len(full_text) > 50000:
+            parsed = _summarize_large_bill_in_chunks(client, bill, system)
+        else:
+            user = _build_user_prompt(bill)
+            raw = _model_call_with_fallback(client, system, user)
+            parsed = _try_parse_json_with_fallback(raw)
     except Exception as e:
         logger.warning(f"Initial parse failed, retrying: {e}")
         try:
-            raw2 = _model_call_with_fallback(client, system, user)
-            parsed = _try_parse_json_with_fallback(raw2)
+            if len(full_text) > 50000:
+                parsed = _summarize_large_bill_in_chunks(client, bill, system)
+            else:
+                user = _build_user_prompt(bill)
+                raw2 = _model_call_with_fallback(client, system, user)
+                parsed = _try_parse_json_with_fallback(raw2)
         except Exception as e2:
             logger.error(f"Retry failed: {e2}")
             raise

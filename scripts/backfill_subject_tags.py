@@ -31,7 +31,7 @@ from src.database.connection import postgres_connect
 # ---------------------------------------------------------------------------
 
 VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
-PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-45")
+PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-4-6")
 RATE_LIMIT_SECONDS = 1.5  # delay between API calls
 
 logging.basicConfig(

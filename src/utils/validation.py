@@ -89,6 +89,11 @@ def is_bill_ready_for_posting(bill: Dict[str, Any]) -> Tuple[bool, str]:
     if bill_status.lower() == "problematic":
         return False, "Status is 'problematic'"
 
+    # 0b. normalized_status must also be present (template renders 'Unknown' when NULL)
+    normalized_status = str(bill.get("normalized_status") or "").strip()
+    if not normalized_status:
+        return False, "Missing or empty normalized_status"
+
     # 1. Structural data validation (title, bill_id, congress, full_text, sponsor)
     is_valid_data, reasons = validate_bill_data(bill)
     if not is_valid_data:
@@ -116,9 +121,11 @@ def is_bill_ready_for_posting(bill: Dict[str, Any]) -> Tuple[bool, str]:
         if phrase in combined_summary:
             return False, f"Summary contains error phrase: '{phrase}'"
 
-    # 3. Teen Impact Score — 0 is valid, None is not
+    # 3. Teen Impact Score — 0 is valid; None/blank-string are not
     score = bill.get("teen_impact_score")
     if score is None:
+        return False, "Missing Teen Impact Score"
+    if isinstance(score, str) and not score.strip():
         return False, "Missing Teen Impact Score"
 
     return True, "Ready for posting"

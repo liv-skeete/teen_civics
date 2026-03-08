@@ -74,11 +74,21 @@ jobs:
   post-bill:
     runs-on: ubuntu-latest
     needs: ping-database
+    # Only run actual bill posting on schedule or manual dispatch.
+    # Push events still run ping-database (CI health check) but skip posting
+    # to prevent accidental production posts on merge.
+    if: github.event_name != 'push'
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     timeout-minutes: 30
     env:
       CONGRESS_FETCH_MODE: html
     steps:
+    - name: Check event type
+      run: |
+        if [ "${{ github.event_name }}" = "push" ]; then
+          echo "⛔ Push event — skipping"
+          exit 0
+        fi
     - name: Checkout code
       uses: actions/checkout@v3
 
@@ -188,7 +198,10 @@ jobs:
   sync-staging:
     runs-on: ubuntu-latest
     needs: post-bill
-    if: github.ref == 'refs/heads/main'
+    # Only sync after actual posting runs (not push-triggered CI).
+    # always() ensures sync runs even if post-bill failed, but the push
+    # gate prevents sync on merge events where post-bill was skipped.
+    if: always() && github.event_name != 'push' && github.ref == 'refs/heads/main'
     environment: staging
     timeout-minutes: 15
     env:
@@ -198,6 +211,12 @@ jobs:
       run:
         working-directory: ${{ github.workspace }}
     steps:
+      - name: Check event type
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "⛔ Push event — skipping"
+            exit 0
+          fi
       - name: Checkout code
         uses: actions/checkout@v4
 

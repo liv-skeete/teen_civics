@@ -75,7 +75,7 @@ TeenCivics was created to help young people understand the legislative process a
         *   `THREADS_USER_ID`, `THREADS_ACCESS_TOKEN` — Meta Threads API
     -   Optional:
         *   `GA_MEASUREMENT_ID` — Google Analytics
-        *   `SUMMARIZER_MODEL` — AI model (defaults to `claude-opus-4-6`)
+        *   `SUMMARIZER_MODEL` — AI model (defaults to `claude-sonnet-4-6`)
 
 5.  **Initialize the database**
     The database schema is created automatically on the first run.
