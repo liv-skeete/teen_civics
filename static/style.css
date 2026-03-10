@@ -855,6 +855,7 @@ a.share-option:link {
 
 .giveaway-social-links a {
     text-decoration: none;
+    white-space: nowrap;
 }
 
 .giveaway-social-links a:hover {
