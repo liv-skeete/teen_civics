@@ -148,7 +148,7 @@
                                target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
                                 <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
                             </a>
-                            <a href="https://www.facebook.com/sharer/sharer.php?u={{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode|replace('/', '%2F') }}&quote={{ ('Check out this bill on TeenCivics: ' ~ bill.title)|urlencode }}"
+                            <a href="https://www.facebook.com/dialog/share?app_id=1495910562545241&display=popup&href={{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode }}&quote={{ ('Check out this bill on TeenCivics: ' ~ bill.title)|urlencode }}"
                                target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">
                                 <span class="share-icon" aria-hidden="true">📘</span> Share on Facebook
                             </a>
