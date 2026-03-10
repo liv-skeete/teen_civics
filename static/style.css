@@ -876,10 +876,18 @@ a.share-option:link {
     display: none;
 }
 
+.giveaway-desktop-pipe {
+    margin: 0 0.25em;
+}
+
 /* Mobile: stack prizes/deadline and social links vertically */
 @media (max-width: 768px) {
     .giveaway-mobile-break {
         display: block;
+    }
+
+    .giveaway-desktop-pipe {
+        display: none;
     }
 
     .giveaway-social-links a {
