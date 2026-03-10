@@ -4,6 +4,12 @@
 {% if bill %}{{ bill.title }} - TeenCivics{% else %}TeenCivics - Congressional Bills for Teens{% endif %}
 {% endblock %}
 
+{% block og_title %}{% if bill %}{{ bill.title }} - TeenCivics{% else %}TeenCivics - Congressional Bills for Teens{% endif %}{% endblock %}
+{% block og_description %}{% if bill %}{{ bill.summary_tweet or bill.summary_overview or 'Understand congressional bills made simple for teenagers.' }}{% else %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endif %}{% endblock %}
+{% block twitter_title %}{% if bill %}{{ bill.title }} - TeenCivics{% else %}TeenCivics - Congressional Bills for Teens{% endif %}{% endblock %}
+{% block twitter_description %}{% if bill %}{{ bill.summary_tweet or bill.summary_overview or 'Understand congressional bills made simple for teenagers.' }}{% else %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endif %}{% endblock %}
+{% block meta_description %}{% if bill %}{{ bill.summary_tweet or bill.summary_overview or 'Understand congressional bills made simple for teenagers.' }}{% else %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endif %}{% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='tell-rep.css', v='2026-02-08-v1') }}">
 <!-- Preload hero image so browser starts fetching it immediately -->
@@ -24,6 +30,66 @@
 
 <div class="container">
     {% if bill %}
+    <article class="bill-card featured-bill giveaway-card">
+        <div class="bill-header">
+            <h4 class="bill-title">🎁 FREE MERCH GIVEAWAY!</h4>
+        </div>
+
+        <div class="bill-content giveaway-content">
+            <p>Our founder is up for a speaking slot at Grace Hopper Celebration 2026 and we're celebrating with free TeenCivics merch!</p>
+            <p><strong>🏆 Prizes:</strong> Stickers, a TeenCivics shirt, and a TeenCivics Stanley cup | <strong>⏰ Deadline:</strong> March 19, 2026 (winner announced the following week)</p>
+
+            <p><strong>How to enter:</strong></p>
+            <ol class="giveaway-steps">
+                <li>1) Follow us on any platform below</li>
+                <li>2) <a href="https://gracehoppercelebration.com/flow/anitab/ghc26/GHCsessionvotingunauth/page/page/session/1771732469049001Tvlq?search=congress&search=congress%2C+congress" target="_blank" rel="noopener noreferrer">Vote for the session here</a></li>
+                <li>3) Share with friends for a bonus entry!</li>
+            </ol>
+
+            <p class="giveaway-social-links" aria-label="TeenCivics social links">
+                <a href="https://bsky.app/profile/teencivics.bsky.social" target="_blank" rel="noopener noreferrer">🦋 Bluesky: @teencivics.bsky.social</a>
+                <span class="giveaway-social-separator" aria-hidden="true">·</span>
+                <a href="https://www.threads.com/@teen.civics" target="_blank" rel="noopener noreferrer">🧵 Threads: @teen.civics</a>
+                <span class="giveaway-social-separator" aria-hidden="true">·</span>
+                <a href="https://x.com/TeenCivics" target="_blank" rel="noopener noreferrer">🐦 X: @TeenCivics</a>
+                <span class="giveaway-social-separator" aria-hidden="true">·</span>
+                <a href="https://www.facebook.com/profile.php?id=61587587706254" target="_blank" rel="noopener noreferrer">📘 Facebook: TeenCivics</a>
+            </p>
+
+            <div class="giveaway-share-wrapper">
+                <div class="share-dropdown">
+                    <button type="button" class="btn btn-share" aria-expanded="false" aria-haspopup="true">
+                        Share Giveaway
+                    </button>
+                    <div class="share-options" role="menu" aria-label="Share giveaway options">
+                        <a href="https://twitter.com/intent/tweet?text=Vote%20for%20TeenCivics%20at%20Grace%20Hopper%202026%20and%20enter%20to%20win%20free%20merch!&url=https://teencivics.org"
+                           target="_blank" rel="noopener" class="share-option share-x" role="menuitem">
+                            <span class="share-icon" aria-hidden="true">𝕏</span> Share on X
+                        </a>
+                        <a href="https://bsky.app/intent/compose?text=Vote%20for%20TeenCivics%20at%20Grace%20Hopper%202026%20and%20enter%20to%20win%20free%20merch!%20https://teencivics.org"
+                           target="_blank" rel="noopener" class="share-option share-bluesky" role="menuitem">
+                            <svg viewBox="0 0 568 501" fill="currentColor" aria-hidden="true" class="share-icon">
+                                <path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.66 1 75.293 1 57.947 1-28.906 76.134-1.611 123.121 33.664z"/>
+                            </svg>
+                            Share on Bluesky
+                        </a>
+                        <a href="https://www.threads.net/intent/post?text=Vote%20for%20TeenCivics%20at%20Grace%20Hopper%202026%20and%20enter%20to%20win%20free%20merch!%20https://teencivics.org"
+                           target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
+                            <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
+                        </a>
+                        <a href="https://www.facebook.com/sharer/sharer.php?u=https://teencivics.org"
+                           target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">
+                            <span class="share-icon" aria-hidden="true">📘</span> Share on Facebook
+                        </a>
+                        <button type="button" class="share-option share-copy" role="menuitem" data-copy-text="Vote for TeenCivics at Grace Hopper 2026 and enter to win free merch! https://teencivics.org">
+                            <span class="share-icon" aria-hidden="true">🔗</span> Copy Link
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </article>
+
     <article class="bill-card featured-bill">
         <div class="bill-header">
             <h4 class="bill-title">{{ bill.title }}</h4>
@@ -72,7 +138,7 @@
                     View Bill Details
                 </a>
                 <div class="share-dropdown">
-                    <button class="btn btn-share" aria-expanded="false" aria-haspopup="true">
+                    <button type="button" class="btn btn-share" aria-expanded="false" aria-haspopup="true">
                         Share This Bill
                     </button>
                     <div class="share-options" role="menu" aria-label="Share options">
@@ -91,7 +157,11 @@
                            target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
                             <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
                         </a>
-                        <button class="share-option share-copy" role="menuitem" data-url="{{ url_for('bill_detail', slug=bill.website_slug, _external=True) }}">
+                        <a href="https://www.facebook.com/sharer/sharer.php?u={{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode|replace('/', '%2F') }}"
+                           target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">
+                            <span class="share-icon" aria-hidden="true">📘</span> Share on Facebook
+                        </a>
+                        <button type="button" class="share-option share-copy" role="menuitem" data-url="{{ url_for('bill_detail', slug=bill.website_slug, _external=True) }}">
                             <span class="share-icon" aria-hidden="true">🔗</span> Copy Link
                         </button>
                     </div>

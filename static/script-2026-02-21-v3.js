@@ -579,14 +579,14 @@
       if (copyBtn) {
         copyBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
-          const url = copyBtn.dataset.url || window.location.href;
-          
+          const textToCopy = copyBtn.dataset.copyText || copyBtn.dataset.url || window.location.href;
+          const originalText = copyBtn.textContent;
+
           try {
-            await navigator.clipboard.writeText(url);
-            const originalText = copyBtn.textContent;
+            await navigator.clipboard.writeText(textToCopy);
             copyBtn.textContent = "✓ Copied!";
             copyBtn.classList.add("copied");
-            
+
             setTimeout(() => {
               copyBtn.textContent = originalText;
               copyBtn.classList.remove("copied");
@@ -597,7 +597,7 @@
             console.error("Failed to copy:", err);
             // Fallback: select and copy
             const textArea = document.createElement("textarea");
-            textArea.value = url;
+            textArea.value = textToCopy;
             textArea.style.position = "fixed";
             textArea.style.opacity = "0";
             document.body.appendChild(textArea);
@@ -605,13 +605,19 @@
             try {
               document.execCommand("copy");
               copyBtn.textContent = "✓ Copied!";
+              copyBtn.classList.add("copied");
               setTimeout(() => {
-                copyBtn.textContent = "🔗 Copy Link";
+                copyBtn.textContent = originalText;
+                copyBtn.classList.remove("copied");
                 options.classList.remove("show");
+                button.setAttribute("aria-expanded", "false");
               }, 1500);
             } catch (e2) {
               copyBtn.textContent = "❌ Failed";
-              setTimeout(() => { copyBtn.textContent = "🔗 Copy Link"; }, 1500);
+              setTimeout(() => {
+                copyBtn.textContent = originalText;
+                button.setAttribute("aria-expanded", "false");
+              }, 1500);
             }
             document.body.removeChild(textArea);
           }

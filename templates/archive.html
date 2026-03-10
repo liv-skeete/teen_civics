@@ -129,7 +129,7 @@
                         Read Summary
                     </a>
                     <div class="share-dropdown">
-                        <button class="btn btn-share btn-small" aria-expanded="false" aria-haspopup="true">
+                        <button type="button" class="btn btn-share btn-small" aria-expanded="false" aria-haspopup="true">
                             Share This Bill
                         </button>
                         <div class="share-options" role="menu" aria-label="Share options">
@@ -148,7 +148,11 @@
                                target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
                                 <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
                             </a>
-                            <button class="share-option share-copy" role="menuitem" data-url="{{ url_for('bill_detail', slug=bill.website_slug, _external=True) }}">
+                            <a href="https://www.facebook.com/sharer/sharer.php?u={{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode|replace('/', '%2F') }}"
+                               target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">
+                                <span class="share-icon" aria-hidden="true">📘</span> Share on Facebook
+                            </a>
+                            <button type="button" class="share-option share-copy" role="menuitem" data-url="{{ url_for('bill_detail', slug=bill.website_slug, _external=True) }}">
                                 <span class="share-icon" aria-hidden="true">🔗</span> Copy Link
                             </button>
                         </div>

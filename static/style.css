@@ -747,6 +747,10 @@ a.share-option:link {
     background-color: rgba(0, 0, 0, 0.05);
 }
 
+.share-option.share-facebook:hover {
+    background-color: rgba(24, 119, 242, 0.12);
+}
+
 .share-option.share-copy:hover {
     background-color: rgba(76, 175, 80, 0.1);
 }
@@ -821,6 +825,50 @@ a.share-option:link {
 
 .featured-bill {
     border: var(--card-border-width) solid var(--card-border-color);
+}
+
+.featured-bill:hover {
+    transform: none;
+    box-shadow: var(--card-shadow);
+}
+
+.giveaway-steps {
+    list-style: none;
+    margin: 0 0 var(--spacing-md) 0;
+    padding-left: 0;
+}
+
+.giveaway-steps li {
+    margin-bottom: var(--spacing-xs);
+}
+
+.giveaway-social-links {
+    margin-top: var(--spacing-md);
+    margin-bottom: 0;
+    line-height: 1.8;
+}
+
+.giveaway-share-wrapper {
+    margin-top: var(--spacing-md);
+    text-align: center;
+}
+
+.giveaway-social-links a {
+    text-decoration: none;
+}
+
+.giveaway-social-links a:hover {
+    text-decoration: underline;
+}
+
+.giveaway-social-separator {
+    margin: 0 var(--spacing-xs);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .giveaway-social-separator,
+.dark-theme .giveaway-social-separator {
+    color: var(--color-text);
 }
 
 .bill-header {
