@@ -871,6 +871,27 @@ a.share-option:link {
     color: var(--color-text);
 }
 
+/* Desktop: hide the mobile-only line break between prizes/deadline */
+.giveaway-mobile-break {
+    display: none;
+}
+
+/* Mobile: stack prizes/deadline and social links vertically */
+@media (max-width: 768px) {
+    .giveaway-mobile-break {
+        display: block;
+    }
+
+    .giveaway-social-links a {
+        display: block;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .giveaway-social-separator {
+        display: none;
+    }
+}
+
 .bill-header {
     margin-bottom: var(--spacing-lg);
 }
