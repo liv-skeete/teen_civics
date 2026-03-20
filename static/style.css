@@ -832,6 +832,7 @@ a.share-option:link {
     box-shadow: var(--card-shadow);
 }
 
+/* --- GIVEAWAY STYLES (commented out — giveaway ended 2026-03-19, keep for future events)
 .giveaway-steps {
     list-style: none;
     margin: 0 0 var(--spacing-md) 0;
@@ -872,7 +873,6 @@ a.share-option:link {
     color: var(--color-text);
 }
 
-/* Desktop: hide the mobile-only line break between prizes/deadline */
 .giveaway-mobile-break {
     display: none;
 }
@@ -881,7 +881,6 @@ a.share-option:link {
     margin: 0 0.25em;
 }
 
-/* Mobile: stack prizes/deadline and social links vertically */
 @media (max-width: 768px) {
     .giveaway-mobile-break {
         display: block;
@@ -900,6 +899,7 @@ a.share-option:link {
         display: none;
     }
 }
+--- END GIVEAWAY STYLES */
 
 .bill-header {
     margin-bottom: var(--spacing-lg);
