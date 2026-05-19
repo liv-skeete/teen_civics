@@ -97,14 +97,31 @@ if _url_prefix:
 app.config["DEBUG"] = config.flask.debug
 
 # SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY.
-# In production (Railway), absence is fatal — a per-process generated key
-# means sessions and CSRF tokens break on worker restart, and they get
-# different keys when workers cold-restart. Once auth ships, this also
-# means every magic-link in flight is invalidated.
+# In any deployed environment (Railway, etc.), absence is fatal — a
+# per-process generated key means each gunicorn worker uses a different
+# key, which silently breaks sessions, CSRF tokens, and magic-link
+# tokens because tokens minted by one worker fail verification on
+# another.
 # In dev/local, generate a random key for convenience.
+def _is_deployed():
+    """True if we're running in a deployed environment (Railway, etc),
+    where per-worker random keys would break auth. Checks multiple env
+    var names because Railway has renamed theirs over time."""
+    return any(
+        os.environ.get(name) for name in (
+            "RAILWAY_ENVIRONMENT",          # legacy Railway
+            "RAILWAY_ENVIRONMENT_NAME",     # current Railway (2025+)
+            "RAILWAY_PROJECT_ID",           # also Railway
+            "RAILWAY_SERVICE_ID",
+            "DYNO",                         # Heroku
+            "RENDER",                       # Render
+            "FLY_APP_NAME",                 # Fly.io
+        )
+    )
+
 _secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY")
 if not _secret_key:
-    if os.getenv("RAILWAY_ENVIRONMENT"):
+    if _is_deployed():
         raise RuntimeError(
             "FLASK_SECRET_KEY (or SECRET_KEY) is required in production. "
             "Set it via Railway dashboard → Variables. Refusing to start "
@@ -118,10 +135,9 @@ app.config["SECRET_KEY"] = _secret_key
 # Session security
 # SECURE=True (production HTTPS) is required for the secure flag on cookies,
 # but in local dev over http:// the browser will silently drop secure cookies
-# → no session → CSRF token mismatches on form posts. Only enable SECURE in
-# real production (Railway sets RAILWAY_ENVIRONMENT); leave off for local dev.
-_is_railway = os.environ.get("RAILWAY_ENVIRONMENT") is not None
-app.config["SESSION_COOKIE_SECURE"] = _is_railway
+# → no session → CSRF token mismatches on form posts. Only enable SECURE
+# when actually deployed; leave off for local dev.
+app.config["SESSION_COOKIE_SECURE"] = _is_deployed()
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Sessions persist 30 days when "remember me" is set via permanent=True
