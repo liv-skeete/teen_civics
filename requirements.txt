@@ -1,4 +1,4 @@
-requests==2.31.0
+requests==2.32.3
 tweepy>=4.15.0
 python-dotenv==1.0.0
 feedparser==6.0.10
@@ -14,7 +14,6 @@ pdfminer.six==20231228
 regex==2024.5.15
 psycopg2-binary==2.9.10
 pytz==2024.1
-gunicorn==21.2.0
-SQLAlchemy==1.4.46
+gunicorn==23.0.0
 cloudscraper>=1.2.71
 atproto>=0.0.55

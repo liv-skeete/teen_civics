@@ -61,6 +61,14 @@ if config.logging.file_path:
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
+# Trust the X-Forwarded-* headers Railway sets. Without this, every
+# request appears to come from Railway's proxy IP, which collapses
+# all per-IP rate limits + admin-login lockouts into one global bucket.
+# Railway sits behind exactly one proxy hop, so x_for=1 / x_proto=1.
+# See: werkzeug.middleware.proxy_fix docs.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 # Support sub-path deployment (e.g. /beta on staging).
 # Railway strips /beta from PATH_INFO before forwarding to Flask, so Flask
 # routes work as normal (/api/vote, /static/...).  We just need url_for() to
@@ -88,14 +96,24 @@ if _url_prefix:
 
 app.config["DEBUG"] = config.flask.debug
 
-# SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY, otherwise generate (dev)
-app.config["SECRET_KEY"] = (
-    os.getenv("FLASK_SECRET_KEY")
-    or os.getenv("SECRET_KEY")
-    or secrets.token_hex(32)
-)
-if not (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY")):
-    logger.warning("SECRET_KEY not set in environment, using generated key (not suitable for production)")
+# SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY.
+# In production (Railway), absence is fatal — a per-process generated key
+# means sessions and CSRF tokens break on worker restart, and they get
+# different keys when workers cold-restart. Once auth ships, this also
+# means every magic-link in flight is invalidated.
+# In dev/local, generate a random key for convenience.
+_secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY")
+if not _secret_key:
+    if os.getenv("RAILWAY_ENVIRONMENT"):
+        raise RuntimeError(
+            "FLASK_SECRET_KEY (or SECRET_KEY) is required in production. "
+            "Set it via Railway dashboard → Variables. Refusing to start "
+            "with a per-process generated key — sessions and CSRF would "
+            "break on every worker restart."
+        )
+    _secret_key = secrets.token_hex(32)
+    logger.warning("SECRET_KEY not set, using ephemeral generated key (dev only)")
+app.config["SECRET_KEY"] = _secret_key
 
 # Session security
 app.config["SESSION_COOKIE_SECURE"] = not config.flask.debug
@@ -406,7 +424,8 @@ def healthz_db():
             cur.close()
             return jsonify({"status": "ok", "db": "connected"}), 200
     except Exception as e:
-        return jsonify({"status": "degraded", "db": str(e)}), 503
+        logger.error(f"healthz/db error: {e}", exc_info=True)
+        return jsonify({"status": "degraded", "db": "error", "req_id": getattr(g, "req_id", None)}), 503
 
 
 # --- Routes ---
@@ -613,33 +632,6 @@ def bills():
             page_size=DEFAULT_ARCHIVE_PAGE_SIZE,
             sort_by_impact=False
         ), 500
-
-@app.route("/debug/env")
-def debug_env():
-    from src.database.connection import get_connection_string
-    if not app.config.get("DEBUG"):
-        abort(404)
-    try:
-        conn_string = get_connection_string()
-        masked_conn = None
-        if conn_string:
-            masked_conn = (
-                conn_string[:30] + "...[MASKED]..." + conn_string[-20:]
-                if len(conn_string) > 50
-                else conn_string[:10] + "...[MASKED]"
-            )
-        env_status = {
-            "database_configured": conn_string is not None,
-            "connection_string_preview": masked_conn,
-            "environment_variables": {
-                "DATABASE_URL": "SET" if os.environ.get("DATABASE_URL") else "NOT SET",
-            },
-            "working_directory": os.getcwd(),
-            "python_path": os.environ.get("PYTHONPATH", "NOT SET"),
-        }
-        return jsonify(env_status)
-    except Exception as e:
-        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
 
 @app.route("/bill/<string:slug>")
 def bill_detail(slug: str):
@@ -1048,7 +1040,7 @@ def admin_sync_contact_forms():
         return jsonify({"success": True, "results": result})
     except Exception as e:
         logger.error(f"Contact form sync error: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 
 @app.route("/admin/api/tables")
@@ -1068,7 +1060,7 @@ def admin_api_tables():
         return jsonify({"tables": tables})
     except Exception as e:
         logger.error(f"Admin API tables error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/tables/<table_name>/schema")
 @admin_required
@@ -1094,7 +1086,7 @@ def admin_api_table_schema(table_name):
         return jsonify({"table": table_name, "columns": schema})
     except Exception as e:
         logger.error(f"Admin API schema error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/tables/<table_name>/rows")
 @admin_required
@@ -1148,7 +1140,7 @@ def admin_api_table_rows(table_name):
         })
     except Exception as e:
         logger.error(f"Admin API rows error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/rows/<table_name>/<int:row_id>", methods=["GET"])
 @admin_required
@@ -1185,7 +1177,7 @@ def admin_api_get_row(table_name, row_id):
         return jsonify({"table": table_name, "row": row})
     except Exception as e:
         logger.error(f"Admin API get row error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/rows/<table_name>/<int:row_id>", methods=["PUT"])
 @admin_required
@@ -1266,7 +1258,7 @@ def admin_api_update_row(table_name, row_id):
         })
     except Exception as e:
         logger.error(f"Admin API update row error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/bills/<int:bill_id>/hide", methods=["POST"])
 @admin_required
@@ -1301,7 +1293,7 @@ def admin_api_hide_bill(bill_id):
         return jsonify({"success": True, "bill_id": row["bill_id"], "hidden": hidden})
     except Exception as e:
         logger.error(f"Admin hide bill error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.errorhandler(404)
 def page_not_found(e):
