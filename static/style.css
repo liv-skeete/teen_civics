@@ -1045,31 +1045,62 @@ a.share-option:link {
 }
 
 /* "Your vote" badge — archive previews only.
-   On main bill widget the dark navy fill is self-evident; on archive cards
-   where the user is scrolling many bills, the explicit tag earns its keep. */
-.poll-preview .poll-option.selected {
-    position: relative;
+   Lives in the poll-header next to the "Community Poll" h4 so the user
+   sees their vote as a status on the whole card, not as a tag floating
+   between bars. Color-coded yes/no for at-a-glance scannability. */
+.poll-preview .poll-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-xs);
 }
 
-.poll-preview .poll-option.selected::after {
-    content: "✓ Your vote";
-    position: absolute;
-    top: -10px;
-    right: 10px;
-    background-color: var(--color-warning);
-    color: var(--color-brown-black);
+.poll-preview .poll-preview-header h4 {
+    margin-bottom: 0;
+}
+
+.your-vote-badge {
     font-size: var(--font-size-xs);
     font-weight: 700;
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 999px;
-    letter-spacing: 0.02em;
-    box-shadow: var(--shadow-sm);
-    pointer-events: none;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    white-space: nowrap;
 }
 
-.poll-option.selected:hover {
-    background-color: var(--color-navy);
-    color: var(--color-white);
+.your-vote-badge[data-vote="yes"] {
+    background-color: #E8F5E9; /* light green */
+    color: #1B5E20;             /* dark green */
+    border: 1px solid #4CAF50;
+}
+
+.your-vote-badge[data-vote="no"] {
+    background-color: #FFEBEE; /* light red */
+    color: #B71C1C;             /* dark red */
+    border: 1px solid #F44336;
+}
+
+.your-vote-badge[data-vote="unsure"] {
+    background-color: var(--color-light-gray);
+    color: var(--color-dark-gray);
+    border: 1px solid var(--color-gray);
+}
+
+[data-theme="dark"] .your-vote-badge[data-vote="yes"],
+.dark-theme .your-vote-badge[data-vote="yes"] {
+    background-color: rgba(76, 175, 80, 0.18);
+    color: #A5D6A7;
+    border-color: #66BB6A;
+}
+
+[data-theme="dark"] .your-vote-badge[data-vote="no"],
+.dark-theme .your-vote-badge[data-vote="no"] {
+    background-color: rgba(244, 67, 54, 0.18);
+    color: #EF9A9A;
+    border-color: #EF5350;
 }
 
 .poll-results {
