@@ -3399,87 +3399,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* --- Quick-stats modal --- */
-.user-quick-modal {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    min-width: 180px;
-    background-color: var(--color-cards);
-    border: 1px solid var(--color-borders);
-    border-radius: var(--border-radius-lg);
-    box-shadow: var(--shadow-md);
-    padding: 0.85rem 1rem;
-    font-size: var(--font-size-sm);
-    z-index: 1100;
-    color: var(--color-text);
-}
-
-.user-quick-modal[hidden] { display: none; }
-
-.uqm-tier {
-    font-weight: 700;
-    font-size: var(--font-size-base);
-    margin-bottom: 0.5rem;
-}
-
-.uqm-progress-wrap { margin-bottom: 0.5rem; }
-
-.uqm-progress-bar {
-    height: 6px;
-    background-color: var(--color-borders);
-    border-radius: 999px;
-    overflow: hidden;
-    margin-bottom: 0.25rem;
-}
-
-.uqm-progress-fill {
-    height: 100%;
-    background-color: var(--color-accent);
-    border-radius: 999px;
-    transition: width 0.4s ease;
-}
-
-.uqm-progress-text {
-    font-size: var(--font-size-xs);
-    opacity: 0.8;
-}
-
-.uqm-divider {
-    border: none;
-    border-top: 1px solid var(--color-borders);
-    margin: 0.5rem 0;
-}
-
-.uqm-stat {
-    display: flex;
-    align-items: baseline;
-    gap: 0.4rem;
-    margin-bottom: 0.2rem;
-}
-
-.uqm-stat-num {
-    font-weight: 700;
-    font-size: var(--font-size-base);
-}
-
-.uqm-stat-label {
-    font-size: var(--font-size-xs);
-    opacity: 0.75;
-}
-
-.uqm-stat-small .uqm-stat-num {
-    font-size: var(--font-size-sm);
-}
-
-.uqm-profile-link {
-    display: block;
-    margin-top: 0.65rem;
-    font-size: var(--font-size-xs);
-    text-align: right;
-    opacity: 0.8;
-}
-
-.uqm-profile-link:hover { opacity: 1; }
+/* Hide user-rail when toggled off via [hidden] attribute */
+.user-rail[hidden] { display: none; }
 
 /* Dark mode overrides */
 [data-theme="dark"] .nav-user,
@@ -3608,10 +3529,13 @@ h1, h2, h3, h4, h5, h6 {
     font-size: var(--font-size-xs);
 }
 
-/* Hide rail on narrow viewports — info lives in navbar there */
+/* On narrow viewports, reposition the rail when toggled open so it
+   doesn't crowd the main content. */
 @media (max-width: 1100px) {
     .user-rail {
-        display: none;
+        top: 70px;
+        right: 12px;
+        width: 200px;
     }
 }
 
