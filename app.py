@@ -107,7 +107,7 @@ def _is_deployed():
     """True if we're running in a deployed environment (Railway, etc),
     where per-worker random keys would break auth. Checks multiple env
     var names because Railway has renamed theirs over time."""
-    return any(
+    named = any(
         os.environ.get(name) for name in (
             "RAILWAY_ENVIRONMENT",          # legacy Railway
             "RAILWAY_ENVIRONMENT_NAME",     # current Railway (2025+)
@@ -118,6 +118,9 @@ def _is_deployed():
             "FLY_APP_NAME",                 # Fly.io
         )
     )
+    # Catch any future Railway renames: any RAILWAY_* var set means we're deployed
+    railway_any = any(k.startswith("RAILWAY_") for k in os.environ)
+    return named or railway_any
 
 _secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY")
 if not _secret_key:
