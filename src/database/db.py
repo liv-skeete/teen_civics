@@ -362,24 +362,6 @@ def get_all_bills(limit: int = 100) -> List[Dict[str, Any]]:
         logger.error(f"Error retrieving bills: {e}")
         return []
 
-def search_bills_by_title(title_query: str, limit: int = 100) -> List[Dict[str, Any]]:
-    """
-    Search all bills by title using LIKE query, sorted by most recent first.
-    """
-    try:
-        with db_connect() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-                cursor.execute('''
-                SELECT * FROM bills
-                WHERE LOWER(COALESCE(title, '')) LIKE %s
-                ORDER BY date_processed DESC
-                LIMIT %s
-                ''', (f'%{title_query.lower()}%', limit,))
-                return [dict(row) for row in cursor.fetchall()]
-    except Exception as e:
-        logger.error(f"Error searching bills by title: {e}")
-        return []
-
 def get_bill_by_id(bill_id: str) -> Optional[Dict[str, Any]]:
     """
     Retrieve a specific bill by its bill_id.
@@ -1710,29 +1692,6 @@ def update_bill_full_text(bill_id: str, full_text: str, text_format: str = "") -
     except Exception as e:
         logger.error(f"Error updating full text for bill {normalized_id}: {e}")
         return False
-@simulate_safe
-def update_bill_teen_impact_score(bill_id: str, teen_impact_score: int) -> bool:
-    """
-    Update the teen impact score for a specific bill.
-    """
-    normalized_id = normalize_bill_id(bill_id)
-    try:
-        with db_connect() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE bills
-                    SET teen_impact_score = %s
-                    WHERE bill_id = %s
-                    """,
-                    (teen_impact_score, normalized_id),
-                )
-                return cursor.rowcount > 0
-    except Exception as e:
-        logger.error(f"Error updating teen impact score for bill {normalized_id}: {e}")
-        return False
-
-
 @simulate_safe
 def update_bill_sponsor(bill_id: str, sponsor_name: str, sponsor_party: str, sponsor_state: str) -> bool:
     """

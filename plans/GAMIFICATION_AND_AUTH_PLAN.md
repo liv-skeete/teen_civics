@@ -12,18 +12,41 @@ session and the future feature backlog. Update when scope changes.
 the currency a TeenCivics user earns is also votes. Same word both
 places. Clean mental model.
 
-### Login model — robust, defense-in-depth
-Magic-link email is the **primary** entry point, but auth is layered
-deeper than just "got the email." The goal: hard to bot, easy for
-real teens.
+### Login model — robust, defense-in-depth, two paths
+Two equal entry points so users pick what feels natural. Both share
+the same `users` row + session state. The goal: hard to bot, easy
+for real teens.
 
-**Primary flow — magic link**
+**Path A — magic link via email (default)**
 - Email-only signup; no password to lose, no breach exposure
 - Service: **Resend** (free tier covers our scale)
 - Token: 32-byte random hex, hashed (SHA-256) before storage
 - TTL: 15 min from creation
 - Used tokens retained 90 days for audit, then redacted
 - Email-verified by definition (you clicked the link)
+
+**Path B — Sign in with Google (alternative)**
+- OAuth 2.0 via Google Identity Services
+- Library: `Authlib` (mature, Flask-native) OR Google's official
+  `google-auth` + `google-auth-oauthlib`. Pick Authlib for simpler
+  callback flow.
+- Required scopes: `openid email` only — NOT profile, NOT
+  contacts, NOT Drive. Just the email + verified flag.
+- On callback: verify `id_token`, extract `email` + `email_verified`,
+  upsert into `users` table keyed by email.
+- If a user previously signed up with magic link, signing in with
+  Google later just links the existing account by email match. No
+  duplicate users.
+- Why Google: covers ~80% of US teens (school Gmail, personal Gmail);
+  zero password friction; Google's account-takeover defenses are
+  far stronger than anything we'd build.
+- Why NOT Apple Sign-In in v1: smaller percentage of teen email
+  identity lives there (most teens use Gmail school accounts); adds
+  Apple Developer membership ($99/yr) and an extra signing key
+  rotation surface; defer.
+- Why NOT email+password in v1: storing passwords requires bcrypt +
+  reset flow + breach-response infrastructure. Two paths above cover
+  the same user without any of that.
 
 **Robustness layers (all of these, not just magic link)**
 
@@ -67,11 +90,13 @@ real teens.
    - Admin-side manual unlock procedure for legit users locked out
 
 **What's NOT in v1 auth**
+- Email + password (handled by magic-link path)
 - Two-factor TOTP (not worth the friction for teen audience yet)
 - SMS verification (paid, easy to spoof, privacy-hostile)
 - Real-name verification (defeats the point — anonymous civic engagement is the brand)
 - Behavioral biometrics (overkill for current scale)
-- OAuth (Google/Apple) — defer to v2 as alternative path
+- Apple Sign-In (defer to v2)
+- Facebook / X / TikTok login (defer; brand alignment concerns)
 
 ### Daily earning cap
 **5 votes per day count toward Votes currency.** Users can still
@@ -239,8 +264,15 @@ users (
   bio             TEXT,                           -- tier 3+
   state_flag      TEXT,                           -- tier 4+
   profile_color   TEXT,                           -- tier 6+
-  total_votes_cast INTEGER DEFAULT 0              -- lifetime aggregator
+  total_votes_cast INTEGER DEFAULT 0,             -- lifetime aggregator
+  -- Auth path tracking
+  signup_method   TEXT NOT NULL,                  -- 'magic_link' | 'google'
+  google_sub      TEXT UNIQUE                     -- Google's stable subject ID
+                                                  -- (only present if signed in via Google)
 )
+-- An account created via magic_link can later attach a Google identity
+-- by setting google_sub on the matching email row. Same user, two
+-- ways to sign in.
 
 magic_links (
   token_hash      TEXT PRIMARY KEY,               -- SHA-256 of token
@@ -270,7 +302,7 @@ same transaction as `votes` insert.
 
 ## v1 ship plan
 
-### Session A — auth foundation
+### Session A — auth foundation (magic-link path)
 - Alembic baseline (existing schema) + first migration (users, magic_links, civitas_ledger)
 - `src/auth/magic_link.py` — token gen, hash, send via Resend
 - `src/auth/session.py` — login/logout
@@ -278,6 +310,18 @@ same transaction as `votes` insert.
 - Templates: `login.html`, `login_check_email.html`, `profile.html`
 - Top nav: shows email + tier badge if logged in, "Sign in" otherwise
 - No earnings yet — just login works
+- Cloudflare Turnstile token validated on `/login` form submit
+
+### Session A.5 — Google OAuth path
+- `src/auth/google_oauth.py` — Authlib client, callback handler
+- New env vars: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
+- Routes: `/login/google` (redirect), `/login/google/callback` (handler)
+- "Sign in with Google" button on `/login` template
+- Same session machinery as Session A — Google login just upserts
+  a user row keyed by email, sets `google_sub`
+- Email-conflict handling: if a magic-link user signs in with Google
+  using the same email, link the existing account (set
+  `google_sub`); do not create duplicate
 
 ### Session B — gamification layer
 - Wire vote → ledger insert (with daily cap enforcement)
@@ -285,18 +329,25 @@ same transaction as `votes` insert.
 - Profile page: tier ladder visualization, current Votes balance, lifetime total
 - Side rail: lifetime bills-voted-on counter
 - "✓ Vote logged" flavor text by tier
+- 8-12 second dwell-time check on bill summary before vote unlocks
 
 ### Session C — Civi gate
 - Public "Civi" link in nav (currently doesn't exist)
 - Click → redirect to /login if unauth
 - Copy: "Civi's a friend who pays attention in AP Gov — sign in so she can remember you."
 
-Pre-reqs from security/backup audit (must complete first):
-- Alembic adopted (B4)
-- Encrypted backups landed (B3)
-- Read-only prod role for sync (B1)
-- Sync script DB-name guard (B2)
-- Privacy policy + ToS drafted
+Pre-reqs from security/backup + python audits (must complete first):
+- **All S1-S8 security fixes** from `SECURITY_BACKUP_AUDIT_2026-05-18.md`
+- **Alembic adopted** (PR 3 in `PYTHON_CLEANUP_PLAN_2026-05-18.md`)
+- **Encrypted backups landed** (backup audit B3)
+- **Read-only prod role for sync** (backup audit B1)
+- **Sync script DB-name guard** (B2 — DONE in current commit)
+- **Staging environment confirmed deploying** (currently broken;
+  requires Railway dashboard fix from olivia)
+- **Privacy policy + ToS drafted**
+- **Google Cloud project created**: OAuth consent screen configured,
+  test users added, then submitted for verification before going
+  public-facing (avoids the "this app isn't verified" warning)
 
 ---
 
@@ -447,28 +498,87 @@ To revisit before implementation:
 
 ## Implementation gates
 
-Per security + backup audit (`plans/SECURITY_BACKUP_AUDIT_2026-05-18.md`):
+Before any `users` row exists in production, ALL of the following
+must be done. These are blockers, not nice-to-haves.
 
-Before any `users` row exists in production:
+### Security gates (from `SECURITY_BACKUP_AUDIT_2026-05-18.md`)
 
-- [ ] Alembic baseline (audit B4)
-- [ ] Encrypted backups via age + R2 (audit B3)
-- [ ] Read-only prod role for staging sync (audit B1)
-- [ ] Sync script DB-name guard + dry-run default (audit B2)
-- [ ] Privacy policy + ToS drafted, linked from /login
-- [ ] Soft-delete + cascade-anonymize designed (audit recommendations)
-- [ ] `/account/export` endpoint scaffolded (audit recommendations)
-- [ ] Healthchecks.io + UptimeRobot monitoring live (audit B6)
-- [ ] Breach notification template at `plans/BREACH_NOTIFICATION_TEMPLATE.md`
-- [ ] Disaster recovery runbook at `plans/DR_RUNBOOK.md`
+- [x] **S1** `previous_vote` integrity — server reads truth from DB
+- [ ] **S2** ProxyFix middleware so rate limits work per-user, not per-Railway-IP
+- [ ] **S3** Either implement or delete `ADMIN_LOGIN_ATTEMPTS` dead code
+- [ ] **S4** Cache-Control becomes `private; no-store` when authenticated
+- [ ] **S5** Remove `@csrf.exempt` from public APIs; add CSRF tokens in JS
+- [ ] **S6** Sign `voter_id` cookie via itsdangerous (or move to Flask session)
+- [ ] **S7** Redis-backed rate limiter (shared state across workers)
+- [ ] **S8** `SECRET_KEY` mandatory in prod (fatal on absence)
+- [ ] **S11** Remove or admin-gate `/debug/env`
+- [ ] **S14** Bump `requests` to 2.32.x, `gunicorn` to 23.x
+- [ ] **S16** Generic error responses (no `str(e)` leak to JSON)
 
-These are blockers, not nice-to-haves. Auth ships after they're done,
-not before.
+### Backup gates
+
+- [ ] **B1** Read-only prod role for staging sync
+- [x] **B2** Sync script DB-name guard + dry-run default (DONE)
+- [ ] **B3** Encrypted backups via age + Cloudflare R2 secondary destination
+- [ ] **B6** Healthchecks.io + UptimeRobot monitoring
+
+### Python foundation gates (from `PYTHON_CLEANUP_PLAN_2026-05-18.md`)
+
+- [ ] **PR 3 Alembic adopted** — first three migrations validated;
+      baseline matches prod byte-for-byte
+
+### Operational gates
+
+- [ ] **Staging environment confirmed deploying** (currently broken —
+      requires Railway dashboard fix from olivia)
+- [ ] **Google Cloud project** created + OAuth consent screen verified
+      for production use (avoids the "this app isn't verified" warning)
+- [ ] **Resend account** activated, sender domain DNS validated
+- [ ] **Privacy policy + ToS drafted**, linked from /login
+- [ ] **Soft-delete + cascade-anonymize designed** into schema
+- [ ] **`/account/export` endpoint scaffolded**
+- [ ] **Breach notification template** at `plans/BREACH_NOTIFICATION_TEMPLATE.md`
+- [ ] **Disaster recovery runbook** at `plans/DR_RUNBOOK.md`
+
+---
+
+## Open questions
+
+To revisit before implementation:
+
+1. ~~**Day reset timezone**~~ → **DECIDED: UTC midnight**
+2. ~~**Email service**~~ → **DECIDED: Resend**
+3. **Civi gate exact copy** — draft option included above; final wording TBD
+4. ~~**Pre-account votes retroactive Votes**~~ → **DECIDED: no retroactive credit**
+5. **Coffee Runner vs Canvasser** — entry-level title naming, open
+6. **Lifetime aggregator UI shape** — simple counter, Pokédex, or
+   heatmap for v1? Lean Pokédex-style for v1 ("X of Y bills this
+   Congress") per research recommendation
+7. ~~**Streak shipping in v1**~~ → **DECIDED: defer to v2** with research-informed
+   design (free auto-freeze, backloaded rewards, user-initiated pause mode)
+8. **Civi conversation rewards Goodhart** — reward quiz *outcomes*
+   (correctness on bill the user just voted on) rather than conversation
+   length — sidesteps gameability entirely. Defer full design to Civi work.
+9. **OAuth-discovered email already has magic-link account** — confirm
+   the "auto-link by email match" UX feels right vs. asking the user
+   "an account with this email already exists, link them?"
 
 ---
 
 ## Document history
 
-- 2026-05-18 — Initial doc. Auth + gamification + Civi v1 plan
-  drafted. Daily cap set to 5 votes. Live trivia contests added to
-  v2/v3 backlog. Tier ladder finalized at 20 tiers.
+- 2026-05-18 (morning) — Initial doc. Auth + gamification + Civi v1
+  plan drafted. Daily cap set to 5 votes. Live trivia contests added
+  to v2/v3 backlog. Tier ladder finalized at 20 tiers.
+- 2026-05-18 (afternoon) — Added defense-in-depth layer to auth model
+  (Turnstile, dwell-time, anomaly detection). Bot policy clarified:
+  open for reads, gated for writes.
+- 2026-05-18 (evening, this revision) —
+  - Promoted Google OAuth from "defer to v2" to v1 alternative path.
+    Two auth paths now: magic-link OR Google. Same user, same tier.
+  - `users` schema extended with `signup_method` + `google_sub`.
+  - Implementation gates expanded to include all S1-S8 security
+    fixes + Alembic adoption + staging deploy fix.
+  - Several open questions resolved per gamification research findings.
+  - Cross-referenced `PYTHON_CLEANUP_PLAN_2026-05-18.md` for the
+    foundation work that must precede auth.

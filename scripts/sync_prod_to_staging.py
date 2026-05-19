@@ -66,6 +66,18 @@ def parse_db_name(dsn: str) -> str:
     except Exception:
         return ""
 
+
+def parse_db_host(dsn: str) -> str:
+    """Extract the hostname (proxy/server) from a Postgres DSN. On
+    Railway, every managed Postgres is named 'railway' but lives at a
+    distinct proxy hostname, so host is what disambiguates one DB from
+    another."""
+    try:
+        parsed = urlparse(dsn)
+        return (parsed.hostname or "").lower()
+    except Exception:
+        return ""
+
 def get_db_connection(url):
     """Creates a raw psycopg2 connection."""
     try:
@@ -142,8 +154,10 @@ def sync_table(prod_conn, staging_conn, table_name: str, dry_run: bool = False):
             # 3. Write to Staging (skipped on dry-run)
             if dry_run:
                 # Count what's in staging today so the user sees the delta.
-                staging_cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-                current_count = staging_cursor.fetchone()[0]
+                # Cursor is a RealDictCursor, so fetchone() returns a dict.
+                staging_cursor.execute(f"SELECT COUNT(*) AS cnt FROM {table_name}")
+                row_dict = staging_cursor.fetchone() or {}
+                current_count = row_dict.get("cnt", 0)
                 logger.info(
                     f"   [DRY-RUN] Would DELETE {current_count} staging rows then "
                     f"INSERT {row_count} prod rows. No write performed."
@@ -226,33 +240,41 @@ def main():
         logger.error("❌ ERROR: Prod and staging URLs are identical. Aborting to prevent data loss.")
         sys.exit(1)
 
-    # 2b. Refuse if the destination DB name doesn't look like staging.
-    # This is the single most important guard against an env-var swap
-    # destroying prod data. The check is conservative: it requires the
-    # literal substring 'staging' in the target DB name, case-insensitive.
     staging_db_name = parse_db_name(staging_url)
     prod_db_name = parse_db_name(prod_url)
-    logger.info(f"📊 Source DB     : {prod_db_name or '(unparseable)'}")
-    logger.info(f"📊 Target DB     : {staging_db_name or '(unparseable)'}")
+    staging_host = parse_db_host(staging_url)
+    prod_host = parse_db_host(prod_url)
 
-    if not staging_db_name:
-        logger.error("❌ ERROR: Could not parse target DB name from STAGING_DATABASE_URL. Aborting.")
+    logger.info(f"📊 Source DB     : {prod_db_name or '(unparseable)'} @ {prod_host or '(unknown host)'}")
+    logger.info(f"📊 Target DB     : {staging_db_name or '(unparseable)'} @ {staging_host or '(unknown host)'}")
+
+    if not staging_db_name or not staging_host:
+        logger.error("❌ ERROR: Could not parse target DB from STAGING_DATABASE_URL. Aborting.")
         sys.exit(1)
 
-    if not args.allow_non_staging and "staging" not in staging_db_name.lower():
+    # 2b. PRIMARY GUARD: source and target hosts must differ.
+    # On Railway, every managed Postgres is named 'railway' but lives at a
+    # distinct proxy hostname, so host is what disambiguates one DB from
+    # another. If prod and staging resolve to the same host, that's a
+    # showstopper regardless of DB name.
+    if prod_host and staging_host and prod_host == staging_host:
         logger.error(
-            f"❌ ERROR: Target DB '{staging_db_name}' does not contain 'staging' in its name.\n"
-            f"   This guard prevents accidentally overwriting production if env vars\n"
-            f"   are swapped. If your staging DB legitimately has a non-standard name,\n"
-            f"   re-run with --allow-non-staging."
+            f"❌ ERROR: Source and target DBs are at the same host ({prod_host}).\n"
+            f"   Cannot safely sync — they're the same physical database."
         )
         sys.exit(1)
 
-    # 2c. Tighter: refuse if the target DB name *matches* the source DB name.
-    # Different URLs but identical DB names is also a red flag.
-    if prod_db_name and prod_db_name == staging_db_name:
+    # 2c. SECONDARY GUARD: target DB name should look like staging.
+    # Conservative check, intended for non-Railway hosts where the DB is
+    # actually named e.g. 'teencivics_staging'. Bypass via --allow-non-staging
+    # on Railway-managed Postgres (which names every DB 'railway').
+    if not args.allow_non_staging and "staging" not in staging_db_name.lower():
         logger.error(
-            f"❌ ERROR: Source and target DB names are both '{prod_db_name}'. Aborting."
+            f"❌ ERROR: Target DB name '{staging_db_name}' does not contain 'staging'.\n"
+            f"   This guard prevents accidentally overwriting production when env\n"
+            f"   vars are swapped. On Railway-managed Postgres (all DBs named\n"
+            f"   'railway'), pass --allow-non-staging to bypass; the host-mismatch\n"
+            f"   guard above is the real safety net there."
         )
         sys.exit(1)
 

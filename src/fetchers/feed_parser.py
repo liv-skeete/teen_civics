@@ -753,12 +753,6 @@ def get_random_user_agent():
     import random
     return random.choice(USER_AGENTS)
 
-def fetch_recent_bills(limit: int = 5, include_text: bool = True) -> List[Dict[str, Any]]:
-    """
-    Wrapper function to fetch and enrich bills.
-    """
-    return fetch_and_enrich_bills(limit=limit)
-
 # ---- Feed parsing and HTML introduced-date extraction (added) ----
 
 def _extract_introduced_date_from_bill_page(url: str, timeout: int = 30) -> Optional[str]:

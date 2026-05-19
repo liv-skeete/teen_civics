@@ -6,7 +6,7 @@ import logging
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
-from src.database.db_utils import get_all_bills
+from src.database.db import get_all_bills
 from src.database.connection import get_connection_string
 from src.load_env import load_env
 
