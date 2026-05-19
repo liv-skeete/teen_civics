@@ -319,6 +319,7 @@ textarea:focus-visible {
     background-color: var(--color-cards-dark);
     box-shadow: none;
     position: sticky;
+    margin-bottom: 0;
 }
 
 /* Seam-masking fix for 1px line artifact under sticky navbar in dark mode */
@@ -332,42 +333,6 @@ textarea:focus-visible {
     height: 1px;
     background-color: var(--color-cards-dark);
     z-index: 1001;
-}
-
-
-
-/* Remove gap between navbar and hero section in dark mode */
-[data-theme="dark"] .hero-section,
-.dark-theme .hero-section {
-    margin-top: 0;
-    padding-top: var(--spacing-xxl);
-}
-
-/* Ensure navbar has no margin-bottom */
-[data-theme="dark"] .navbar,
-.dark-theme .navbar {
-    margin-bottom: 0;
-}
-
-/* Remove any top borders/margins that create a line after navbar */
-[data-theme="dark"] .navbar + *,
-.dark-theme .navbar + * {
-    margin-top: 0 !important;
-    border-top: none !important;
-}
-
-/* Specifically target hero section */
-[data-theme="dark"] .hero-section,
-.dark-theme .hero-section {
-    margin-top: 0;
-    border-top: none;
-}
-
-/* Also target main-content */
-[data-theme="dark"] .main-content,
-.dark-theme .main-content {
-    margin-top: 0;
-    border-top: none;
 }
 
 .nav-container {
