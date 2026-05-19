@@ -379,17 +379,30 @@
       if (!overlay || !resultsContent) return;
 
       const hasVoted = getStored(`voted_${billId}`);
+      const badge = preview.querySelector(".your-vote-badge");
       if (hasVoted) {
         // User has voted - show results, hide overlay
         overlay.style.display = "none";
         resultsContent.style.display = "block";
-        // Mark the matching display row so the "✓ Your vote" badge appears
-        const matchedRow = resultsContent.querySelector(`.poll-option[data-vote="${hasVoted}"]`);
-        if (matchedRow) matchedRow.classList.add("selected");
+        // Populate the heading-level "you voted X" badge — sits in the
+        // poll header, color-coded yes/no, instead of floating between bars.
+        if (badge) {
+          const label = hasVoted === "yes" ? "Voted Yes"
+                       : hasVoted === "no" ? "Voted No"
+                       : "Voted Unsure";
+          badge.textContent = "✓ " + label;
+          badge.dataset.vote = hasVoted;
+          badge.hidden = false;
+        }
       } else {
         // User has not voted - show overlay, hide results
         overlay.style.display = "flex";
         resultsContent.style.display = "none";
+        if (badge) {
+          badge.hidden = true;
+          badge.textContent = "";
+          delete badge.dataset.vote;
+        }
       }
     });
   }

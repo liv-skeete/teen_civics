@@ -160,7 +160,10 @@
 
                 {% if bill.poll_results_yes is defined or bill.poll_results_no is defined %}
                 <div class="poll-preview" data-bill-id="{{ bill.bill_id }}">
-                    <h4>Community Poll</h4>
+                    <div class="poll-preview-header">
+                        <h4>Community Poll</h4>
+                        <span class="your-vote-badge" hidden aria-live="polite"></span>
+                    </div>
                     <p class="poll-subtitle">Vote to see who sponsored this bill!</p>
                     
                     <!-- Vote to unlock overlay (shown when user hasn't voted) -->
