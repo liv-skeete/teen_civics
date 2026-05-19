@@ -42,6 +42,13 @@
   function getStored(key) { try { return localStorage.getItem(key); } catch { return null; } }
   function setStored(key, val) { try { localStorage.setItem(key, val); } catch {} }
 
+  // CSRF token from <meta name="csrf-token"> (set in base.html). Sent
+  // as X-CSRFToken header on all state-changing POSTs.
+  function getCsrfToken() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute("content") || "") : "";
+  }
+
   // --- Toast Notification ---
   let toastEl = null;
   let toastTimer = null;
@@ -231,6 +238,7 @@
         headers: {
           "Content-Type": "application/json",
           "X-Request-ID": randReqId(),
+          "X-CSRFToken": getCsrfToken(),
         },
         body: JSON.stringify({ zip }),
       });
@@ -253,6 +261,7 @@
             headers: {
               "Content-Type": "application/json",
               "X-Request-ID": randReqId(),
+              "X-CSRFToken": getCsrfToken(),
             },
             body: JSON.stringify({ state: dist.state, district: dist.district }),
           });
@@ -529,6 +538,7 @@
         headers: {
           "Content-Type": "application/json",
           "X-Request-ID": randReqId(),
+          "X-CSRFToken": getCsrfToken(),
         },
         body: JSON.stringify({
           bill_id: billId,

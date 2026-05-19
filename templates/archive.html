@@ -159,7 +159,10 @@
                 </div>
 
                 {% if bill.poll_results_yes is defined or bill.poll_results_no is defined %}
-                <div class="poll-preview" data-bill-id="{{ bill.bill_id }}">
+                <div class="poll-preview"
+                     data-bill-id="{{ bill.bill_id }}"
+                     data-yes-count="{{ bill.poll_results_yes or 0 }}"
+                     data-no-count="{{ bill.poll_results_no or 0 }}">
                     <div class="poll-preview-header">
                         <h4>Community Poll</h4>
                         <span class="your-vote-badge" hidden aria-live="polite"></span>
