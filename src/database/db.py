@@ -1842,50 +1842,70 @@ def record_vote_and_update_poll(
         bill_id: The bill identifier
         vote_type: 'yes', 'no', or 'unsure'
         voter_id: UUID string identifying the voter
-        previous_vote: The user's previous vote if changing ('yes' or 'no')
+        previous_vote: DEPRECATED. Ignored. Retained for backward-compatibility
+            of the call signature. The voter's actual prior vote is looked
+            up server-side from the votes table.
 
     Returns:
         bool: True if the poll update succeeded, False otherwise
+
+    Security note: prior implementations trusted the client-supplied
+    previous_vote, which let any script decrement arbitrary poll counters
+    by passing fake values. This implementation reads the voter's actual
+    prior vote from the votes table inside the same transaction.
     """
     normalized_id = normalize_bill_id(bill_id)
     try:
         with db_connect() as conn:
             with conn.cursor() as cursor:
-                # 1) Decrement previous vote if changing
-                if previous_vote:
-                    prev = previous_vote.lower()
-                    if prev == 'yes':
+                # 1) Look up THIS voter's actual prior vote for THIS bill,
+                # server-side. Never trust client-supplied previous_vote.
+                cursor.execute(
+                    'SELECT vote_type FROM votes WHERE voter_id = %s AND bill_id = %s',
+                    (voter_id, bill_id),
+                )
+                row = cursor.fetchone()
+                actual_prev = (row[0] if row else None)
+
+                # 2) Decrement the previous vote (if any). Only changes
+                # the tally when the voter actually has a recorded prior
+                # vote AND it differs from the new vote.
+                if actual_prev and actual_prev != vote_type:
+                    if actual_prev == 'yes':
                         cursor.execute(
                             'UPDATE bills SET poll_results_yes = GREATEST(0, COALESCE(poll_results_yes, 0) - 1) WHERE bill_id = %s',
                             (normalized_id,),
                         )
-                    elif prev == 'no':
+                    elif actual_prev == 'no':
                         cursor.execute(
                             'UPDATE bills SET poll_results_no = GREATEST(0, COALESCE(poll_results_no, 0) - 1) WHERE bill_id = %s',
                             (normalized_id,),
                         )
 
-                # 2) Increment new vote
-                vt = vote_type.lower()
-                if vt == 'yes':
-                    cursor.execute(
-                        'UPDATE bills SET poll_results_yes = COALESCE(poll_results_yes, 0) + 1 WHERE bill_id = %s',
-                        (normalized_id,),
-                    )
-                elif vt == 'no':
-                    cursor.execute(
-                        'UPDATE bills SET poll_results_no = COALESCE(poll_results_no, 0) + 1 WHERE bill_id = %s',
-                        (normalized_id,),
-                    )
-                elif vt != 'unsure':
-                    logger.error(f"Invalid vote_type: {vote_type}")
-                    return False
+                # 3) Increment the new vote (only if vote actually changed
+                # or is brand new — voting the same way twice is a no-op
+                # on aggregate counters).
+                if actual_prev != vote_type:
+                    vt = vote_type.lower()
+                    if vt == 'yes':
+                        cursor.execute(
+                            'UPDATE bills SET poll_results_yes = COALESCE(poll_results_yes, 0) + 1 WHERE bill_id = %s',
+                            (normalized_id,),
+                        )
+                    elif vt == 'no':
+                        cursor.execute(
+                            'UPDATE bills SET poll_results_no = COALESCE(poll_results_no, 0) + 1 WHERE bill_id = %s',
+                            (normalized_id,),
+                        )
+                    elif vt != 'unsure':
+                        logger.error(f"Invalid vote_type: {vote_type}")
+                        return False
 
-                if cursor.rowcount == 0:
-                    logger.warning(f"No bill found with id {normalized_id} to update poll results")
-                    return False
+                    if cursor.rowcount == 0:
+                        logger.warning(f"No bill found with id {normalized_id} to update poll results")
+                        return False
 
-                # 3) Record individual vote (same connection, same transaction)
+                # 4) Record (or update) the individual vote in same transaction
                 cursor.execute('''
                 INSERT INTO votes (voter_id, bill_id, vote_type)
                 VALUES (%s, %s, %s)
@@ -1895,7 +1915,10 @@ def record_vote_and_update_poll(
                     updated_at = CURRENT_TIMESTAMP
                 ''', (voter_id, bill_id, vote_type))
 
-                logger.info(f"Recorded vote + poll update for voter {voter_id[:8]}... on bill {normalized_id}: {vote_type}")
+                logger.info(
+                    f"Recorded vote + poll update for voter {voter_id[:8]}... on bill {normalized_id}: "
+                    f"{actual_prev or 'new'} -> {vote_type}"
+                )
                 return True
     except Exception as e:
         logger.error(f"Error in record_vote_and_update_poll for {normalized_id}: {e}")

@@ -10,19 +10,31 @@ Synced Tables:
 
 Skipped Tables:
 - votes (ISOLATED - staging has its own votes)
+- users, magic_links, civitas_ledger (ISOLATED — staging keeps test accounts)
 
 Safety:
-- Fails if PROD_DATABASE_URL == DATABASE_URL
-- PROD connection is READ-ONLY
-- Staging tables are cleared before insert
+- Dry-run by default; requires --apply to actually write
+- Fails if prod and staging URLs are identical
+- Fails if the staging DSN's database name doesn't contain 'staging'
+  (case-insensitive). Prevents catastrophic prod-overwrite if env
+  vars are accidentally swapped.
+- PROD connection is READ-ONLY in intent; the read-only role should
+  be enforced in Postgres role grants
+- Staging tables are cleared before insert (DESTRUCTIVE)
+
+Usage:
+    python scripts/sync_prod_to_staging.py            # dry-run, no writes
+    python scripts/sync_prod_to_staging.py --apply    # actually write
 """
 
+import argparse
+import logging
 import os
 import sys
-import logging
+from urllib.parse import urlparse
+
 import psycopg2
 import psycopg2.extras
-from typing import List, Dict, Any
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -34,6 +46,25 @@ load_env()
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# Tables that get synced from prod. Add new tables here ONLY after confirming
+# they should be a strict prod-overwrite (no staging-only state on this table).
+SYNCED_TABLES = ("bills", "rep_contact_forms")
+
+# Tables that must NEVER be in SYNCED_TABLES — staging keeps its own copies.
+ISOLATED_TABLES = ("votes", "users", "magic_links", "civitas_ledger")
+
+
+def parse_db_name(dsn: str) -> str:
+    """Extract the database name from a Postgres DSN. Returns empty
+    string if the DSN can't be parsed (we treat that as a safety failure
+    upstream)."""
+    try:
+        parsed = urlparse(dsn)
+        # parsed.path is like '/teencivics_staging'
+        return (parsed.path or "").lstrip("/").strip()
+    except Exception:
+        return ""
 
 def get_db_connection(url):
     """Creates a raw psycopg2 connection."""
@@ -59,13 +90,17 @@ def get_columns(cursor, table_name):
     except Exception as e:
         return None
 
-def sync_table(prod_conn, staging_conn, table_name: str):
+def sync_table(prod_conn, staging_conn, table_name: str, dry_run: bool = False):
     """
     Syncs a single table from prod to staging.
     Reads all columns dynamically to ensure matching schema.
     Handled schema drift by only syncing intersection of columns.
+
+    When dry_run is True, all SELECT / inspection queries still run so we
+    can report what *would* happen, but no DELETE or INSERT is issued.
     """
-    logger.info(f"🔄 Syncing table: {table_name}...")
+    label = "[DRY-RUN] " if dry_run else ""
+    logger.info(f"{label}🔄 Syncing table: {table_name}...")
 
     try:
         # 1. Inspect Schema for both Prod and Staging
@@ -104,25 +139,32 @@ def sync_table(prod_conn, staging_conn, table_name: str):
                 logger.info(f"   ⚠️ No data in production {table_name}. Skipping insert.")
                 return
 
-            # 3. Write to Staging
-            
+            # 3. Write to Staging (skipped on dry-run)
+            if dry_run:
+                # Count what's in staging today so the user sees the delta.
+                staging_cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                current_count = staging_cursor.fetchone()[0]
+                logger.info(
+                    f"   [DRY-RUN] Would DELETE {current_count} staging rows then "
+                    f"INSERT {row_count} prod rows. No write performed."
+                )
+                staging_conn.rollback()
+                return
+
             # Clear existing data
             logger.info(f"   🧹 Clearing staging table {table_name}...")
             staging_cursor.execute(f"DELETE FROM {table_name}")
-            
+
             # Prepare INSERT statement
-            # placeholders: %s, %s, %s...
             placeholders = ", ".join(["%s"] * len(common_columns))
             insert_query = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders})"
-            
+
             # Convert RealDictRow to tuple values for executemany
-            # Note: We must ensure order matches 'common_columns' list
-            # Since common_columns is a list, iterating it guarantees order
             values = [tuple(row[col] for col in common_columns) for row in rows]
-            
+
             logger.info(f"   💾 Inserting {row_count} rows into Staging...")
             staging_cursor.executemany(insert_query, values)
-            
+
         staging_conn.commit()
         logger.info(f"✅ Synced {table_name}: {row_count} rows.")
 
@@ -132,7 +174,29 @@ def sync_table(prod_conn, staging_conn, table_name: str):
         raise
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Sync reference tables from production to staging.",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write to staging. Default is dry-run.",
+    )
+    parser.add_argument(
+        "--allow-non-staging",
+        action="store_true",
+        help=(
+            "Skip the safety check that requires 'staging' to appear in the "
+            "target DB name. Only use if your staging DB has a non-standard "
+            "name. THINK FIRST."
+        ),
+    )
+    args = parser.parse_args()
+    dry_run = not args.apply
+
     logger.info("🚀 Starting Production to Staging Sync...")
+    if dry_run:
+        logger.info("🔒 DRY-RUN mode (no writes). Pass --apply to actually sync.")
 
     # 1. Load Environment Variables
     # In CI, GitHub Actions sets PROD_DATABASE_URL and DATABASE_URL (staging secrets).
@@ -150,14 +214,46 @@ def main():
     if not prod_url:
         logger.error("❌ Missing PROD_DATABASE_URL (or DATABASE_URL) environment variable.")
         sys.exit(1)
-    
+
     if not staging_url:
         logger.error("❌ Missing STAGING_DATABASE_URL (or DATABASE_URL with PROD_DATABASE_URL set) environment variable.")
         sys.exit(1)
 
-    # 2. Safety Check
+    # 2. Safety checks BEFORE connecting
+
+    # 2a. Refuse if prod and staging URLs are identical
     if prod_url == staging_url:
         logger.error("❌ ERROR: Prod and staging URLs are identical. Aborting to prevent data loss.")
+        sys.exit(1)
+
+    # 2b. Refuse if the destination DB name doesn't look like staging.
+    # This is the single most important guard against an env-var swap
+    # destroying prod data. The check is conservative: it requires the
+    # literal substring 'staging' in the target DB name, case-insensitive.
+    staging_db_name = parse_db_name(staging_url)
+    prod_db_name = parse_db_name(prod_url)
+    logger.info(f"📊 Source DB     : {prod_db_name or '(unparseable)'}")
+    logger.info(f"📊 Target DB     : {staging_db_name or '(unparseable)'}")
+
+    if not staging_db_name:
+        logger.error("❌ ERROR: Could not parse target DB name from STAGING_DATABASE_URL. Aborting.")
+        sys.exit(1)
+
+    if not args.allow_non_staging and "staging" not in staging_db_name.lower():
+        logger.error(
+            f"❌ ERROR: Target DB '{staging_db_name}' does not contain 'staging' in its name.\n"
+            f"   This guard prevents accidentally overwriting production if env vars\n"
+            f"   are swapped. If your staging DB legitimately has a non-standard name,\n"
+            f"   re-run with --allow-non-staging."
+        )
+        sys.exit(1)
+
+    # 2c. Tighter: refuse if the target DB name *matches* the source DB name.
+    # Different URLs but identical DB names is also a red flag.
+    if prod_db_name and prod_db_name == staging_db_name:
+        logger.error(
+            f"❌ ERROR: Source and target DB names are both '{prod_db_name}'. Aborting."
+        )
         sys.exit(1)
 
     # 3. Connect
@@ -166,20 +262,26 @@ def main():
     staging_conn = get_db_connection(staging_url)
 
     try:
-        # 4. Sync Tables
-        sync_table(prod_conn, staging_conn, "bills")
-        sync_table(prod_conn, staging_conn, "rep_contact_forms")
-        
+        # 4. Sync Tables (dry-run mode skips DELETE / INSERT)
+        for table in SYNCED_TABLES:
+            sync_table(prod_conn, staging_conn, table, dry_run=dry_run)
+
         logger.info("=" * 40)
-        logger.info("✅ Data Sync Complete!")
+        if dry_run:
+            logger.info("✅ Dry-run complete. Re-run with --apply to write.")
+        else:
+            logger.info("✅ Data Sync Complete!")
         logger.info("=" * 40)
 
     except Exception as e:
         logger.error(f"❌ Critical error during sync: {e}")
         sys.exit(1)
     finally:
-        if prod_conn: prod_conn.close()
-        if staging_conn: staging_conn.close()
+        if prod_conn:
+            prod_conn.close()
+        if staging_conn:
+            staging_conn.close()
+
 
 if __name__ == "__main__":
     main()
