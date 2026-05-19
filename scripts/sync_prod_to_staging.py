@@ -27,6 +27,10 @@ from typing import List, Dict, Any
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load .env for local development
+from src.load_env import load_env
+load_env()
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -131,15 +135,24 @@ def main():
     logger.info("🚀 Starting Production to Staging Sync...")
 
     # 1. Load Environment Variables
-    prod_url = os.environ.get("PROD_DATABASE_URL")
-    staging_url = os.environ.get("DATABASE_URL")
+    # In CI, GitHub Actions sets PROD_DATABASE_URL and DATABASE_URL (staging secrets).
+    # Locally, .env has DATABASE_URL (prod) and STAGING_DATABASE_URL (staging),
+    # so we fall back to those when the CI-style vars aren't set.
+    prod_url = os.environ.get("PROD_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    staging_url = os.environ.get("STAGING_DATABASE_URL")
+
+    # In CI the staging environment sets DATABASE_URL to the staging DB,
+    # but locally DATABASE_URL is prod, so only use it as staging_url if
+    # PROD_DATABASE_URL was separately provided (meaning DATABASE_URL is staging).
+    if not staging_url and os.environ.get("PROD_DATABASE_URL"):
+        staging_url = os.environ.get("DATABASE_URL")
 
     if not prod_url:
-        logger.error("❌ Missing PROD_DATABASE_URL environment variable.")
+        logger.error("❌ Missing PROD_DATABASE_URL (or DATABASE_URL) environment variable.")
         sys.exit(1)
     
     if not staging_url:
-        logger.error("❌ Missing DATABASE_URL environment variable.")
+        logger.error("❌ Missing STAGING_DATABASE_URL (or DATABASE_URL with PROD_DATABASE_URL set) environment variable.")
         sys.exit(1)
 
     # 2. Safety Check
