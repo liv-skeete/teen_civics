@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+  <div class="auth-card">
+    <h1>Sign in</h1>
+    <p>Welcome back. Sign in to track your Votes and rank.</p>
+
+    {% if error %}
+    <div class="auth-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('login') }}" class="auth-form" autocomplete="on">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="30" autofocus>
+
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8" maxlength="128">
+
+      <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+
+    <p class="auth-foot">New here? <a href="{{ url_for('signup') }}">Create an account</a>.</p>
+  </div>
+</div>
+{% endblock %}

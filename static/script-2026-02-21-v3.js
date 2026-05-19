@@ -18,6 +18,39 @@
   const randReqId = () => { try { return crypto.randomUUID(); } catch { return String(Math.random()).slice(2); } };
   const $all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+  // Refresh the navbar user pill AND the right-side rail after a vote.
+  // Hits /api/me; silently no-ops when not logged in. Reuses
+  // data-rail-* attributes that appear in both surfaces.
+  function refreshUserRail() {
+    const hasPill = document.querySelector(".nav-user");
+    const hasRail = document.querySelector("[data-user-rail]");
+    if (!hasPill && !hasRail) return;
+
+    fetch(API_BASE + "/api/me", { headers: { "Cache-Control": "no-store" } })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((me) => {
+        if (!me || !me.authenticated) return;
+        // Update every element bound to a data-rail-* attribute, no
+        // matter which surface (navbar pill or right rail) it lives in.
+        document.querySelectorAll("[data-rail-tier]").forEach((el) => { el.textContent = me.tier; });
+        document.querySelectorAll("[data-rail-balance]").forEach((el) => { el.textContent = String(Math.round(me.balance)); });
+        document.querySelectorAll("[data-rail-lifetime]").forEach((el) => { el.textContent = String(me.lifetime_votes_cast); });
+        document.querySelectorAll("[data-rail-daily]").forEach((el) => { el.textContent = `${me.daily_used}/${me.daily_cap}`; });
+        document.querySelectorAll("[data-rail-fill]").forEach((el) => {
+          if (me.progress) el.style.width = me.progress.percent + "%";
+        });
+        document.querySelectorAll("[data-rail-to-next]").forEach((el) => {
+          if (me.progress && me.progress.votes_to_next != null) {
+            el.textContent = String(Math.round(me.progress.votes_to_next));
+          }
+        });
+        document.querySelectorAll("[data-rail-next-tier]").forEach((el) => {
+          if (me.progress && me.progress.next_tier) el.textContent = me.progress.next_tier;
+        });
+      })
+      .catch(() => {});
+  }
+
   // Read the per-page CSRF token from the <meta name="csrf-token"> tag
   // (set in base.html). Returns "" if missing — server will reject the
   // request, which is the correct behavior. Sent as X-CSRFToken on all
@@ -157,6 +190,9 @@
       // round-trip returns. The server is already consistent (S1 fix),
       // and the followup fetch corrects any drift.
       applyOptimisticVoteDelta(widget, voteType, previousVote);
+
+      // Refresh the user rail / navbar tier badge if the user is logged in
+      refreshUserRail();
 
       // Pre-warm reasoning cache in background (don't await, don't block UI)
       fetch(API_BASE + '/api/pre-generate-reasoning', {
