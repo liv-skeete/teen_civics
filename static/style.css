@@ -1,15 +1,7 @@
 /* TeenCivics Design System */
 
-/* TODO: Future improvements (SAVE FOR LATER):
- * - Increase touch target sizes to 44x44px minimum for mobile (WCAG 2.5.5)
- * - Add loading spinners for async operations
- * - Add aria-current="page" to active navigation items
- * - Implement keyboard navigation handlers for interactive elements
- * - Add meta theme-color for mobile browsers
- */
-
 :root {
-    /* Color Palette - Light Theme (Default) */
+    /* Color palette */
     --color-beige: #FAF7F2;
     --color-white: #FFFFFF;
     --color-brown-black: #3E2723;
@@ -21,40 +13,21 @@
     --color-warning: #FF9800;
     --color-error: #F44336;
     --color-info: #2196F3;
-    
-    /* Light Theme Variables */
-    --color-background: var(--color-beige);
-    --color-text: var(--color-brown-black);
-    --color-cards: var(--color-white);
-    --color-accent: var(--color-navy);
-    --color-borders: var(--color-gray);
-    
-    /* Dark Theme Colors */
+
+    /* Dark theme palette */
     --color-background-dark: #1e1e1e;
     --color-cards-dark: #2a2a2a;
     --color-text-dark: #e8e8e8;
     --color-accent-dark: #6ba3e8;
     --color-borders-dark: #444444;
-    
-    /* Theme Variables */
+
+    /* Theme tokens (light defaults; overridden in [data-theme="dark"]) */
     --color-background: var(--color-beige);
     --color-text: var(--color-brown-black);
     --color-cards: var(--color-white);
     --color-accent: var(--color-navy);
     --color-borders: var(--color-gray);
-}
 
-/* Dark Theme */
-[data-theme="dark"],
-.dark-theme {
-    --color-background: var(--color-background-dark);
-    --color-text: var(--color-text-dark);
-    --color-cards: var(--color-cards-dark);
-    --color-accent: var(--color-accent-dark);
-    --color-borders: var(--color-borders-dark);
-}
-
-:root {
     /* Spacing */
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
@@ -62,7 +35,7 @@
     --spacing-lg: 1.5rem;
     --spacing-xl: 2rem;
     --spacing-xxl: 3rem;
-    
+
     /* Typography */
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-size-xs: 0.75rem;
@@ -72,39 +45,46 @@
     --font-size-xl: 1.5rem;
     --font-size-xxl: 2rem;
     --font-size-xxxl: 2.5rem;
-    
+
     /* Borders */
     --border-radius: 8px;
     --border-radius-lg: 12px;
     --border-width: 1px;
     --border-color: var(--color-gray);
-    
+
     /* Shadows */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-    
-    /* Standardized Button Sizing
-     * Desktop: sized by padding (no min-height forced on .btn)
-     * Mobile/touch: min-height used as floor for accessibility (44px WCAG target)
-     * Form controls (search, select): always min-height for consistency */
+
+    /* Buttons */
     --btn-touch-target: 44px;
     --btn-padding-y: var(--spacing-sm);
     --btn-padding-x: var(--spacing-lg);
     --btn-padding-y-sm: var(--spacing-xs);
     --btn-padding-x-sm: var(--spacing-md);
-    
-    /* Standardized Card Styling */
+
+    /* Cards */
     --card-border-width: 2px;
     --card-border-color: var(--color-navy);
     --card-border-radius: var(--border-radius-lg);
     --card-shadow: var(--shadow-md);
     --card-padding: var(--spacing-lg);
-    
+
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
     --transition-theme: 0.3s ease;
+}
+
+/* Dark theme overrides */
+[data-theme="dark"],
+.dark-theme {
+    --color-background: var(--color-background-dark);
+    --color-text: var(--color-text-dark);
+    --color-cards: var(--color-cards-dark);
+    --color-accent: var(--color-accent-dark);
+    --color-borders: var(--color-borders-dark);
 }
 
 /* Reset and Base Styles */
@@ -767,7 +747,7 @@ a.share-option:link {
 
 /* Hero Section */
 .hero-section {
-    background: linear-gradient(135deg, var(--color-navy) 0%, #283593 100%);
+    background-color: var(--color-navy);
     color: var(--color-white);
     padding: var(--spacing-xxl) 0;
     text-align: center;
@@ -802,13 +782,36 @@ a.share-option:link {
 
 /* Bill Cards */
 .bill-card {
-    background-color: var(--color-white);
+    background-color: var(--color-cards);
+    color: var(--color-text);
     border-radius: var(--card-border-radius);
     box-shadow: var(--card-shadow);
     padding: var(--card-padding);
     margin-bottom: var(--spacing-lg);
     transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
     border: var(--card-border-width) solid var(--card-border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.bills-grid .bill-card .bill-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: var(--spacing-md);
+}
+
+/* In archive cards, flex gap handles spacing — strip the implicit p-margin so
+   summary text doesn't double-space against the action buttons below it. */
+.bills-grid .bill-card .summary-preview,
+.bills-grid .bill-card .summary-preview p:last-child {
+    margin-bottom: 0;
+}
+
+/* When card has no poll-preview, push actions to the bottom so cards align */
+.bills-grid .bill-card:not(:has(.poll-preview)) .bill-actions {
+    margin-top: auto;
 }
 
 /* Dark theme bill card */
@@ -832,77 +835,16 @@ a.share-option:link {
     box-shadow: var(--card-shadow);
 }
 
-/* --- GIVEAWAY STYLES (commented out — giveaway ended 2026-03-19, keep for future events)
-.giveaway-steps {
-    list-style: none;
-    margin: 0 0 var(--spacing-md) 0;
-    padding-left: 0;
-}
-
-.giveaway-steps li {
-    margin-bottom: var(--spacing-xs);
-}
-
-.giveaway-social-links {
-    margin-top: var(--spacing-md);
-    margin-bottom: 0;
-    line-height: 1.8;
-}
-
-.giveaway-share-wrapper {
-    margin-top: var(--spacing-md);
-    text-align: center;
-}
-
-.giveaway-social-links a {
-    text-decoration: none;
-    white-space: nowrap;
-}
-
-.giveaway-social-links a:hover {
-    text-decoration: underline;
-}
-
-.giveaway-social-separator {
-    margin: 0 var(--spacing-xs);
-    color: var(--color-dark-gray);
-}
-
-[data-theme="dark"] .giveaway-social-separator,
-.dark-theme .giveaway-social-separator {
-    color: var(--color-text);
-}
-
-.giveaway-mobile-break {
-    display: none;
-}
-
-.giveaway-desktop-pipe {
-    margin: 0 0.25em;
-}
-
-@media (max-width: 768px) {
-    .giveaway-mobile-break {
-        display: block;
-    }
-
-    .giveaway-desktop-pipe {
-        display: none;
-    }
-
-    .giveaway-social-links a {
-        display: block;
-        margin-bottom: var(--spacing-xs);
-    }
-
-    .giveaway-social-separator {
-        display: none;
-    }
-}
---- END GIVEAWAY STYLES */
-
 .bill-header {
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.featured-bill .bill-header {
+    margin-bottom: var(--spacing-sm);
+}
+
+.featured-bill .bill-title {
+    margin-bottom: 0;
 }
 
 .bill-meta {
@@ -930,76 +872,53 @@ a.share-option:link {
     background-color: var(--color-borders-dark);
 }
 
+/* Bill status pills — each status defined once. Default is neutral gray. */
 .bill-status {
     font-size: var(--font-size-sm);
     font-weight: 500;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    color: var(--color-white) !important;
-    background-color: #666666 !important;
+    color: var(--color-white);
+    background-color: var(--color-dark-gray);
     transition: background-color 0.3s ease;
 }
 
 .bill-status.introduced,
 .bill-status.referred-to-committee {
-    background-color: var(--color-info) !important;
-    color: var(--color-white) !important;
-}
-
-/* Dark theme bill status */
-[data-theme="dark"] .bill-status,
-.dark-theme .bill-status {
-    background-color: #555555 !important;
-}
-
-[data-theme="dark"] .bill-status.introduced,
-[data-theme="dark"] .bill-status.referred-to-committee,
-.dark-theme .bill-status.introduced,
-.dark-theme .bill-status.referred-to-committee {
-    background-color: var(--color-info) !important;
+    background-color: var(--color-info);
 }
 
 .bill-status.committee-consideration,
 .bill-status.reported-by-committee {
-    background-color: var(--color-warning) !important;
-    color: var(--color-white) !important;
+    background-color: var(--color-warning);
 }
 
 .bill-status.passed-house,
 .bill-status.passed-senate,
 .bill-status.agreed-to-in-house,
-.bill-status.agreed-to-in-senate {
-    background-color: var(--color-success) !important;
-    color: var(--color-white) !important;
-}
-
-.bill-status.agreed-to-in-house,
-.bill-status.agreed-to-in-senate {
-    background-color: #4CAF50 !important;
-    color: #FFFFFF !important;
-}
-
+.bill-status.agreed-to-in-senate,
 .bill-status.became-law,
-.bill-status.vetoed {
-    background-color: #666666 !important;
-    color: var(--color-white) !important;
+.bill-status.enacted {
+    background-color: var(--color-success);
+}
+
+.bill-status.to-president,
+.bill-status.presented-to-president {
+    background-color: #C2410C;
 }
 
 .bill-status.failed-house,
-.bill-status.failed-senate {
-    background-color: var(--color-error) !important;
-    color: var(--color-white) !important;
-}
-
-.bill-status.became-law,
-.bill-status.enacted {
-    background-color: var(--color-success) !important;
-    color: var(--color-white) !important;
-}
-
+.bill-status.failed-senate,
 .bill-status.vetoed {
     background-color: var(--color-error);
-    color: var(--color-white);
+}
+
+/* Dark-mode brightening only for the "to president" pill (lighter burnt-orange) */
+[data-theme="dark"] .bill-status.to-president,
+[data-theme="dark"] .bill-status.presented-to-president,
+.dark-theme .bill-status.to-president,
+.dark-theme .bill-status.presented-to-president {
+    background-color: #EA580C;
 }
 
 .teen-impact-badge {
@@ -1065,7 +984,6 @@ a.share-option:link {
 .bill-actions {
     display: flex;
     gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
     flex-wrap: wrap;
     align-items: center;
 }
@@ -1124,6 +1042,29 @@ a.share-option:link {
     color: var(--color-white);
     border-color: var(--color-navy);
     cursor: default;
+}
+
+/* "Your vote" badge — archive previews only.
+   On main bill widget the dark navy fill is self-evident; on archive cards
+   where the user is scrolling many bills, the explicit tag earns its keep. */
+.poll-preview .poll-option.selected {
+    position: relative;
+}
+
+.poll-preview .poll-option.selected::after {
+    content: "✓ Your vote";
+    position: absolute;
+    top: -10px;
+    right: 10px;
+    background-color: var(--color-warning);
+    color: var(--color-brown-black);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    box-shadow: var(--shadow-sm);
+    pointer-events: none;
 }
 
 .poll-option.selected:hover {
@@ -1227,34 +1168,12 @@ a.share-option:link {
     font-size: var(--font-size-base);
 }
 
-.sponsor-name {
-    font-weight: 500;
-}
-
-.sponsor-party {
-    margin-left: var(--spacing-xs);
-}
-
-/* Party colors */
-.party-d {
-    color: #2563eb; /* Democrat blue */
-}
-
-.party-r {
-    color: #dc2626; /* Republican red */
-}
-
-.party-i {
-    color: #7c3aed; /* Independent purple */
-}
-
 /* Poll Preview (Archive Page) */
 .poll-preview {
-    margin-top: var(--spacing-lg);
     padding: var(--spacing-md);
-    background-color: var(--color-white);
+    background-color: var(--color-cards);
     border-radius: var(--border-radius);
-    border: var(--border-width) solid var(--color-gray);
+    border: var(--border-width) solid var(--color-borders);
 }
 
 .poll-preview h4 {
@@ -1852,6 +1771,71 @@ a.share-option:link {
     flex-wrap: wrap;
 }
 
+/* By the Numbers Section */
+.numbers-section {
+    margin: var(--spacing-lg) 0;
+    text-align: center;
+}
+
+.numbers-section h2 {
+    margin-bottom: var(--spacing-lg);
+}
+
+.numbers-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.number-card {
+    padding: var(--spacing-lg) var(--spacing-md);
+    border-top: 2px solid var(--color-navy);
+    background-color: transparent;
+}
+
+[data-theme="dark"] .number-card,
+.dark-theme .number-card {
+    border-top-color: var(--color-accent);
+}
+
+.number-value {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    color: var(--color-navy);
+    line-height: 1.1;
+    margin: 0;
+}
+
+[data-theme="dark"] .number-value,
+.dark-theme .number-value {
+    color: var(--color-accent);
+}
+
+.number-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-dark-gray);
+    margin-bottom: var(--spacing-sm);
+}
+
+[data-theme="dark"] .number-label,
+.dark-theme .number-label {
+    color: var(--color-text);
+    opacity: 0.75;
+}
+
+@media (max-width: 600px) {
+    .numbers-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+        max-width: 320px;
+    }
+}
+
 /* Features Section */
 .features-section {
     margin: var(--spacing-xl) 0;
@@ -1896,10 +1880,23 @@ a.share-option:link {
     min-width: 0;
 }
 
-.feature-emoji {
-    font-size: 2.5rem;
-    line-height: 1;
-    margin-bottom: var(--spacing-md);
+.feature-kicker {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", "Liberation Mono", monospace;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--color-navy);
+    width: fit-content;
+}
+
+[data-theme="dark"] .feature-kicker,
+.dark-theme .feature-kicker {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
 }
 
 /* Error Page */
@@ -2100,22 +2097,6 @@ a.share-option:link {
     font-size: var(--font-size-xl);
 }
 
-.mb-0 {
-    margin-bottom: 0;
-}
-
-.mt-0 {
-    margin-top: 0;
-}
-
-/* New styles for UI fixes */
-.full-bill-title {
-    margin-top: var(--spacing-sm);
-    font-size: var(--font-size-sm);
-    color: var(--color-dark-gray);
-    line-height: 1.4;
-}
-
 .bill-meta-bottom {
     margin-top: var(--spacing-xl);
     padding: var(--spacing-md);
@@ -2158,7 +2139,7 @@ a.share-option:link {
 
 /* Term Dictionary */
 .term-dictionary-section {
-    margin: var(--spacing-lg) 0;
+    margin: var(--spacing-md) 0 var(--spacing-lg);
     padding-bottom: var(--spacing-lg);
     border-bottom: 1px solid var(--border-color);
 }
@@ -2471,8 +2452,7 @@ h1, h2, h3, h4, h5, h6 {
     }
 
     /* Mobile nav links */
-    .nav-menu .nav-link,
-    .nav-menu .theme-toggle {
+    .nav-menu .nav-link {
         width: 100%;
         text-align: left;
         justify-content: flex-start;
@@ -2515,16 +2495,6 @@ h1, h2, h3, h4, h5, h6 {
         font-weight: 600;
     }
     
-    /* Theme toggle in mobile menu */
-    .nav-menu .theme-toggle:hover {
-        background-color: var(--color-light-gray);
-    }
-    
-    [data-theme="dark"] .nav-menu .theme-toggle:hover,
-    .dark-theme .nav-menu .theme-toggle:hover {
-        background-color: rgba(107, 163, 232, 0.1);
-    }
-
     /* Other mobile touch targets */
     .btn,
     .page-link {
@@ -2656,22 +2626,6 @@ h1, h2, h3, h4, h5, h6 {
     }
 }
 
-/* Theme Toggle Button Styles */
-.theme-toggle {
-  display: none !important; /* Hide old navbar theme toggle */
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: calc(var(--spacing-sm) + 2px) clamp(var(--spacing-sm), 1.2vw, var(--spacing-md));
-  border-radius: var(--border-radius);
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease, padding 0.2s ease;
-  margin: 0;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
 /* Floating Theme Toggle - Bottom Right */
 .floating-theme-toggle {
   position: fixed;
@@ -2789,51 +2743,6 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-.theme-toggle:hover {
-  background-color: var(--color-light-gray);
-  color: var(--color-navy);
-}
-
-.theme-toggle:focus {
-  outline: 2px solid var(--color-navy);
-  outline-offset: 2px;
-  background-color: var(--color-light-gray);
-  color: var(--color-navy);
-}
-
-[data-theme="dark"] .theme-toggle:hover,
-[data-theme="dark"] .theme-toggle:focus {
-    background-color: rgba(107, 163, 232, 0.1);
-    color: var(--color-accent-dark);
-    outline-color: var(--color-accent-dark);
-}
-
-.icon {
-  font-size: clamp(1rem, 1.2vw, 1.125rem);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  transition: font-size 0.2s ease;
-}
-
-.theme-toggle .sun-icon {
-  display: none;
-}
-
-[data-theme="dark"] .theme-toggle .sun-icon {
-  display: flex;
-}
-
-.theme-toggle .moon-icon {
-  display: flex;
-}
-
-[data-theme="dark"] .theme-toggle .moon-icon {
-  display: none;
-}
-
 /* ===== COMPLETE DARK MODE CONTAINER FIXES ===== */
 
 /* Search and Filter Section */
@@ -2875,17 +2784,10 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-white) !important;
 }
 
-/* Bill Card - CRITICAL */
+/* Bill card: dark mode keeps the brighter accent border */
 [data-theme="dark"] .bill-card,
 .dark-theme .bill-card {
-  background-color: var(--color-cards);
-  color: var(--color-text);
-  border-color: #4a9eff; /* Brighter border for dark mode */
-}
-
-[data-theme="dark"] .bill-title,
-.dark-theme .bill-title {
-  color: var(--color-text);
+  border-color: #4a9eff;
 }
 
 [data-theme="dark"] .bill-short-title,
@@ -2893,22 +2795,11 @@ h1, h2, h3, h4, h5, h6 {
   color: rgba(232, 232, 232, 0.8);
 }
 
-[data-theme="dark"] .summary-text,
-.dark-theme .summary-text {
-  color: var(--color-text);
-}
-
-/* Poll Widget & Poll Preview */
+/* Poll Widget & Poll Preview — dark mode card surface */
 [data-theme="dark"] .poll-widget,
 .dark-theme .poll-widget {
   background-color: var(--color-cards);
   border: 1px solid var(--color-borders-dark);
-}
-
-[data-theme="dark"] .poll-preview,
-.dark-theme .poll-preview {
-  background-color: var(--color-cards);
-  border-color: var(--color-borders-dark);
 }
 
 [data-theme="dark"] .poll-preview h4,
@@ -3067,10 +2958,10 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ===== HERO SECTION DARK MODE ===== */
 
-/* Change hero to a more subtle deep purple/navy gradient in dark mode */
+/* Hero in dark mode: flat near-black for editorial credibility (no purple gradient) */
 [data-theme="dark"] .hero-section:not(.hero-with-image),
 .dark-theme .hero-section:not(.hero-with-image) {
-  background: linear-gradient(135deg, #1a1f35 0%, #2d1b4e 50%, #1e293b 100%);
+  background: #14172b;
 }
 
 /* Dark mode homepage hero: darken overlay more for readability */
@@ -3102,22 +2993,6 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .creator-card .creator-info h3,
 .dark-theme .creator-card .creator-info h3 {
   color: var(--color-text);
-}
-
-/* ===== THEME TOGGLE FIX ===== */
-
-[data-theme="dark"] .theme-toggle,
-.dark-theme .theme-toggle {
-  color: var(--color-text);
-  background: none;
-  border: none;
-}
-
-/* Dark hover merged into unified rule above near theme-toggle hover/focus */
-
-[data-theme="dark"] .icon,
-.dark-theme .icon {
-  color: #4a9eff;
 }
 
 /* Additional/info sections */
@@ -3363,12 +3238,6 @@ h1, h2, h3, h4, h5, h6 {
 /* Margin-top spacer (replaces style="margin-top: 1.5rem" in about.html) */
 .mt-lg {
     margin-top: var(--spacing-lg);
-}
-
-/* Threads icon inline link styling (replaces style on contact.html) */
-.social-icon-emoji {
-    font-size: 24px;
-    text-decoration: none;
 }
 
 /* ========================================
