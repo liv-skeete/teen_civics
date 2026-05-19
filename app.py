@@ -1610,10 +1610,15 @@ def record_vote():
             if votes_awarded > 0:
                 auth_db.award_vote(uid, bill_id, votes_awarded)
 
+        # Include fresh user stats in the response so the client can update
+        # the navbar pill / rail without a follow-up /api/me round-trip.
+        user_stats = _user_stats(uid) if uid else None
+
         response = make_response(jsonify({
             "success": True,
             "voter_id": voter_id,
             "votes_awarded": votes_awarded,
+            "user": user_stats,
         }))
         _set_voter_cookie(response, voter_id)
         return response
