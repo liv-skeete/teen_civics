@@ -180,10 +180,16 @@ def add_security_headers(response):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if hasattr(g, "req_id"):
         response.headers["X-Request-ID"] = g.req_id
+    # Pages that render a per-session CSRF token or per-user state must
+    # NEVER be edge-cached. If they were, User A's CSRF token would be
+    # served to User B from cache and the form post would fail validation.
+    AUTH_PATHS = ("/signup", "/login", "/logout", "/profile", "/account")
     if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
         response.headers["Cache-Control"] = "no-store"
     elif request.path.startswith("/admin"):
         response.headers["Cache-Control"] = "no-store"
+    elif any(request.path == p or request.path.startswith(p + "/") for p in AUTH_PATHS):
+        response.headers["Cache-Control"] = "private, no-store"
     elif getattr(g, "is_authenticated", False):
         # Authenticated pages render user-specific state (tier badge,
         # display name, vote balance). Must not be cached by Cloudflare
