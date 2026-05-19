@@ -168,16 +168,20 @@ def _handle_csrf_error(e):
     if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
         return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
     # For auth forms, re-render the form with a clear error so user can retry
+    _csrf_reason = getattr(e, "description", "unknown")
+    _has_sess = bool(session.get("csrf_token"))
+    _has_form = bool(request.form.get("csrf_token"))
+    _diag = f"[diag: reason={_csrf_reason} has_session={_has_sess} has_form={_has_form}]"
     if request.path == "/signup":
         return render_template(
             "signup.html",
-            error="Your session expired. Please try again.",
+            error=f"Your session expired. Please try again. {_diag}",
             username=request.form.get("username", ""),
         ), 400
     if request.path == "/login":
         return render_template(
             "login.html",
-            error="Your session expired. Please try again.",
+            error=f"Your session expired. Please try again. {_diag}",
             username=request.form.get("username", ""),
         ), 400
     return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
