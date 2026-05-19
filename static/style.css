@@ -3327,11 +3327,25 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 500;
     font-size: var(--font-size-sm);
     white-space: nowrap;
-    overflow: hidden;
     position: relative;
 }
 
-.nav-user-left,
+.nav-user-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    color: var(--color-white);
+    background: transparent;
+    border: none;
+    font: inherit;
+    font-weight: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    text-decoration: none;
+    border-radius: 999px 0 0 999px;
+}
+
 .nav-user-right {
     display: inline-flex;
     align-items: center;
@@ -3345,6 +3359,7 @@ h1, h2, h3, h4, h5, h6 {
     cursor: pointer;
     transition: background-color 0.15s ease;
     text-decoration: none;
+    border-radius: 0 999px 999px 0;
 }
 
 .nav-user-left:hover {
@@ -3384,9 +3399,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* --- Quick-stats modal --- */
-/* Pill wrapper needs relative positioning for the modal anchor */
-.nav-user { position: relative; }
-
 .user-quick-modal {
     position: absolute;
     top: calc(100% + 8px);
@@ -3858,14 +3870,6 @@ h1, h2, h3, h4, h5, h6 {
 .nav-user-wrap {
     position: relative;
     display: inline-block;
-}
-
-.nav-user {
-    background: var(--color-navy);
-    color: var(--color-white);
-    border: none;
-    cursor: pointer;
-    font: inherit;
 }
 
 .nav-user-caret {
