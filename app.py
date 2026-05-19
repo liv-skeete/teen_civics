@@ -61,13 +61,13 @@ if config.logging.file_path:
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
-# Trust the X-Forwarded-* headers Railway sets. Without this, every
-# request appears to come from Railway's proxy IP, which collapses
-# all per-IP rate limits + admin-login lockouts into one global bucket.
-# Railway sits behind exactly one proxy hop, so x_for=1 / x_proto=1.
-# See: werkzeug.middleware.proxy_fix docs.
+# Trust the X-Forwarded-* headers from the proxies in front of Flask.
+# Cloudflare → Railway's edge → Flask = 2 hops, so x_for=2/x_proto=2.
+# Without this, request.is_secure is False (the inner Railway→Flask
+# hop is plain HTTP) and SECURE session cookies refuse to set, which
+# means no session, which means CSRF tokens never persist.
 from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=2, x_proto=2, x_host=1)
 
 # Support sub-path deployment (e.g. /beta on staging).
 # Railway strips /beta from PATH_INFO before forwarding to Flask, so Flask
@@ -130,6 +130,21 @@ app.config["PERMANENT_SESSION_LIFETIME"] = _timedelta(days=30)
 
 # CSRF + rate limiting
 csrf = CSRFProtect(app)
+
+
+@app.errorhandler(CSRFError)
+def _handle_csrf_error(e):
+    """Log CSRF failures so we can diagnose them in Railway logs.
+    Returns a clear 400 instead of the generic 500 template."""
+    logger.warning(
+        "CSRF failure path=%s req_id=%s reason=%s has_session=%s has_form_token=%s",
+        request.path,
+        getattr(g, "req_id", "-"),
+        getattr(e, "description", "?"),
+        bool(session.get("csrf_token")),
+        bool(request.form.get("csrf_token")),
+    )
+    return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
 # NOTE: With multiple Gunicorn workers, each worker has independent rate limit
 # counters. To share state, switch to Redis: storage_uri="redis://..."
 limiter = Limiter(
