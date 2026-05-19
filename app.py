@@ -134,8 +134,10 @@ csrf = CSRFProtect(app)
 
 @app.errorhandler(CSRFError)
 def _handle_csrf_error(e):
-    """Log CSRF failures so we can diagnose them in Railway logs.
-    Returns a clear 400 instead of the generic 500 template."""
+    """Log CSRF failures with full context, then return a useful response.
+    For API calls returns JSON. For form pages returns the same form page
+    with a friendly error message so the user can retry rather than seeing
+    a 500."""
     logger.warning(
         "CSRF failure path=%s req_id=%s reason=%s has_session=%s has_form_token=%s",
         request.path,
@@ -144,6 +146,21 @@ def _handle_csrf_error(e):
         bool(session.get("csrf_token")),
         bool(request.form.get("csrf_token")),
     )
+    if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
+        return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
+    # For auth forms, re-render the form with a clear error so user can retry
+    if request.path == "/signup":
+        return render_template(
+            "signup.html",
+            error="Your session expired. Please try again.",
+            username=request.form.get("username", ""),
+        ), 400
+    if request.path == "/login":
+        return render_template(
+            "login.html",
+            error="Your session expired. Please try again.",
+            username=request.form.get("username", ""),
+        ), 400
     return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
 # NOTE: With multiple Gunicorn workers, each worker has independent rate limit
 # counters. To share state, switch to Redis: storage_uri="redis://..."
@@ -1466,12 +1483,9 @@ def page_not_found(e):
 def internal_server_error(e):
     return render_template("500.html"), 500
 
-@app.errorhandler(CSRFError)
-def handle_csrf_error(e):
-    logger.warning(f"CSRF error on {request.path}: {e.description}")
-    if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
-        return jsonify({"error": "CSRF validation failed", "details": e.description}), 400
-    return render_template("500.html"), 400
+# Old CSRFError handler removed — superseded by the one near
+# CSRFProtect(app) initialization which logs full diagnostic info
+# and returns clear JSON.
 
 from itsdangerous import URLSafeSerializer, BadSignature
 
