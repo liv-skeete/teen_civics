@@ -3317,23 +3317,55 @@ h1, h2, h3, h4, h5, h6 {
    Auth + gamification (v1 MVP)
    ========================================================================= */
 
-/* --- Navbar user pill --- */
+/* --- Navbar user pill (split: left=profile link, right=stats modal) --- */
 .nav-user {
     display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.75rem;
+    align-items: stretch;
     background-color: var(--color-navy);
     color: var(--color-white);
     border-radius: 999px;
     font-weight: 500;
     font-size: var(--font-size-sm);
     white-space: nowrap;
+    overflow: hidden;
+    position: relative;
 }
 
-.nav-user:hover {
-    background-color: var(--color-brown-black);
+.nav-user-left,
+.nav-user-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
     color: var(--color-white);
+    background: transparent;
+    border: none;
+    font: inherit;
+    font-weight: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    text-decoration: none;
+}
+
+.nav-user-left:hover {
+    background-color: rgba(255,255,255,0.15);
+    color: var(--color-white);
+}
+
+.nav-user-right:hover {
+    background-color: rgba(255,255,255,0.15);
+    color: var(--color-white);
+}
+
+.nav-user-right[aria-expanded="true"] {
+    background-color: rgba(255,255,255,0.22);
+}
+
+.nav-user-divider {
+    width: 1px;
+    background-color: rgba(255,255,255,0.3);
+    align-self: stretch;
+    flex-shrink: 0;
 }
 
 .nav-user-tier {
@@ -3351,16 +3383,115 @@ h1, h2, h3, h4, h5, h6 {
     font-size: var(--font-size-xs);
 }
 
-.nav-signin {
-    border: 1px solid var(--color-navy);
-    border-radius: 999px;
-    padding: 0.35rem 1rem;
+/* --- Quick-stats modal --- */
+/* Pill wrapper needs relative positioning for the modal anchor */
+.nav-user { position: relative; }
+
+.user-quick-modal {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 180px;
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 0.85rem 1rem;
+    font-size: var(--font-size-sm);
+    z-index: 1100;
+    color: var(--color-text);
 }
 
+.user-quick-modal[hidden] { display: none; }
+
+.uqm-tier {
+    font-weight: 700;
+    font-size: var(--font-size-base);
+    margin-bottom: 0.5rem;
+}
+
+.uqm-progress-wrap { margin-bottom: 0.5rem; }
+
+.uqm-progress-bar {
+    height: 6px;
+    background-color: var(--color-borders);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.25rem;
+}
+
+.uqm-progress-fill {
+    height: 100%;
+    background-color: var(--color-accent);
+    border-radius: 999px;
+    transition: width 0.4s ease;
+}
+
+.uqm-progress-text {
+    font-size: var(--font-size-xs);
+    opacity: 0.8;
+}
+
+.uqm-divider {
+    border: none;
+    border-top: 1px solid var(--color-borders);
+    margin: 0.5rem 0;
+}
+
+.uqm-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin-bottom: 0.2rem;
+}
+
+.uqm-stat-num {
+    font-weight: 700;
+    font-size: var(--font-size-base);
+}
+
+.uqm-stat-label {
+    font-size: var(--font-size-xs);
+    opacity: 0.75;
+}
+
+.uqm-stat-small .uqm-stat-num {
+    font-size: var(--font-size-sm);
+}
+
+.uqm-profile-link {
+    display: block;
+    margin-top: 0.65rem;
+    font-size: var(--font-size-xs);
+    text-align: right;
+    opacity: 0.8;
+}
+
+.uqm-profile-link:hover { opacity: 1; }
+
+/* Dark mode overrides */
 [data-theme="dark"] .nav-user,
 .dark-theme .nav-user {
     background-color: var(--color-accent);
     color: var(--color-background);
+}
+
+[data-theme="dark"] .nav-user-left,
+[data-theme="dark"] .nav-user-right,
+.dark-theme .nav-user-left,
+.dark-theme .nav-user-right {
+    color: var(--color-background);
+}
+
+[data-theme="dark"] .nav-user-divider,
+.dark-theme .nav-user-divider {
+    background-color: rgba(0,0,0,0.2);
+}
+
+.nav-signin {
+    border: 1px solid var(--color-navy);
+    border-radius: 999px;
+    padding: 0.35rem 1rem;
 }
 
 /* --- Right-side rail (desktop only) --- */

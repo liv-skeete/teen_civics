@@ -144,11 +144,45 @@
         <a href="{{ url_for('grants') }}" class="nav-link" {% if request.endpoint == 'grants' %}aria-current="page"{% endif %}>Grants</a>
         <a href="{{ url_for('contact') }}" class="nav-link" {% if request.endpoint == 'contact' %}aria-current="page"{% endif %}>Contact</a>
         {% if current_user %}
-          <a href="{{ url_for('profile') }}" class="nav-link nav-user" {% if request.endpoint == 'profile' %}aria-current="page"{% endif %}>
-            <span class="nav-user-tier" data-rail-tier>{{ current_user.tier }}</span>
-            <span class="nav-user-balance" data-rail-balance>{{ current_user.balance|int }}</span>
-            <span class="nav-user-suffix">Votes</span>
-          </a>
+          <div class="nav-user" role="group" aria-label="Your civic standing">
+            <a href="{{ url_for('profile') }}" class="nav-user-left" {% if request.endpoint == 'profile' %}aria-current="page"{% endif %} aria-label="Go to profile">
+              <span class="nav-user-tier" data-rail-tier>{{ current_user.tier }}</span>
+            </a>
+            <span class="nav-user-divider" aria-hidden="true"></span>
+            <button type="button" class="nav-user-right" aria-label="View your stats" aria-expanded="false" aria-controls="user-quick-modal" id="user-pill-btn">
+              <span class="nav-user-balance" data-rail-balance>{{ current_user.balance|int }}</span>
+              <span class="nav-user-suffix">Votes</span>
+            </button>
+          </div>
+          <div id="user-quick-modal" class="user-quick-modal" hidden role="dialog" aria-modal="true" aria-label="Your civic standing">
+            <div class="uqm-tier" data-rail-tier>{{ current_user.tier }}</div>
+            {% if current_user.progress.next_tier %}
+              <div class="uqm-progress-wrap">
+                <div class="uqm-progress-bar">
+                  <div class="uqm-progress-fill" data-rail-fill style="width: {{ current_user.progress.percent }}%"></div>
+                </div>
+                <div class="uqm-progress-text">
+                  <span data-rail-to-next>{{ current_user.progress.votes_to_next }}</span> to <span data-rail-next-tier>{{ current_user.progress.next_tier }}</span>
+                </div>
+              </div>
+            {% else %}
+              <div class="uqm-progress-text">Top rank reached.</div>
+            {% endif %}
+            <hr class="uqm-divider">
+            <div class="uqm-stat">
+              <span class="uqm-stat-num" data-rail-balance>{{ current_user.balance|int }}</span>
+              <span class="uqm-stat-label">Votes</span>
+            </div>
+            <div class="uqm-stat">
+              <span class="uqm-stat-num" data-rail-lifetime>{{ current_user.lifetime_votes_cast }}</span>
+              <span class="uqm-stat-label">Bills voted on</span>
+            </div>
+            <div class="uqm-stat uqm-stat-small">
+              <span data-rail-daily>{{ current_user.daily_used }}/{{ current_user.daily_cap }}</span>
+              <span class="uqm-stat-label">today</span>
+            </div>
+            <a href="{{ url_for('profile') }}" class="uqm-profile-link">Full profile →</a>
+          </div>
         {% else %}
           <a href="{{ url_for('login') }}" class="nav-link nav-signin">Sign in</a>
         {% endif %}

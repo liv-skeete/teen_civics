@@ -147,6 +147,11 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 from datetime import timedelta as _timedelta
 app.config["PERMANENT_SESSION_LIFETIME"] = _timedelta(days=30)
 
+# Disable Flask-WTF's referrer/origin check — it's unreliable behind Cloudflare
+# + Railway's double proxy. The HMAC token validation still runs; this only
+# drops the extra "Referer must match host" check that fails on proxied requests.
+app.config["WTF_CSRF_SSL_STRICT"] = False
+
 # CSRF + rate limiting
 csrf = CSRFProtect(app)
 
@@ -168,20 +173,16 @@ def _handle_csrf_error(e):
     if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
         return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
     # For auth forms, re-render the form with a clear error so user can retry
-    _csrf_reason = getattr(e, "description", "unknown")
-    _has_sess = bool(session.get("csrf_token"))
-    _has_form = bool(request.form.get("csrf_token"))
-    _diag = f"[diag: reason={_csrf_reason} has_session={_has_sess} has_form={_has_form}]"
     if request.path == "/signup":
         return render_template(
             "signup.html",
-            error=f"Your session expired. Please try again. {_diag}",
+            error="Your session expired. Please try again.",
             username=request.form.get("username", ""),
         ), 400
     if request.path == "/login":
         return render_template(
             "login.html",
-            error=f"Your session expired. Please try again. {_diag}",
+            error="Your session expired. Please try again.",
             username=request.form.get("username", ""),
         ), 400
     return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
@@ -1597,12 +1598,13 @@ def record_vote():
         if not updated:
             abort(404, description="Bill not found or vote update failed")
 
-        # Award Votes currency if the user is logged in and within their
-        # daily cap. Anonymous votes don't earn currency but DO move the
-        # poll counter (we want everyone's poll input).
+        # Award Votes currency only for NEW votes (not vote switches).
+        # Switching an existing vote moves the poll tally but doesn't
+        # count as a new civic action for reward purposes.
         votes_awarded = 0.0
         uid = auth_session.current_user_id()
-        if uid:
+        is_new_vote = not previous_vote
+        if uid and is_new_vote:
             today_count = auth_db.count_today_vote_awards(uid)
             votes_awarded = reward_for_nth_vote_of_day(today_count + 1)
             if votes_awarded > 0:

@@ -883,6 +883,40 @@
   // Start live polling after bootstrap completes
   setTimeout(startLivePollRefresh, 2000);
 
+  // --- Split pill quick-stats modal ---
+  (function initPillModal() {
+    const btn = document.getElementById("user-pill-btn");
+    const modal = document.getElementById("user-quick-modal");
+    if (!btn || !modal) return;
+
+    function openModal() {
+      modal.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      modal.hidden ? openModal() : closeModal();
+    });
+
+    // Close when clicking outside the pill+modal group
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".nav-user") && !e.target.closest("#user-quick-modal")) {
+        closeModal();
+      }
+    }, { passive: true });
+
+    // Close on Escape
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeModal();
+    }, { passive: true });
+  })();
+
   // Optionally expose a tiny API for testing
   window.TeenCivics = Object.assign(window.TeenCivics || {}, {
     _debug: { fetchedOnce, resultsControllers },
