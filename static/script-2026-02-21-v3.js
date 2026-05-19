@@ -162,6 +162,9 @@
       // After vote, refresh results exactly once
       fetchedOnce.delete(widget); // allow a fresh fetch
       fetchOnceResults(billId, widget);
+
+      // Restart live polling so other voters' votes appear in real time
+      restartLivePollRefresh();
     })
     .catch((error) => {
       console.error("Vote error:", error);
@@ -380,6 +383,9 @@
         // User has voted - show results, hide overlay
         overlay.style.display = "none";
         resultsContent.style.display = "block";
+        // Mark the matching display row so the "✓ Your vote" badge appears
+        const matchedRow = resultsContent.querySelector(`.poll-option[data-vote="${hasVoted}"]`);
+        if (matchedRow) matchedRow.classList.add("selected");
       } else {
         // User has not voted - show overlay, hide results
         overlay.style.display = "flex";
@@ -649,6 +655,65 @@
   // Add share dropdown init to bootstrap
   initializeShareDropdowns();
 
+  // --- Live poll refresh (real-time updates from other voters) ---
+  const LIVE_POLL_INTERVAL_MS = 15000; // 15 seconds — balances "feels live" with API cost
+  let livePollTimer = null;
+
+  function startLivePollRefresh() {
+    if (livePollTimer) return; // already running
+
+    // Works on both bill detail and archive pages
+    const widgets = $all(".poll-widget");
+    if (widgets.length === 0) return;
+
+    livePollTimer = setInterval(() => {
+      // Pause when tab is hidden to save bandwidth
+      if (document.visibilityState === "hidden") return;
+
+      widgets.forEach((widget) => {
+        const billId = widget.dataset.billId;
+        if (!billId) return;
+        // Only refresh if user has voted (results are visible)
+        if (!getStored(`voted_${billId}`)) return;
+
+        const resultsContainer = widget.querySelector(".poll-results");
+        if (!resultsContainer || resultsContainer.style.display === "none") return;
+
+        // Silently fetch fresh results and update the bars
+        fetch(API_BASE + `/api/poll-results/${billId}`, {
+          headers: { "Cache-Control": "no-store" }
+        })
+        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((results) => updateResultsDisplay(results, resultsContainer))
+        .catch(() => {}); // silently ignore errors
+      });
+    }, LIVE_POLL_INTERVAL_MS);
+  }
+
+  function stopLivePollRefresh() {
+    if (livePollTimer) {
+      clearInterval(livePollTimer);
+      livePollTimer = null;
+    }
+  }
+
+  // Restart the live poll timer so the next tick happens in LIVE_POLL_INTERVAL_MS
+  // from NOW (called after a vote so the user's results are immediately fresh).
+  function restartLivePollRefresh() {
+    stopLivePollRefresh();
+    startLivePollRefresh();
+  }
+
+  // Start/stop live refresh based on tab visibility
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !livePollTimer) {
+      startLivePollRefresh();
+    }
+  }, { passive: true });
+
+  // Start live polling after bootstrap completes
+  setTimeout(startLivePollRefresh, 2000);
+
   // Optionally expose a tiny API for testing
   window.TeenCivics = Object.assign(window.TeenCivics || {}, {
     _debug: { fetchedOnce, resultsControllers },
@@ -659,6 +724,9 @@
         fetchedOnce.delete(w);
         fetchOnceResults(billId, w);
       });
-    }
+    },
+    stopLivePollRefresh,
+    startLivePollRefresh,
+    restartLivePollRefresh,
   });
 })();

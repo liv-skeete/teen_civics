@@ -1,378 +1,286 @@
-# AWS Lightsail Deployment Guide (Legacy)
+# Railway.app Deployment Guide
 
-> **NOTE**: This guide covers the legacy deployment method to AWS Lightsail. The project is now deployed to Railway.app. For current deployment instructions, see [DEPLOYMENT_RAILWAY.md](DEPLOYMENT_RAILWAY.md).
-
-This guide covers deploying TeenCivics to AWS Lightsail with Gunicorn and Nginx.
+This guide covers deploying TeenCivics to Railway.app, the current production environment.
 
 ## Prerequisites
 
-- AWS account with Lightsail access
-- Domain name (optional, but recommended)
-- SSH key pair for server access
+- Railway.app account
+- GitHub account with repository access
+- Domain name (optional, but recommended for custom domain)
+- API keys for Congress.gov, Anthropic, and Twitter/X
 
-## AWS Lightsail Setup
+## Railway Setup
 
-### 1. Create Lightsail Instance
+### 1. Connect GitHub Repository
 
-1. Log into AWS Lightsail console
-2. Click "Create instance"
-3. Select:
-   - Platform: Linux/Unix
-   - Blueprint: OS Only → Ubuntu 22.04 LTS
-   - Instance plan: At least $5/month (1 GB RAM, 1 vCPU)
-4. Name your instance (e.g., `teencivics-prod`)
-5. Click "Create instance"
+1. Log into Railway.app
+2. Click "New Project"
+3. Select "Deploy from GitHub repo"
+4. Choose your TeenCivics repository
+5. Select the branch (typically `main`)
 
-### 2. Configure Networking
+### 2. Configure Environment Variables
 
-1. In the Lightsail console, go to your instance's "Networking" tab
-2. Add firewall rules:
-   - SSH (port 22) - Already configured
-   - HTTP (port 80) - Click "Add rule"
-   - HTTPS (port 443) - Click "Add rule"
+Railway will automatically detect the `Procfile` and `requirements.txt`. You need to add environment variables:
 
-### 3. Assign Static IP (Recommended)
-
-1. Go to "Networking" tab
-2. Click "Create static IP"
-3. Attach it to your instance
-4. Note the IP address for DNS configuration
-
-## Server Configuration
-
-### 1. Connect to Server
-
-```bash
-ssh ubuntu@YOUR_STATIC_IP
-```
-
-### 2. Update System
-
-```bash
-sudo apt update
-sudo apt upgrade -y
-```
-
-### 3. Install Dependencies
-
-```bash
-# Install Python and pip
-sudo apt install python3 python3-pip python3-venv -y
-
-# Install PostgreSQL
-sudo apt install postgresql postgresql-contrib -y
-
-# Install Nginx
-sudo apt install nginx -y
-
-# Install Git
-sudo apt install git -y
-```
-
-### 4. Configure PostgreSQL
-
-```bash
-# Switch to postgres user
-sudo -u postgres psql
-
-# In PostgreSQL prompt:
-CREATE DATABASE teencivics;
-CREATE USER teencivics_user WITH PASSWORD 'your_secure_password';
-GRANT ALL PRIVILEGES ON DATABASE teencivics TO teencivics_user;
-\q
-```
-
-### 5. Clone Repository
-
-```bash
-cd /var/www
-sudo mkdir teencivics
-sudo chown ubuntu:ubuntu teencivics
-cd teencivics
-git clone https://github.com/liv-skeete/teen_civics.git .
-```
-
-### 6. Set Up Python Environment
-
-```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install gunicorn
-```
-
-### 7. Configure Environment Variables
-
-```bash
-# Create .env file
-nano .env
-```
-
-Add your configuration:
+In Railway → Project → Settings → Variables, add:
 
 ```env
 # Database
-DATABASE_URL=postgresql://teencivics_user:your_secure_password@localhost/teencivics
+DATABASE_URL=your_postgresql_connection_string
 
 # API Keys
 CONGRESS_API_KEY=your_congress_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
 
 # Twitter/X API
-TWITTER_CONSUMER_KEY=your_consumer_key
-TWITTER_CONSUMER_SECRET=your_consumer_secret
-TWITTER_ACCESS_TOKEN=your_access_token
-TWITTER_ACCESS_TOKEN_SECRET=your_access_token_secret
+TWITTER_API_KEY=your_twitter_api_key
+TWITTER_API_SECRET=your_twitter_api_secret
+TWITTER_ACCESS_TOKEN=your_twitter_access_token
+TWITTER_ACCESS_SECRET=your_twitter_access_token_secret
+TWITTER_BEARER_TOKEN=your_twitter_bearer_token
 
-# Flask
-FLASK_ENV=production
+# Flask Security
 SECRET_KEY=your_random_secret_key_here
+
+# Optional: Analytics
+GA_MEASUREMENT_ID=your_google_analytics_id
 ```
 
-Save and exit (Ctrl+X, Y, Enter).
+### 3. Configure Railway.json
 
-### 8. Initialize Database
+The repository includes a `railway.json` configuration file that optimizes deployment:
 
-```bash
-# Activate virtual environment if not already active
-source venv/bin/activate
-
-# Run the app once to initialize database
-python app.py
-# Press Ctrl+C after it starts
+```json
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK"
+  },
+  "deploy": {
+    "runtime": "V2",
+    "numReplicas": 1,
+    "sleepApplication": false,
+    "useLegacyStacker": false,
+    "multiRegionConfig": {
+      "us-west2": {
+        "numReplicas": 1
+      }
+    },
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
 ```
 
 ## Gunicorn Configuration
 
-### 1. Test Gunicorn
+The application uses a production-optimized Gunicorn configuration (`gunicorn_config.py`):
+
+- **Workers**: 2 (optimized for Railway's 512MB RAM limit)
+- **Timeout**: 120 seconds (accommodates Anthropic API calls)
+- **Max Requests**: 1000 with jitter (prevents memory leaks)
+- **Preloading**: Enabled for faster startup
+
+## Custom Domain with Cloudflare
+
+### 1. Configure Domain in Railway
+
+1. Go to Railway → Project → Settings → Domains
+2. Add your custom domain (e.g., `teencivics.org`)
+3. Railway will provide DNS records to add
+
+### 2. Configure Cloudflare
+
+1. Add the domain to Cloudflare
+2. Point Cloudflare's nameservers to your domain registrar
+3. Configure SSL/TLS encryption mode to "Full" (not Full (Strict))
+
+## GitHub Actions Integration
+
+The repository includes automated workflows:
+
+- **Daily workflow** (`.github/workflows/daily.yml`): Runs orchestrator twice daily
+- **Database connectivity check**: Validates database before processing
+- **Secret scanning**: Prevents credential leaks
+- **Retry logic**: Automatic retries on transient failures
+
+## Monitoring and Logging
+
+### Railway Built-in Features
+
+- **Live logs**: View real-time application logs in Railway dashboard
+- **Metrics**: CPU, memory, and request metrics
+- **Alerts**: Configure notification rules for downtime or performance issues
+
+### Custom Logging
+
+The application uses structured logging with:
+
+```python
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+```
+
+View logs in Railway dashboard or via CLI:
 
 ```bash
-gunicorn --bind 0.0.0.0:8000 wsgi:app
+railway logs
 ```
 
-Visit `http://YOUR_IP:8000` to verify it works. Press Ctrl+C to stop.
+## Database Management
 
-### 2. Create Systemd Service
+### PostgreSQL on Railway
+
+Railway provides managed PostgreSQL databases with:
+
+- Automatic backups
+- SSL connections (configured in `src/database/connection.py`)
+- Connection pooling (built-in with `psycopg2`)
+
+### Schema Migrations
+
+Database schema is automatically initialized by `src/database/connection.py`. For schema updates:
+
+1. Modify `init_db_tables()` function
+2. Deploy to Railway
+3. Run migration script if needed
+
+## Scaling and Performance
+
+### Current Configuration
+
+- **Instance**: 512MB RAM, 1 vCPU (Railway free tier)
+- **Workers**: 2 Gunicorn workers
+- **Memory**: Optimized with request recycling
+
+### Performance Optimizations
+
+1. **Database Connection Pooling**: Reuses connections efficiently
+2. **HTTP Caching**: Configured in Flask security headers
+3. **Gunicorn Preloading**: Reduces memory footprint
+4. **Request Recycling**: Workers restart after 1000 requests
+
+### Scaling Options
+
+To scale beyond free tier limits:
+
+1. Upgrade Railway plan for more resources
+2. Increase Gunicorn workers in `gunicorn_config.py`
+3. Add Redis for session caching (optional)
+4. Configure CDN for static assets
+
+## Security Best Practices
+
+### Railway Security Features
+
+- **Environment Variables**: Automatically masked in logs
+- **Private Networking**: Database connections over private network
+- **Automatic HTTPS**: SSL termination at Railway edge
+
+### Application Security
+
+1. **Secrets Management**: Never commit `.env` files
+2. **CSRF Protection**: Enabled for all forms
+3. **Rate Limiting**: 200 requests/day, 50/hour per IP
+4. **Security Headers**: X-Frame-Options, CSP, etc.
+5. **Input Sanitization**: All user inputs escaped in templates
+
+## Maintenance and Updates
+
+### Automatic Updates
+
+Railway automatically builds and deploys on GitHub push to main branch.
+
+### Manual Deployment
 
 ```bash
-sudo nano /etc/systemd/system/teencivics.service
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login
+railway login
+
+# Deploy from local changes
+railway up
 ```
 
-Add the following:
+### Database Backups
 
-```ini
-[Unit]
-Description=TeenCivics Gunicorn Application
-After=network.target
-
-[Service]
-User=ubuntu
-Group=www-data
-WorkingDirectory=/var/www/teencivics
-Environment="PATH=/var/www/teencivics/venv/bin"
-ExecStart=/var/www/teencivics/venv/bin/gunicorn --config gunicorn_config.py wsgi:app
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 3. Enable and Start Service
+Railway automatically backs up PostgreSQL databases. For manual backups:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl start teencivics
-sudo systemctl enable teencivics
-sudo systemctl status teencivics
-```
-
-## Nginx Configuration
-
-### 1. Create Nginx Configuration
-
-```bash
-sudo nano /etc/nginx/sites-available/teencivics
-```
-
-Add the following:
-
-```nginx
-server {
-    listen 80;
-    server_name your_domain.com www.your_domain.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /static {
-        alias /var/www/teencivics/static;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
-
-### 2. Enable Site
-
-```bash
-sudo ln -s /etc/nginx/sites-available/teencivics /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-## SSL/HTTPS Setup (Recommended)
-
-### 1. Install Certbot
-
-```bash
-sudo apt install certbot python3-certbot-nginx -y
-```
-
-### 2. Obtain SSL Certificate
-
-```bash
-sudo certbot --nginx -d your_domain.com -d www.your_domain.com
-```
-
-Follow the prompts. Certbot will automatically configure Nginx for HTTPS.
-
-### 3. Test Auto-Renewal
-
-```bash
-sudo certbot renew --dry-run
-```
-
-## GitHub Actions Automation
-
-### 1. Configure GitHub Secrets
-
-In your GitHub repository, go to Settings → Secrets and variables → Actions, and add:
-
-- `CONGRESS_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `TWITTER_CONSUMER_KEY`
-- `TWITTER_CONSUMER_SECRET`
-- `TWITTER_ACCESS_TOKEN`
-- `TWITTER_ACCESS_TOKEN_SECRET`
-- `DATABASE_URL`
-
-### 2. Workflows
-
-The repository includes two workflows:
-
-- **Daily workflow** (`.github/workflows/daily.yml`): Runs orchestrator daily to fetch and post bills
-- **Weekly workflow** (`.github/workflows/weekly.yml`): Sends weekly digest (planned feature)
-
-These run automatically via GitHub Actions and don't require server cron jobs.
-
-## Monitoring and Maintenance
-
-### View Application Logs
-
-```bash
-# Gunicorn logs
-sudo journalctl -u teencivics -f
-
-# Nginx access logs
-sudo tail -f /var/log/nginx/access.log
-
-# Nginx error logs
-sudo tail -f /var/log/nginx/error.log
-```
-
-### Restart Services
-
-```bash
-# Restart Gunicorn
-sudo systemctl restart teencivics
-
-# Restart Nginx
-sudo systemctl restart nginx
-```
-
-### Update Application
-
-```bash
-cd /var/www/teencivics
-git pull origin main
-source venv/bin/activate
-pip install -r requirements.txt
-sudo systemctl restart teencivics
-```
-
-### Database Backup
-
-```bash
-# Create backup
-sudo -u postgres pg_dump teencivics > backup_$(date +%Y%m%d).sql
-
-# Restore from backup
-sudo -u postgres psql teencivics < backup_20240101.sql
+railway shell
+# In container:
+pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
 ```
 
 ## Troubleshooting
 
-### Application Won't Start
+### Common Issues
 
-1. Check logs: `sudo journalctl -u teencivics -n 50`
-2. Verify environment variables in `.env`
-3. Ensure database is running: `sudo systemctl status postgresql`
-4. Check file permissions: `ls -la /var/www/teencivics`
+1. **Deployment Failures**
+   - Check build logs in Railway dashboard
+   - Verify all required environment variables are set
+   - Ensure `requirements.txt` is up to date
 
-### 502 Bad Gateway
+2. **Database Connection Errors**
+   - Verify `DATABASE_URL` is correctly configured
+   - Check Railway PostgreSQL instance status
+   - Ensure SSL is enabled in connection string
 
-1. Verify Gunicorn is running: `sudo systemctl status teencivics`
-2. Check Gunicorn is listening: `sudo netstat -tlnp | grep 8000`
-3. Review Nginx config: `sudo nginx -t`
+3. **Memory Issues**
+   - Reduce Gunicorn workers
+   - Optimize database queries
+   - Consider upgrading Railway plan
 
-### Database Connection Issues
+4. **API Rate Limiting**
+   - Implement exponential backoff
+   - Cache API responses where appropriate
+   - Monitor API usage in vendor dashboards
 
-1. Verify PostgreSQL is running: `sudo systemctl status postgresql`
-2. Test connection: `psql -U teencivics_user -d teencivics -h localhost`
-3. Check `DATABASE_URL` in `.env`
+### Debugging Steps
 
-### High Memory Usage
+1. **Check Railway Logs**
+   ```bash
+   railway logs
+   ```
 
-1. Adjust Gunicorn workers in `gunicorn_config.py`
-2. Consider upgrading Lightsail instance
-3. Monitor with: `htop` or `free -h`
+2. **Verify Environment**
+   ```bash
+   railway shell
+   env | grep -E "(DATABASE|API)"
+   ```
 
-## Security Best Practices
+3. **Test Database Connection**
+   ```bash
+   railway shell
+   python -c "from src.database.connection import postgres_connect; print('Database connected successfully')"
+   ```
 
-1. **Keep system updated**: `sudo apt update && sudo apt upgrade`
-2. **Use strong passwords** for database and SSH
-3. **Enable firewall**: Only allow necessary ports
-4. **Regular backups**: Automate database backups
-5. **Monitor logs**: Check for suspicious activity
-6. **Keep secrets secure**: Never commit `.env` to git
-7. **Use HTTPS**: Always use SSL certificates in production
+## Cost Management
 
-## Performance Optimization
+### Railway Pricing
 
-1. **Enable Nginx caching** for static files
-2. **Use CDN** for static assets (optional)
-3. **Database indexing**: Ensure proper indexes on frequently queried columns
-4. **Gunicorn workers**: Adjust based on CPU cores (2-4 × CPU cores + 1)
-5. **Connection pooling**: Already configured in `src/database/connection.py`
+- **Free Tier**: 512MB RAM, 1 vCPU, 1GB disk
+- **Usage-Based**: Pay for additional resources
 
-## Cost Estimation
+### API Costs
 
-- **Lightsail instance**: $5-10/month (depending on size)
-- **Domain name**: $10-15/year
-- **API costs**: Variable (Congress.gov is free, Venice.ai has usage-based pricing)
+- **Congress.gov API**: Free (no rate limits)
+- **Venice.ai API**: Usage-based pricing (for AI summarization)
+- **Twitter API**: Free for posting (rate limits apply)
 
-Total estimated cost: ~$10-20/month plus API usage.
+### Cost Optimization
 
-## Support
+1. **Database**: Use Railway managed PostgreSQL (included in free tier)
+2. **Compute**: Optimize Gunicorn workers for memory usage
+3. **Caching**: Implement Redis for session caching (optional)
+4. **Monitoring**: Use Railway's built-in metrics
 
-For issues or questions:
-- GitHub Issues: https://github.com/liv-skeete/teen_civics/issues
-- Email: liv@di.st
-- Twitter: @TeenCivics
+## Support Resources
+
+- **Railway Documentation**: https://docs.railway.com
+- **GitHub Repository**: https://github.com/liv-skeete/teen_civics
+- **Email Support**: liv@di.st
+- **Twitter**: @TeenCivics

@@ -108,7 +108,7 @@ TeenCivics is deployed on [Railway.app](https://railway.app) with the following 
 - **SSL**: Automatic HTTPS via Cloudflare
 - **Domain**: [teencivics.org](https://teencivics.org)
 
-For deployment instructions, see [DEPLOYMENT_RAILWAY.md](DEPLOYMENT_RAILWAY.md).
+For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## CI and Automation
 

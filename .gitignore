@@ -73,6 +73,12 @@ COMMIT_MESSAGE.txt
 *_qa_report.txt
 *_QA_*.md
 
+# Dev-only scripts and debug artifacts (use `_` prefix for throwaway scripts)
+scripts/_*.py
+*-debug.png
+*-debug.html
+*-debug.json
+
 # macOS
 .DS_Store
 **/.DS_Store

@@ -18,7 +18,7 @@
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image">
-  <meta property="twitter:url" content="{% block twitter_url %}https://teencivics.org{{ request.path }}{% endblock %}">
+  <meta property="twitter:url" content="https://teencivics.org{{ request.path }}">
   <meta property="twitter:title" content="{% block twitter_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
   <meta property="twitter:description" content="{% block twitter_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
   <meta property="twitter:image" content="{% block twitter_image %}https://teencivics.org/static/img/logo.png{% endblock %}">
@@ -80,7 +80,7 @@
     })();
   </script>
   <!-- CSS with cache busting -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2026-02-05-v8') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2026-05-18-v1') }}">
   
   <!-- Google Fonts - Load only weights we actually use -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

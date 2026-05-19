@@ -61,6 +61,7 @@
                         <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
                         <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
                         <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
+                        <option value="to_president" {% if status_filter == 'to_president' %}selected{% endif %}>To President</option>
                         <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
                     </select>
                 </div>
@@ -121,9 +122,7 @@
                 <div class="summary-preview">
                     {{ bill.summary_tweet|truncate(200) }}
                 </div>
-                
-                <br>
-                
+
                 <div class="bill-actions">
                     <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}" class="btn btn-primary btn-small">
                         Read Summary
@@ -176,14 +175,14 @@
                         {% set yes_percentage = ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) %}
                         {% set no_percentage = ((bill.poll_results_no or 0) / total_votes * 100)|round(1) %}
                         <div class="poll-results-content" style="display: none; --yes-width: {{ yes_percentage }}%; --no-width: {{ no_percentage }}%;">
-                            <div class="poll-option">
+                            <div class="poll-option" data-vote="yes">
                                 <span class="poll-label">Yes</span>
                                 <div class="poll-bar">
                                     <div class="poll-fill yes-fill"></div>
                                 </div>
                                 <span class="poll-percentage">{{ yes_percentage }}%</span>
                             </div>
-                            <div class="poll-option">
+                            <div class="poll-option" data-vote="no">
                                 <span class="poll-label">No</span>
                                 <div class="poll-bar">
                                     <div class="poll-fill no-fill"></div>

@@ -163,6 +163,13 @@ def add_security_headers(response):
         response.headers["X-Request-ID"] = g.req_id
     if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
         response.headers["Cache-Control"] = "no-store"
+    elif request.path.startswith("/admin"):
+        response.headers["Cache-Control"] = "no-store"
+    else:
+        # Allow short caching for public HTML pages so social media crawlers/
+        # link preview generators can fetch and cache the page content with
+        # proper OG meta tags (avoids "Just a moment..." placeholder previews).
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300"
     return response
 
 # --- Context processors ---
@@ -403,6 +410,32 @@ def healthz_db():
 
 
 # --- Routes ---
+def _get_homepage_stats():
+    """Cheap aggregate stats for the homepage 'By the Numbers' section.
+    Returns dict with total_bills, total_votes. Returns zeros on any failure."""
+    try:
+        import psycopg2.extras
+        from src.database.connection import postgres_connect
+        with postgres_connect() as conn:
+            if conn is None:
+                return {"total_bills": 0, "total_votes": 0, "days_active": 0}
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE published = TRUE) AS total_bills,
+                        COALESCE(SUM(poll_results_yes), 0) + COALESCE(SUM(poll_results_no), 0) AS total_votes
+                    FROM bills
+                """)
+                row = cur.fetchone() or {}
+                return {
+                    "total_bills": int(row.get("total_bills") or 0),
+                    "total_votes": int(row.get("total_votes") or 0),
+                }
+    except Exception as e:
+        logger.warning(f"Homepage stats query failed (non-fatal): {e}")
+        return {"total_bills": 0, "total_votes": 0}
+
+
 @app.route("/")
 def index():
     start_time = time.time()
@@ -410,13 +443,14 @@ def index():
     try:
         db_start = time.time()
         latest_bill = get_latest_tweeted_bill() or get_latest_bill()
+        stats = _get_homepage_stats()
         db_time = time.time() - db_start
         logger.info(f"Database query completed in {db_time:.3f}s")
         if not latest_bill:
             logger.warning("No bills found in database")
-            return render_template("index.html", bill=None)
+            return render_template("index.html", bill=None, stats=stats)
         render_start = time.time()
-        response = render_template("index.html", bill=latest_bill)
+        response = render_template("index.html", bill=latest_bill, stats=stats)
         render_time = time.time() - render_start
         total_time = time.time() - start_time
         logger.info(f"Template rendered in {render_time:.3f}s")
@@ -424,7 +458,7 @@ def index():
         return response
     except Exception as e:
         logger.error(f"Error loading homepage: {e}", exc_info=True)
-        return render_template("index.html", bill=None, error="Unable to load the latest bill. Please try again later.")
+        return render_template("index.html", bill=None, stats={"total_bills": 0, "total_votes": 0}, error="Unable to load the latest bill. Please try again later.")
 
 @app.route("/archive")
 def archive_redirect():
@@ -477,7 +511,8 @@ def bills():
             "all", "agreed_to_in_house", "agreed_to_in_senate", "became_law",
             "committee_consideration", "failed_house", "failed_senate",
             "introduced", "passed_house", "passed_senate",
-            "referred_to_committee", "reported_by_committee", "vetoed"
+            "referred_to_committee", "reported_by_committee",
+            "to_president", "vetoed"
         ]
         if status not in valid_statuses:
             logger.warning(f"Invalid status parameter: {status}")
@@ -1372,6 +1407,7 @@ def get_my_votes():
         abort(500, description="Internal server error")
 
 @app.route("/api/poll-results/<string:bill_id>")
+@limiter.limit("120 per minute")
 def get_poll_results(bill_id: str):
     try:
         bill = get_bill_by_id(bill_id)
