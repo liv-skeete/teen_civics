@@ -18,6 +18,15 @@
   const randReqId = () => { try { return crypto.randomUUID(); } catch { return String(Math.random()).slice(2); } };
   const $all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+  // Read the per-page CSRF token from the <meta name="csrf-token"> tag
+  // (set in base.html). Returns "" if missing — server will reject the
+  // request, which is the correct behavior. Sent as X-CSRFToken on all
+  // state-changing POSTs.
+  function getCsrfToken() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute("content") || "") : "";
+  }
+
   // Safe localStorage helpers (handles Safari private mode)
   function getStored(key) { try { return localStorage.getItem(key); } catch { return null; } }
   function setStored(key, val) { try { localStorage.setItem(key, val); } catch {} }
@@ -112,7 +121,11 @@
 
     fetch(API_BASE + "/api/vote", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Request-ID": randReqId() },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": randReqId(),
+        "X-CSRFToken": getCsrfToken(),
+      },
       body: JSON.stringify({
         bill_id: billId,
         vote_type: voteType,
@@ -139,10 +152,19 @@
       setStored(`voted_${billId}`, voteType);
       highlightCurrentVote(options, voteType);
 
+      // Optimistic local poll update — apply the delta from this vote to
+      // the displayed bars immediately, before the /api/poll-results
+      // round-trip returns. The server is already consistent (S1 fix),
+      // and the followup fetch corrects any drift.
+      applyOptimisticVoteDelta(widget, voteType, previousVote);
+
       // Pre-warm reasoning cache in background (don't await, don't block UI)
       fetch(API_BASE + '/api/pre-generate-reasoning', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
         body: JSON.stringify({ bill_id: billId, vote: voteType })
       }).catch(() => {}); // Silently ignore failures
 
@@ -159,8 +181,19 @@
         window.TeenCivics.onVoteChanged(billId, voteType);
       }
 
-      // After vote, refresh results exactly once
-      fetchedOnce.delete(widget); // allow a fresh fetch
+      // Record the vote in sessionStorage so that if the user navigates
+      // to another page (e.g. /bills archive) within this tab, the archive
+      // can apply the same optimistic delta to its mini-results — no need
+      // to wait for the next SSR snapshot.
+      try {
+        const stash = JSON.parse(sessionStorage.getItem("pendingVoteDeltas") || "{}");
+        stash[billId] = { voteType: voteType, previousVote: previousVote || null, ts: Date.now() };
+        sessionStorage.setItem("pendingVoteDeltas", JSON.stringify(stash));
+      } catch (_) {}
+
+      // Confirm/correct against server (this also catches any concurrent votes
+      // from other users that landed between optimistic-update and now)
+      fetchedOnce.delete(widget);
       fetchOnceResults(billId, widget);
 
       // Restart live polling so other voters' votes appear in real time
@@ -254,6 +287,37 @@
     // Force reflow to ensure the changes are rendered properly
     if (yesFill) yesFill.offsetHeight;
     if (noFill) noFill.offsetHeight;
+  }
+
+  // Apply the just-voted delta to the on-screen poll bars immediately,
+  // before the /api/poll-results round-trip returns. Reads current
+  // displayed counts (from the .result-count spans we render to) and
+  // increments/decrements based on what changed.
+  function applyOptimisticVoteDelta(widget, voteType, previousVote) {
+    if (!widget) return;
+    const resultsContainer = widget.querySelector(".poll-results");
+    if (!resultsContainer) return;
+
+    // Read current displayed counts. If nothing's rendered yet (first
+    // vote on a fresh bill), default to 0 and let the followup fetch
+    // populate.
+    const yesEl = resultsContainer.querySelector(".yes-fill .result-count");
+    const noEl  = resultsContainer.querySelector(".no-fill .result-count");
+    let yes = parseInt(yesEl ? yesEl.textContent : "0", 10) || 0;
+    let no  = parseInt(noEl  ? noEl.textContent  : "0", 10) || 0;
+
+    // Subtract previous vote (if any) first, then add new vote
+    if (previousVote === "yes") yes = Math.max(0, yes - 1);
+    if (previousVote === "no")  no  = Math.max(0, no - 1);
+    if (voteType === "yes") yes += 1;
+    if (voteType === "no")  no  += 1;
+
+    updateResultsDisplay({ yes_votes: yes, no_votes: no, total: yes + no }, resultsContainer);
+
+    // Ensure the results section is visible — on first vote it may be hidden
+    if (resultsContainer.style.display === "none") {
+      resultsContainer.style.display = "block";
+    }
   }
 
   // Highlight the user's current vote selection
@@ -352,6 +416,44 @@
     });
   }
 
+  // Apply a pending vote delta to an archive .poll-preview that was SSR'd
+  // with stale counts (because the vote happened after the page was
+  // rendered). Updates the data-* attrs, the --yes-width/--no-width CSS
+  // vars, the percentage spans, and the total-votes caption.
+  function applyArchivePollDelta(preview, voteType, previousVote) {
+    if (!preview) return;
+    let yes = parseInt(preview.dataset.yesCount || "0", 10) || 0;
+    let no  = parseInt(preview.dataset.noCount  || "0", 10) || 0;
+
+    if (previousVote === "yes") yes = Math.max(0, yes - 1);
+    if (previousVote === "no")  no  = Math.max(0, no - 1);
+    if (voteType === "yes") yes += 1;
+    if (voteType === "no")  no  += 1;
+
+    preview.dataset.yesCount = String(yes);
+    preview.dataset.noCount  = String(no);
+
+    const total = yes + no;
+    const yesPct = total > 0 ? Math.round((yes / total) * 1000) / 10 : 0;
+    const noPct  = total > 0 ? Math.round((no  / total) * 1000) / 10 : 0;
+
+    const content = preview.querySelector(".poll-results-content");
+    if (content) {
+      content.style.setProperty("--yes-width", `${yesPct}%`);
+      content.style.setProperty("--no-width",  `${noPct}%`);
+    }
+
+    const yesPctEl = preview.querySelector('.poll-option[data-vote="yes"] .poll-percentage');
+    const noPctEl  = preview.querySelector('.poll-option[data-vote="no"]  .poll-percentage');
+    if (yesPctEl) yesPctEl.textContent = `${yesPct}%`;
+    if (noPctEl)  noPctEl.textContent  = `${noPct}%`;
+
+    const totalEl = preview.querySelector(".poll-total");
+    if (totalEl) {
+      totalEl.textContent = `${total} total vote${total !== 1 ? "s" : ""}`;
+    }
+  }
+
   // --- Archive mini-results bars ---
   function initArchiveMiniResults() {
     const containers = $all(".mini-results");
@@ -366,8 +468,19 @@
   }
 
   // --- Archive poll preview vote-to-unlock ---
-  // Shows/hides poll results based on whether user has voted on each bill
+  // Shows/hides poll results based on whether user has voted on each bill.
+  // Also applies any pending vote deltas from sessionStorage so a vote
+  // cast on one page reflects on the archive without waiting for the
+  // next SSR snapshot.
   function initArchiveVoteToUnlock() {
+    // Pull pending vote deltas the user cast on another page in this tab.
+    // We don't have the SSR yes/no counts for those bills here, but the
+    // server-side rendered .mini-results dataset has them. Use that.
+    let pendingDeltas = {};
+    try {
+      pendingDeltas = JSON.parse(sessionStorage.getItem("pendingVoteDeltas") || "{}");
+    } catch (_) {}
+
     const pollPreviews = $all(".poll-preview[data-bill-id]");
     pollPreviews.forEach((preview) => {
       const billId = preview.dataset.billId;
@@ -377,6 +490,13 @@
       const resultsContent = preview.querySelector(".poll-results-content");
 
       if (!overlay || !resultsContent) return;
+
+      // Apply pending delta to the SSR-rendered widths + percentages
+      // so the bars reflect the freshly-cast vote.
+      const pending = pendingDeltas[billId];
+      if (pending) {
+        applyArchivePollDelta(preview, pending.voteType, pending.previousVote);
+      }
 
       const hasVoted = getStored(`voted_${billId}`);
       const badge = preview.querySelector(".your-vote-badge");

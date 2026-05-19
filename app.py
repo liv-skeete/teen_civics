@@ -176,10 +176,15 @@ def add_security_headers(response):
         response.headers["Cache-Control"] = "no-store"
     elif request.path.startswith("/admin"):
         response.headers["Cache-Control"] = "no-store"
+    elif getattr(g, "is_authenticated", False):
+        # Authenticated pages render user-specific state (tier badge,
+        # display name, vote balance). Must not be cached by Cloudflare
+        # or shared browser caches or User A's page leaks to User B.
+        response.headers["Cache-Control"] = "private, no-store"
     else:
-        # Allow short caching for public HTML pages so social media crawlers/
-        # link preview generators can fetch and cache the page content with
-        # proper OG meta tags (avoids "Just a moment..." placeholder previews).
+        # Public, anonymous HTML pages — short edge cache for social media
+        # link-preview crawlers / SEO. private would block Cloudflare's
+        # edge cache; public is intentional since no user data is rendered.
         response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300"
     return response
 
@@ -1303,20 +1308,46 @@ def handle_csrf_error(e):
         return jsonify({"error": "CSRF validation failed", "details": e.description}), 400
     return render_template("500.html"), 400
 
+from itsdangerous import URLSafeSerializer, BadSignature
+
+# Voter-ID cookies are signed with SECRET_KEY to prevent forgery/swap.
+# Once a voter_id is joined to a users row, the cookie value becomes a
+# session-equivalent bearer token; an unsigned UUID is trivially
+# guessable / replayable. Signed values reject tampered cookies as if
+# absent (returning user looks new — they lose their "you voted on X"
+# UI highlight until they vote again, but votes themselves are preserved
+# in the DB keyed by voter_id).
+_voter_id_serializer = URLSafeSerializer(app.config["SECRET_KEY"], salt="voter-id")
+
+
+def _read_signed_voter_id():
+    """Return the verified voter_id from the request cookie, or None
+    if the cookie is missing, tampered, or in the legacy unsigned format."""
+    raw = request.cookies.get("voter_id")
+    if not raw:
+        return None
+    try:
+        return _voter_id_serializer.loads(raw)
+    except BadSignature:
+        # Legacy unsigned UUID cookies fall through here; treat as
+        # absent so a new signed cookie gets minted on the way out.
+        return None
+
+
 def _get_or_create_voter_id():
     """
-    Get the voter_id from the request cookie, or generate a new UUID4.
-    Returns (voter_id, is_new) tuple.
+    Get the voter_id from the (signed) request cookie, or generate a
+    new UUID4. Returns (voter_id, is_new) tuple.
     """
-    voter_id = request.cookies.get("voter_id")
-    if voter_id:
-        return voter_id, False
+    existing = _read_signed_voter_id()
+    if existing:
+        return existing, False
     return str(uuid.uuid4()), True
 
 
 def _set_voter_cookie(response, voter_id):
     """
-    Set the voter_id cookie on a response object.
+    Set the SIGNED voter_id cookie on a response object.
     Uses secure=True only in production environments.
     """
     is_production = (
@@ -1324,9 +1355,10 @@ def _set_voter_cookie(response, voter_id):
         or os.environ.get("FLASK_ENV") == "production"
         or request.is_secure
     )
+    signed = _voter_id_serializer.dumps(voter_id)
     response.set_cookie(
         "voter_id",
-        voter_id,
+        signed,
         max_age=63072000,  # 2 years
         httponly=True,
         samesite="Lax",
@@ -1337,7 +1369,6 @@ def _set_voter_cookie(response, voter_id):
 
 @app.route("/api/vote", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def record_vote():
     try:
         data = request.get_json()
@@ -1377,7 +1408,7 @@ def record_vote():
 def get_my_votes():
     """Return all votes for the current voter as a bill_id -> vote_type mapping."""
     try:
-        voter_id = request.cookies.get("voter_id")
+        voter_id = _read_signed_voter_id()
         if not voter_id:
             return jsonify({"votes": {}})
 
@@ -1476,7 +1507,6 @@ def _set_cached_rep(state: str, district: int, data: Dict) -> None:
 
 @app.route("/api/zip-lookup", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def zip_lookup():
     """Look up congressional district(s) from a ZIP code using Census Geocoder."""
     try:
@@ -1627,7 +1657,6 @@ def zip_lookup():
 
 @app.route("/api/rep-lookup", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def rep_lookup():
     """Look up a House representative for a state + district using Congress.gov API."""
     try:
@@ -1788,7 +1817,6 @@ def rep_lookup():
 
 @app.route("/api/pre-generate-reasoning", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def pre_generate_reasoning():
     """Pre-warm the argument cache when a user votes, before they enter their ZIP.
 
@@ -1860,7 +1888,6 @@ def _truncate_at_sentence(text: str, max_length: int) -> str:
 
 @app.route("/api/generate-email", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def generate_email():
     """Generate an email template for contacting a representative about a bill.
 
