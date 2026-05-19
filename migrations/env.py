@@ -10,23 +10,23 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-# Read DATABASE_URL from environment (.env via src.load_env when run
-# locally; from Railway env in CI). We deliberately don't put the DSN
-# in alembic.ini so secrets stay out of version control.
-try:
-    # Best effort: load .env when running locally. Safe to skip in CI.
-    import sys
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-    from src.load_env import load_env  # type: ignore
-    load_env()
-except Exception:
-    pass
-
+# Read DATABASE_URL from the environment. We DELIBERATELY do not
+# auto-load .env here — it's too easy to run a migration against prod
+# when you meant staging. To target a specific DB, set the env var
+# explicitly when invoking alembic:
+#
+#   DATABASE_URL=postgresql://... alembic upgrade head
+#
+# In Railway CI, DATABASE_URL is already set by the runtime so this
+# Just Works.
 _db_url = os.environ.get("DATABASE_URL")
 if not _db_url:
     raise RuntimeError(
         "DATABASE_URL is not set. Alembic migrations require an explicit "
-        "DSN — set DATABASE_URL in your .env (local) or Railway env (CI)."
+        "DSN. Set it inline:\n"
+        "    DATABASE_URL=postgresql://... alembic upgrade head\n"
+        "Refusing to silently auto-load .env so you don't accidentally "
+        "migrate prod when you meant staging."
     )
 # Railway DSNs use the postgresql:// scheme; SQLAlchemy is happy with it.
 config.set_main_option("sqlalchemy.url", _db_url)

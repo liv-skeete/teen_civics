@@ -116,9 +116,17 @@ if not _secret_key:
 app.config["SECRET_KEY"] = _secret_key
 
 # Session security
-app.config["SESSION_COOKIE_SECURE"] = not config.flask.debug
+# SECURE=True (production HTTPS) is required for the secure flag on cookies,
+# but in local dev over http:// the browser will silently drop secure cookies
+# → no session → CSRF token mismatches on form posts. Only enable SECURE in
+# real production (Railway sets RAILWAY_ENVIRONMENT); leave off for local dev.
+_is_railway = os.environ.get("RAILWAY_ENVIRONMENT") is not None
+app.config["SESSION_COOKIE_SECURE"] = _is_railway
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Sessions persist 30 days when "remember me" is set via permanent=True
+from datetime import timedelta as _timedelta
+app.config["PERMANENT_SESSION_LIFETIME"] = _timedelta(days=30)
 
 # CSRF + rate limiting
 csrf = CSRFProtect(app)
@@ -664,6 +672,142 @@ def contact():
 @app.route("/resources")
 def resources():
     return render_template("resources.html")
+
+
+# --- Auth + gamification (v1 MVP) ---
+from src.auth import passwords as auth_passwords
+from src.auth import session as auth_session
+from src.auth import db as auth_db
+from src.auth.gamification import (
+    get_tier as gam_get_tier,
+    progress_to_next as gam_progress,
+    reward_for_nth_vote_of_day,
+    DAILY_VOTE_CAP,
+)
+
+
+def _user_stats(user_id):
+    """Build the dict the navbar / rail / profile pages need.
+    Returns None if user_id resolves to nothing (deleted account)."""
+    user = auth_db.get_user_by_id(user_id)
+    if not user:
+        return None
+    balance = auth_db.get_balance(user_id)
+    today_count = auth_db.count_today_vote_awards(user_id)
+    tier = gam_get_tier(balance)
+    return {
+        "user_id": user_id,
+        "username": user["username"],
+        "balance": balance,
+        "tier": tier.title,
+        "tier_rank": tier.rank,
+        "progress": gam_progress(balance),
+        "lifetime_votes_cast": int(user.get("total_votes_cast") or 0),
+        "daily_used": today_count,
+        "daily_cap": DAILY_VOTE_CAP,
+    }
+
+
+@app.context_processor
+def inject_current_user():
+    """Make current_user available in every template."""
+    uid = auth_session.current_user_id()
+    if not uid:
+        return {"current_user": None}
+    stats = _user_stats(uid)
+    return {"current_user": stats}
+
+
+@app.before_request
+def _set_is_authenticated():
+    """Flag the request as authenticated so Cache-Control short-circuits
+    to private/no-store (see add_security_headers, S4 fix)."""
+    g.is_authenticated = auth_session.is_authenticated()
+
+
+@app.route("/signup", methods=["GET", "POST"])
+@limiter.limit("10 per hour")
+def signup():
+    if auth_session.is_authenticated():
+        return redirect(url_for("profile"))
+    if request.method == "GET":
+        return render_template("signup.html", error=None, username="")
+
+    username_raw = (request.form.get("username") or "").strip()
+    password = request.form.get("password") or ""
+
+    try:
+        username = auth_passwords.validate_username(username_raw)
+        auth_passwords.validate_password(password)
+    except ValueError as e:
+        return render_template("signup.html", error=str(e), username=username_raw), 400
+
+    # Link existing anonymous voter_id (if present) so prior votes
+    # follow the user once they sign up.
+    voter_id, _ = _get_or_create_voter_id()
+    password_hash = auth_passwords.hash_password(password)
+    new_id = auth_db.create_user(username, password_hash, voter_id=voter_id)
+    if not new_id:
+        return render_template("signup.html", error="That username is already taken.", username=username_raw), 400
+
+    auth_session.login_user(new_id)
+    auth_db.update_last_login(new_id)
+    response = make_response(redirect(url_for("profile")))
+    _set_voter_cookie(response, voter_id)
+    return response
+
+
+@app.route("/login", methods=["GET", "POST"])
+@limiter.limit("20 per hour")
+def login():
+    if auth_session.is_authenticated():
+        return redirect(url_for("profile"))
+    if request.method == "GET":
+        return render_template("login.html", error=None, username="")
+
+    username = (request.form.get("username") or "").strip()
+    password = request.form.get("password") or ""
+
+    user = auth_db.get_user_by_username(username) if username else None
+    if not user or not auth_passwords.verify_password(password, user["password_hash"]):
+        return render_template("login.html", error="Invalid username or password.", username=username), 401
+
+    auth_session.login_user(user["id"])
+    auth_db.update_last_login(user["id"])
+    return redirect(url_for("profile"))
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    auth_session.logout_user()
+    return redirect(url_for("index"))
+
+
+@app.route("/profile")
+def profile():
+    uid = auth_session.current_user_id()
+    if not uid:
+        return redirect(url_for("login"))
+    stats = _user_stats(uid)
+    if not stats:
+        auth_session.logout_user()
+        return redirect(url_for("login"))
+    from src.auth.gamification import TIERS
+    return render_template("profile.html", stats=stats, tiers=TIERS)
+
+
+@app.route("/api/me")
+@limiter.limit("60 per minute")
+def api_me():
+    """Used by the right-side rail to refresh after a vote."""
+    uid = auth_session.current_user_id()
+    if not uid:
+        return jsonify({"authenticated": False})
+    stats = _user_stats(uid)
+    if not stats:
+        return jsonify({"authenticated": False})
+    return jsonify({"authenticated": True, **stats})
+
 
 @app.route('/favicon.ico')
 def favicon():
@@ -1395,7 +1539,22 @@ def record_vote():
         if not updated:
             abort(404, description="Bill not found or vote update failed")
 
-        response = make_response(jsonify({"success": True, "voter_id": voter_id}))
+        # Award Votes currency if the user is logged in and within their
+        # daily cap. Anonymous votes don't earn currency but DO move the
+        # poll counter (we want everyone's poll input).
+        votes_awarded = 0.0
+        uid = auth_session.current_user_id()
+        if uid:
+            today_count = auth_db.count_today_vote_awards(uid)
+            votes_awarded = reward_for_nth_vote_of_day(today_count + 1)
+            if votes_awarded > 0:
+                auth_db.award_vote(uid, bill_id, votes_awarded)
+
+        response = make_response(jsonify({
+            "success": True,
+            "voter_id": voter_id,
+            "votes_awarded": votes_awarded,
+        }))
         _set_voter_cookie(response, voter_id)
         return response
     except Exception as e:

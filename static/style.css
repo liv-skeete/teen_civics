@@ -2491,6 +2491,19 @@ h1, h2, h3, h4, h5, h6 {
         padding: var(--spacing-sm) var(--spacing-md);
         border-radius: var(--border-radius);
     }
+
+    /* Sign-in pill + user pill: keep their compact ellipse shape on
+       mobile too, instead of stretching to full row width like the
+       regular nav links. */
+    .nav-menu .nav-link.nav-signin,
+    .nav-menu .nav-link.nav-user {
+        width: auto;
+        align-self: flex-start;
+        margin: var(--spacing-xs) var(--spacing-md);
+        padding: 0.45rem 1rem;
+        border-radius: 999px;
+        min-height: 0;
+    }
     
     /* Light mode mobile nav link hover */
     .nav-menu .nav-link:hover {
@@ -3333,4 +3346,576 @@ h1, h2, h3, h4, h5, h6 {
 .dark-theme {
     --card-border-color: #4a9eff;
     --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* =========================================================================
+   Auth + gamification (v1 MVP)
+   ========================================================================= */
+
+/* --- Navbar user pill --- */
+.nav-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    background-color: var(--color-navy);
+    color: var(--color-white);
+    border-radius: 999px;
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+}
+
+.nav-user:hover {
+    background-color: var(--color-brown-black);
+    color: var(--color-white);
+}
+
+.nav-user-tier {
+    font-weight: 700;
+}
+
+.nav-user-balance {
+    background-color: rgba(255, 255, 255, 0.18);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+}
+
+.nav-user-suffix {
+    opacity: 0.85;
+    font-size: var(--font-size-xs);
+}
+
+.nav-signin {
+    border: 1px solid var(--color-navy);
+    border-radius: 999px;
+    padding: 0.35rem 1rem;
+}
+
+[data-theme="dark"] .nav-user,
+.dark-theme .nav-user {
+    background-color: var(--color-accent);
+    color: var(--color-background);
+}
+
+/* --- Right-side rail (desktop only) --- */
+.user-rail {
+    position: fixed;
+    top: 100px;
+    right: 24px;
+    width: 220px;
+    padding: 1rem 1.1rem;
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    font-size: var(--font-size-sm);
+    z-index: 50;
+}
+
+.rail-tier {
+    font-weight: 700;
+    font-size: var(--font-size-md);
+    color: var(--color-navy);
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+}
+
+[data-theme="dark"] .rail-tier,
+.dark-theme .rail-tier {
+    color: var(--color-accent);
+}
+
+.rail-progress-wrap {
+    margin-bottom: 0.75rem;
+}
+
+.rail-progress-bar {
+    height: 6px;
+    background-color: var(--color-light-gray);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.3rem;
+}
+
+[data-theme="dark"] .rail-progress-bar,
+.dark-theme .rail-progress-bar {
+    background-color: var(--color-borders-dark);
+}
+
+.rail-progress-fill {
+    height: 100%;
+    background-color: var(--color-navy);
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .rail-progress-fill,
+.dark-theme .rail-progress-fill {
+    background-color: var(--color-accent);
+}
+
+.rail-progress-text {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .rail-progress-text,
+.dark-theme .rail-progress-text {
+    color: var(--color-text);
+    opacity: 0.7;
+}
+
+.rail-divider {
+    border: none;
+    border-top: 1px solid var(--color-borders);
+    margin: 0.75rem 0;
+}
+
+.rail-stat {
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+.rail-stat-num {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-text);
+    margin-right: 0.3rem;
+}
+
+.rail-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+[data-theme="dark"] .rail-stat-label,
+.dark-theme .rail-stat-label {
+    color: var(--color-text);
+    opacity: 0.65;
+}
+
+.rail-stat-small {
+    font-size: var(--font-size-xs);
+}
+
+/* Hide rail on narrow viewports — info lives in navbar there */
+@media (max-width: 1100px) {
+    .user-rail {
+        display: none;
+    }
+}
+
+/* --- Auth pages (login + signup) --- */
+.auth-container {
+    max-width: 480px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+.auth-card {
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--card-border-radius);
+    padding: 2rem 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.auth-card h1 {
+    margin-bottom: 0.5rem;
+}
+
+.auth-error {
+    background-color: #FEE;
+    color: #B71C1C;
+    border: 1px solid #F44336;
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 1rem;
+    font-size: var(--font-size-sm);
+}
+
+[data-theme="dark"] .auth-error,
+.dark-theme .auth-error {
+    background-color: rgba(244, 67, 54, 0.18);
+    color: #EF9A9A;
+    border-color: #EF5350;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.auth-form label {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+}
+
+.auth-hint {
+    font-weight: 400;
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-xs);
+}
+
+.auth-form input[type="text"],
+.auth-form input[type="password"] {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-family: var(--font-family);
+    background-color: var(--color-cards);
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+}
+
+.auth-form input:focus {
+    outline: 2px solid var(--color-navy);
+    outline-offset: 2px;
+}
+
+.auth-form button[type="submit"] {
+    margin-top: 0.5rem;
+}
+
+.auth-foot {
+    margin-top: 1.25rem;
+    font-size: var(--font-size-sm);
+    color: var(--color-dark-gray);
+}
+
+.auth-note {
+    font-style: italic;
+    opacity: 0.85;
+}
+
+/* --- Profile page --- */
+.profile-container {
+    max-width: 720px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.profile-header h1 {
+    margin: 0;
+}
+
+.profile-tier-pill {
+    background-color: var(--color-navy);
+    color: var(--color-white);
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .profile-stats { grid-template-columns: 1fr; }
+}
+
+.profile-stat {
+    text-align: center;
+    padding: 1rem;
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+}
+
+.profile-stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-navy);
+    line-height: 1.1;
+}
+
+[data-theme="dark"] .profile-stat-number,
+.dark-theme .profile-stat-number {
+    color: var(--color-accent);
+}
+
+.profile-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.3rem;
+}
+
+.profile-progress {
+    margin-bottom: 2rem;
+}
+
+.profile-progress-label {
+    font-size: var(--font-size-sm);
+    margin-bottom: 0.4rem;
+}
+
+.profile-progress-bar {
+    height: 10px;
+    background-color: var(--color-light-gray);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+[data-theme="dark"] .profile-progress-bar,
+.dark-theme .profile-progress-bar {
+    background-color: var(--color-borders-dark);
+}
+
+.profile-progress-fill {
+    height: 100%;
+    background-color: var(--color-navy);
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .profile-progress-fill,
+.dark-theme .profile-progress-fill {
+    background-color: var(--color-accent);
+}
+
+.profile-ladder {
+    margin-top: 2rem;
+}
+
+.tier-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tier-list-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.9rem;
+    border-radius: var(--border-radius);
+    border: 1px solid transparent;
+    margin-bottom: 0.3rem;
+    font-size: var(--font-size-sm);
+}
+
+.tier-num {
+    font-weight: 700;
+    color: var(--color-dark-gray);
+    font-family: ui-monospace, monospace;
+}
+
+.tier-name {
+    font-weight: 500;
+}
+
+.tier-threshold {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+}
+
+.tier-current {
+    background-color: var(--color-navy);
+    color: var(--color-white);
+    border-color: var(--color-navy);
+}
+
+.tier-current .tier-num,
+.tier-current .tier-threshold {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.tier-done {
+    opacity: 0.6;
+}
+
+.tier-done .tier-name::before {
+    content: "✓ ";
+    color: var(--color-success);
+}
+
+.tier-locked {
+    opacity: 0.55;
+}
+
+.profile-account {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-borders);
+}
+
+/* --- Navbar user dropdown (replaces the persistent right rail) --- */
+.nav-user-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.nav-user {
+    background: var(--color-navy);
+    color: var(--color-white);
+    border: none;
+    cursor: pointer;
+    font: inherit;
+}
+
+.nav-user-caret {
+    margin-left: 0.25rem;
+    font-size: 0.7em;
+    opacity: 0.8;
+}
+
+.nav-user-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 260px;
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 1rem;
+    z-index: 1100;
+}
+
+.nav-user-panel[hidden] { display: none; }
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+}
+
+.panel-tier {
+    font-size: var(--font-size-xs);
+    color: var(--color-navy);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+[data-theme="dark"] .panel-tier,
+.dark-theme .panel-tier {
+    color: var(--color-accent);
+}
+
+.panel-progress {
+    margin-bottom: 0.85rem;
+}
+
+.panel-progress-bar {
+    height: 6px;
+    background-color: var(--color-light-gray);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.3rem;
+}
+
+[data-theme="dark"] .panel-progress-bar,
+.dark-theme .panel-progress-bar {
+    background-color: var(--color-borders-dark);
+}
+
+.panel-progress-fill {
+    height: 100%;
+    background-color: var(--color-navy);
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .panel-progress-fill,
+.dark-theme .panel-progress-fill {
+    background-color: var(--color-accent);
+}
+
+.panel-progress-text {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .panel-progress-text,
+.dark-theme .panel-progress-text {
+    color: var(--color-text);
+    opacity: 0.7;
+}
+
+.panel-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin: 0 0 0.85rem 0;
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--color-borders);
+    border-bottom: 1px solid var(--color-borders);
+}
+
+.panel-stats > div { font-size: var(--font-size-xs); }
+.panel-stats dt {
+    color: var(--color-dark-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.15rem;
+}
+.panel-stats dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.panel-link {
+    display: block;
+    padding: 0.5rem 0;
+    color: var(--color-navy);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+[data-theme="dark"] .panel-link,
+.dark-theme .panel-link {
+    color: var(--color-accent);
+}
+
+.panel-link:hover { text-decoration: underline; }
+
+.panel-logout {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-borders);
+}
+
+.panel-logout-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    padding: 0.25rem 0;
+}
+
+.panel-logout-btn:hover { color: var(--color-error); }
+
+@media (max-width: 768px) {
+    .nav-user-panel {
+        position: fixed;
+        top: auto;
+        bottom: 1rem;
+        right: 1rem;
+        left: 1rem;
+        width: auto;
+    }
 }

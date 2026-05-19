@@ -143,12 +143,54 @@
         <a href="{{ url_for('about') }}" class="nav-link" {% if request.endpoint == 'about' %}aria-current="page"{% endif %}>About</a>
         <a href="{{ url_for('grants') }}" class="nav-link" {% if request.endpoint == 'grants' %}aria-current="page"{% endif %}>Grants</a>
         <a href="{{ url_for('contact') }}" class="nav-link" {% if request.endpoint == 'contact' %}aria-current="page"{% endif %}>Contact</a>
+        {% if current_user %}
+          <a href="{{ url_for('profile') }}" class="nav-link nav-user" {% if request.endpoint == 'profile' %}aria-current="page"{% endif %}>
+            <span class="nav-user-tier" data-rail-tier>{{ current_user.tier }}</span>
+            <span class="nav-user-balance" data-rail-balance>{{ current_user.balance|int }}</span>
+            <span class="nav-user-suffix">Votes</span>
+          </a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="nav-link nav-signin">Sign in</a>
+        {% endif %}
       </div>
       <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-menu">
         <span class="bar"></span><span class="bar"></span><span class="bar"></span>
       </button>
     </div>
   </nav>
+
+
+  {% if current_user %}
+  <aside class="user-rail" aria-label="Your civic standing" data-user-rail>
+    <div class="rail-tier" data-rail-tier>{{ current_user.tier }}</div>
+    {% if current_user.progress.next_tier %}
+      <div class="rail-progress-wrap">
+        <div class="rail-progress-bar" aria-label="Progress to next tier">
+          <div class="rail-progress-fill" data-rail-fill style="width: {{ current_user.progress.percent }}%"></div>
+        </div>
+        <div class="rail-progress-text">
+          <span data-rail-to-next>{{ current_user.progress.votes_to_next }}</span>
+          to <span data-rail-next-tier>{{ current_user.progress.next_tier }}</span>
+        </div>
+      </div>
+    {% else %}
+      <div class="rail-progress-text">Top rank reached.</div>
+    {% endif %}
+    <hr class="rail-divider">
+    <div class="rail-stat">
+      <span class="rail-stat-num" data-rail-balance>{{ current_user.balance|int }}</span>
+      <span class="rail-stat-label">Votes</span>
+    </div>
+    <div class="rail-stat">
+      <span class="rail-stat-num" data-rail-lifetime>{{ current_user.lifetime_votes_cast }}</span>
+      <span class="rail-stat-label">Bills voted on</span>
+    </div>
+    <div class="rail-stat rail-stat-small">
+      <span data-rail-daily>{{ current_user.daily_used }}/{{ current_user.daily_cap }}</span>
+      <span class="rail-stat-label">today</span>
+    </div>
+  </aside>
+  {% endif %}
 
   <!-- Main Content -->
   <main class="main-content" id="main-content">
