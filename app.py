@@ -136,22 +136,15 @@ DEFAULT_ARCHIVE_PAGE_SIZE = 24
 
 # --- Import database functions (after app initialized) ---
 from src.database.db import (
-    get_all_bills,
     get_bill_by_id,
     get_latest_bill,
     get_latest_tweeted_bill,
-    get_all_tweeted_bills,
     get_bill_by_slug,
-    update_poll_results,
-    search_tweeted_bills,
-    count_search_tweeted_bills,
     search_and_count_bills,
-    record_individual_vote,
     record_vote_and_update_poll,
     get_voter_votes,
     update_bill_arguments,
 )
-from src.processors.summarizer import summarize_title
 from src.processors.argument_generator import generate_bill_arguments
 from src.utils.sponsor_formatter import format_sponsor_sentence
 
