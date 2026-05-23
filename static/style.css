@@ -18,8 +18,24 @@
     --color-background-dark: #1e1e1e;
     --color-cards-dark: #2a2a2a;
     --color-text-dark: #e8e8e8;
-    --color-accent-dark: #6ba3e8;
+    --color-accent-dark: #A4ABE4;        /* Material Indigo 200 — same ramp as primary indigo 500, pairs cleanly */
+    --color-primary-dark: #4F5BB8;       /* Material Indigo 500 — same family as light navy, lighter for dark bg */
+    --color-primary-dark-hover: #5C6BC0; /* Material Indigo 400 */
     --color-borders-dark: #444444;
+    --color-text-muted-dark: #A8A8A8;
+
+    /* --- Unified brand palette (2026-05-23) ---
+       Brand is navy (logo) + terracotta accent. No red anywhere in UI;
+       red stays only inside the logo. Light/dark mirror each other through
+       the theme-aware vars at the bottom of this block. */
+    --color-terracotta: #C75D4F;            /* light accent: Teen Impact, focus rings */
+    --color-terracotta-hover: #A9483C;
+    --color-terracotta-dark: #E8917F;       /* dark accent: dusty coral */
+    --color-terracotta-dark-hover: #D67865;
+    --color-status-bg: #F1E4DE;             /* warm terracotta wash for status pills (light) */
+    --color-status-text: #7A3F35;           /* deep terracotta text for status pills (light) */
+    --color-status-bg-dark: #44322D;        /* warm surface for status pills (dark, slightly lifted) */
+    --color-status-text-dark: #F3B5A6;       /* lighter dusty coral for readability against the wash */
 
     /* Theme tokens (light defaults; overridden in [data-theme="dark"]) */
     --color-background: var(--color-beige);
@@ -27,6 +43,18 @@
     --color-cards: var(--color-white);
     --color-accent: var(--color-navy);
     --color-borders: var(--color-gray);
+
+    /* Unified semantic tokens (theme-aware) */
+    --color-primary: var(--color-navy);
+    --color-primary-hover: #283593;
+    --color-on-primary: #FFFFFF;
+    --color-brand-accent: var(--color-terracotta);
+    --color-brand-accent-hover: var(--color-terracotta-hover);
+    --color-on-brand-accent: #FFFFFF;
+    --color-link: var(--color-navy);
+    --color-text-muted: var(--color-dark-gray);
+    --color-status-pill-bg: var(--color-status-bg);
+    --color-status-pill-text: var(--color-status-text);
 
     /* Spacing */
     --spacing-xs: 0.25rem;
@@ -37,7 +65,7 @@
     --spacing-xxl: 3rem;
 
     /* Typography */
-    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-size-xs: 0.75rem;
     --font-size-sm: 0.875rem;
     --font-size-md: 1rem;
@@ -66,7 +94,7 @@
 
     /* Cards */
     --card-border-width: 2px;
-    --card-border-color: var(--color-navy);
+    --card-border-color: var(--color-primary);
     --card-border-radius: var(--border-radius-lg);
     --card-shadow: var(--shadow-md);
     --card-padding: var(--spacing-lg);
@@ -85,6 +113,18 @@
     --color-cards: var(--color-cards-dark);
     --color-accent: var(--color-accent-dark);
     --color-borders: var(--color-borders-dark);
+
+    /* Unified semantic tokens — dark variants */
+    --color-primary: var(--color-primary-dark);
+    --color-primary-hover: var(--color-primary-dark-hover);
+    --color-on-primary: #FFFFFF;
+    --color-brand-accent: var(--color-terracotta-dark);
+    --color-brand-accent-hover: var(--color-terracotta-dark-hover);
+    --color-on-brand-accent: #1e1e1e;
+    --color-link: var(--color-accent-dark);
+    --color-text-muted: var(--color-text-muted-dark);
+    --color-status-pill-bg: var(--color-status-bg-dark);
+    --color-status-pill-text: var(--color-status-text-dark);
 }
 
 /* Reset and Base Styles */
@@ -99,7 +139,7 @@
     position: absolute;
     top: -9999px;
     left: 0;
-    background: var(--color-navy);
+    background: var(--color-primary);
     color: var(--color-white);
     padding: var(--spacing-sm) var(--spacing-md);
     text-decoration: none;
@@ -125,7 +165,10 @@
 }
 
 /* Stabilize viewport height on mobile browsers */
-html { height: -webkit-fill-available; }
+html {
+    height: -webkit-fill-available;
+    background-color: var(--color-background);  /* prevent overscroll showing wrong color above nav */
+}
 
 body {
     font-family: var(--font-family);
@@ -211,7 +254,7 @@ p {
 }
 
 a {
-    color: var(--color-navy);
+    color: var(--color-primary);
     text-decoration: none;
     transition: color 0.15s ease;
 }
@@ -263,7 +306,7 @@ button:focus,
 input:focus,
 select:focus,
 textarea:focus {
-    outline: 3px solid var(--color-navy);
+    outline: 3px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -285,7 +328,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-    outline: 3px solid var(--color-navy);
+    outline: 3px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -363,7 +406,7 @@ textarea:focus-visible {
 
 .nav-logo h1 {
     font-size: clamp(1.25rem, 2.2vw, 1.625rem);
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin: 0;
     font-weight: 600;
     padding-left: 0;
@@ -415,19 +458,19 @@ textarea:focus-visible {
 /* Hover state - light mode */
 .nav-link:hover {
   background-color: var(--color-light-gray);
-  color: var(--color-navy);
+  color: var(--color-primary);
 }
 
 /* Hover state - dark mode */
 [data-theme="dark"] .nav-link:hover,
 .dark-theme .nav-link:hover {
-  background-color: rgba(107, 163, 232, 0.1);
-  color: var(--color-accent-dark);
+  background-color: rgba(164, 171, 228, 0.10);  /* accent-dark (Indigo 200) @ 10% */
+  color: var(--color-link);
 }
 
 /* Active/current page - light mode */
 .nav-link[aria-current="page"] {
-  color: var(--color-navy);
+  color: var(--color-primary);
   font-weight: 600;
   background-color: var(--color-light-gray);
 }
@@ -435,9 +478,9 @@ textarea:focus-visible {
 /* Active/current page - dark mode */
 [data-theme="dark"] .nav-link[aria-current="page"],
 .dark-theme .nav-link[aria-current="page"] {
-  color: var(--color-accent-dark);
+  color: var(--color-link);
   font-weight: 600;
-  background-color: rgba(107, 163, 232, 0.15);
+  background-color: rgba(164, 171, 228, 0.15);
 }
 
 .nav-toggle {
@@ -495,24 +538,24 @@ textarea:focus-visible {
 }
 
 .btn-primary {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
 }
 
 .btn-primary:hover {
-    background-color: #283593;
-    color: var(--color-white);
+    background-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
 }
 
 .btn-secondary {
-    background-color: var(--color-white);
-    color: var(--color-navy);
-    border: var(--border-width) solid var(--color-navy);
+    background-color: transparent;
+    color: var(--color-primary);
+    border: var(--border-width) solid var(--color-primary);
 }
 
 .btn-secondary:hover {
-    background-color: var(--color-navy);
-    color: var(--color-white);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
 }
 
 .btn-twitter {
@@ -533,7 +576,7 @@ textarea:focus-visible {
 }
 
 .btn-twitter:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
     color: #ffffff !important;
     text-decoration: none;
@@ -541,7 +584,7 @@ textarea:focus-visible {
 
 [data-theme="dark"] .btn-twitter:focus,
 .dark-theme .btn-twitter:focus {
-    outline-color: #4a9eff;
+    outline-color: var(--color-link);
 }
 
 /* Dark theme btn-twitter */
@@ -558,27 +601,28 @@ textarea:focus-visible {
 }
 
 .btn-share {
-    background-color: #1081cf;
-    color: #ffffff !important;
+    background-color: var(--color-primary);
+    color: var(--color-on-primary) !important;
     border: none;
     text-decoration: none;
 }
 
 .btn-share:hover {
-    background-color: #0c69a8;
-    color: #ffffff;
+    background-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
 }
 
-/* Dark theme btn-share */
+/* Dark theme btn-share — folded into the primary indigo family so all
+   filled CTAs share one swatch (Stripe / Linear / Discord pattern). */
 [data-theme="dark"] .btn-share,
 .dark-theme .btn-share {
-    background-color: #40a9ff;
+    background-color: var(--color-primary-dark);
     color: #ffffff;
 }
 
 [data-theme="dark"] .btn-share:hover,
 .dark-theme .btn-share:hover {
-    background-color: #1890ff;
+    background-color: var(--color-primary-dark-hover);
     color: #ffffff;
 }
 
@@ -712,7 +756,7 @@ a.share-option:link {
 
 /* Hero Section */
 .hero-section {
-    background-color: var(--color-navy);
+    background: linear-gradient(180deg, var(--color-primary) 0%, #303F9F 100%);  /* navy → Indigo 700 */
     color: var(--color-white);
     padding: var(--spacing-xxl) 0;
     text-align: center;
@@ -815,6 +859,7 @@ a.share-option:link {
 .bill-meta {
     display: flex;
     gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-sm);
     flex-wrap: wrap;
 }
@@ -838,52 +883,18 @@ a.share-option:link {
 }
 
 /* Bill status pills — each status defined once. Default is neutral gray. */
+/* Bill status pills — unified warm-neutral chip in both themes.
+   The legislative stage isn't actionable info for a teen; collapsing the
+   rainbow into one calm chip lets the eye go to the title and the Teen
+   Impact pill instead. Stage label still renders so the data is there. */
 .bill-status {
     font-size: var(--font-size-sm);
     font-weight: 500;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    color: var(--color-white);
-    background-color: var(--color-dark-gray);
+    color: var(--color-status-pill-text);
+    background-color: var(--color-status-pill-bg);
     transition: background-color 0.3s ease;
-}
-
-.bill-status.introduced,
-.bill-status.referred-to-committee {
-    background-color: var(--color-info);
-}
-
-.bill-status.committee-consideration,
-.bill-status.reported-by-committee {
-    background-color: var(--color-warning);
-}
-
-.bill-status.passed-house,
-.bill-status.passed-senate,
-.bill-status.agreed-to-in-house,
-.bill-status.agreed-to-in-senate,
-.bill-status.became-law,
-.bill-status.enacted {
-    background-color: var(--color-success);
-}
-
-.bill-status.to-president,
-.bill-status.presented-to-president {
-    background-color: #C2410C;
-}
-
-.bill-status.failed-house,
-.bill-status.failed-senate,
-.bill-status.vetoed {
-    background-color: var(--color-error);
-}
-
-/* Dark-mode brightening only for the "to president" pill (lighter burnt-orange) */
-[data-theme="dark"] .bill-status.to-president,
-[data-theme="dark"] .bill-status.presented-to-president,
-.dark-theme .bill-status.to-president,
-.dark-theme .bill-status.presented-to-president {
-    background-color: #EA580C;
 }
 
 .teen-impact-badge {
@@ -891,8 +902,8 @@ a.share-option:link {
     font-weight: 500;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    background-color: #9C27B0;
-    color: var(--color-white);
+    background-color: var(--color-brand-accent);
+    color: var(--color-on-brand-accent);
 }
 
 .bill-title {
@@ -994,7 +1005,7 @@ a.share-option:link {
 
 .poll-option:hover {
     background-color: var(--color-beige);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
 }
 
 .poll-option:disabled {
@@ -1003,9 +1014,9 @@ a.share-option:link {
 }
 
 .poll-option.selected {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
     cursor: default;
 }
 
@@ -1036,36 +1047,32 @@ a.share-option:link {
     white-space: nowrap;
 }
 
+/* Vote badges — warmed semantic colors (sage + coral) that sit nicely
+   on cream alongside terracotta accent, instead of raw Material green/red. */
 .your-vote-badge[data-vote="yes"] {
-    background-color: #E8F5E9; /* light green */
-    color: #1B5E20;             /* dark green */
-    border: 1px solid #4CAF50;
+    background-color: #E6EFE2;
+    color: #2D5C3F;
+    border: 1px solid #4F7A5A;
 }
 
 .your-vote-badge[data-vote="no"] {
-    background-color: #FFEBEE; /* light red */
-    color: #B71C1C;             /* dark red */
-    border: 1px solid #F44336;
-}
-
-.your-vote-badge[data-vote="unsure"] {
-    background-color: var(--color-light-gray);
-    color: var(--color-dark-gray);
-    border: 1px solid var(--color-gray);
+    background-color: #F8E4DD;
+    color: #8B3A2A;
+    border: 1px solid #C75D4F;
 }
 
 [data-theme="dark"] .your-vote-badge[data-vote="yes"],
 .dark-theme .your-vote-badge[data-vote="yes"] {
-    background-color: rgba(76, 175, 80, 0.18);
-    color: #A5D6A7;
-    border-color: #66BB6A;
+    background-color: rgba(127, 161, 137, 0.18);
+    color: #B5D4BD;
+    border-color: #7FA189;
 }
 
 [data-theme="dark"] .your-vote-badge[data-vote="no"],
 .dark-theme .your-vote-badge[data-vote="no"] {
-    background-color: rgba(244, 67, 54, 0.18);
-    color: #EF9A9A;
-    border-color: #EF5350;
+    background-color: rgba(232, 145, 127, 0.18);
+    color: #F3B5A6;
+    border-color: #E8917F;
 }
 
 .poll-results {
@@ -1100,16 +1107,13 @@ a.share-option:link {
 }
 
 .yes-fill {
-    background-color: var(--color-success);
+    background-color: #4F7A5A;  /* sage green — warmed to pair with terracotta */
 }
 
 .no-fill {
-    background-color: var(--color-error);
+    background-color: #8B3A2A;  /* deep terracotta — distinct from the brand-accent terracotta */
 }
 
-.unsure-fill {
-    background-color: var(--color-warning);
-}
 
 .result-label {
     color: var(--color-white);
@@ -1144,13 +1148,13 @@ a.share-option:link {
 }
 
 .poll-message.success {
-    background-color: #E8F5E8;
-    color: var(--color-success);
+    background-color: #E6EFE2;
+    color: #2D5C3F;
 }
 
 .poll-message.error {
-    background-color: #FFEBEE;
-    color: var(--color-error);
+    background-color: #F8E4DD;
+    color: #8B3A2A;
 }
 
 /* Sponsor Reveal Section - shown after voting */
@@ -1220,12 +1224,12 @@ a.share-option:link {
 }
 
 .poll-preview .yes-fill {
-    background: linear-gradient(90deg, #4CAF50, #66BB6A);
+    background: linear-gradient(90deg, #4F7A5A, #6B9477);  /* sage palette */
     width: var(--yes-width, 0%);
 }
 
 .poll-preview .no-fill {
-    background: linear-gradient(90deg, #f44336, #ef5350);
+    background: linear-gradient(90deg, #8B3A2A, #B05744);  /* deep terracotta palette */
     width: var(--no-width, 0%);
 }
 
@@ -1366,8 +1370,8 @@ a.share-option:link {
 }
 
 .search-input:focus {
-    border-color: var(--color-navy);
-    outline: 2px solid var(--color-navy);
+    border-color: var(--color-primary);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -1420,8 +1424,8 @@ a.share-option:link {
 }
 
 .filter-form select:focus {
-    border-color: var(--color-navy);
-    outline: 2px solid var(--color-navy);
+    border-color: var(--color-primary);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -1453,7 +1457,7 @@ a.share-option:link {
     -webkit-appearance: checkbox;
     -moz-appearance: checkbox;
     appearance: auto;
-    accent-color: var(--color-navy);
+    accent-color: var(--color-primary);
 }
 
 .sort-control input[type="checkbox"] {
@@ -1478,13 +1482,13 @@ a.share-option:link {
 
 .btn-search:hover,
 .btn-clear:hover {
-    background-color: var(--color-dark-gray) !important;
-    color: var(--color-white) !important;
+    background-color: var(--color-primary-hover) !important;
+    color: var(--color-on-primary) !important;
 }
 
 .btn-search:focus,
 .btn-clear:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -1504,7 +1508,7 @@ a.share-option:link {
     width: 40px;
     height: 40px;
     border: 3px solid var(--color-gray);
-    border-top-color: var(--color-navy);
+    border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -1555,7 +1559,7 @@ a.share-option:link {
 }
 
 .no-bills-message h2 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-md);
 }
 
@@ -1589,7 +1593,7 @@ a.share-option:link {
     padding: var(--spacing-sm) var(--spacing-md);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
-    color: var(--color-navy);
+    color: var(--color-primary);
     text-decoration: none;
     transition: all var(--transition-fast);
     white-space: nowrap;
@@ -1600,20 +1604,20 @@ a.share-option:link {
 }
 
 .page-link:hover {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
 }
 
 .page-link:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
 .page-link.current {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
     cursor: default;
 }
 
@@ -1640,7 +1644,7 @@ a.share-option:link {
 }
 
 .resource-card h2 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-md);
     word-break: normal;
     overflow-wrap: normal;
@@ -1658,7 +1662,7 @@ a.share-option:link {
     padding: var(--spacing-sm);
     background-color: var(--color-light-gray);
     border-radius: var(--border-radius);
-    color: var(--color-navy);
+    color: var(--color-primary);
     text-decoration: none;
     transition: background-color var(--transition-fast);
 }
@@ -1686,7 +1690,7 @@ a.share-option:link {
     padding: 8px;
     border-radius: 8px;
     background-color: var(--color-light-gray);
-    color: var(--color-navy);
+    color: var(--color-primary);
     border: 1px solid var(--color-borders);
     text-decoration: none;
     transition: transform 0.2s ease, background-color 0.2s ease;
@@ -1708,7 +1712,7 @@ a.share-option:link {
 .social-icon-link:hover {
     transform: scale(1.05);
     background-color: var(--color-gray);
-    color: var(--color-navy);
+    color: var(--color-primary);
 }
 
 [data-theme="dark"] .social-icon-link:hover,
@@ -1787,26 +1791,26 @@ a.share-option:link {
 
 .number-card {
     padding: var(--spacing-lg) var(--spacing-md);
-    border-top: 2px solid var(--color-navy);
+    border-top: 2px solid var(--color-primary);
     background-color: transparent;
 }
 
 [data-theme="dark"] .number-card,
 .dark-theme .number-card {
-    border-top-color: var(--color-accent);
+    border-top-color: var(--color-primary);
 }
 
 .number-value {
     font-size: clamp(2rem, 5vw, 3rem);
     font-weight: 700;
-    color: var(--color-navy);
+    color: var(--color-primary);
     line-height: 1.1;
     margin: 0;
 }
 
 [data-theme="dark"] .number-value,
 .dark-theme .number-value {
-    color: var(--color-accent);
+    color: var(--color-link);
 }
 
 .number-label {
@@ -1859,7 +1863,7 @@ a.share-option:link {
 }
 
 .feature-card h3 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-sm);
     line-height: 1.3;
     font-size: var(--font-size-xl);
@@ -1882,17 +1886,17 @@ a.share-option:link {
     font-size: var(--font-size-sm);
     font-weight: 600;
     letter-spacing: 0.12em;
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-sm);
     padding-bottom: var(--spacing-xs);
-    border-bottom: 1px solid var(--color-navy);
+    border-bottom: 1px solid var(--color-primary);
     width: fit-content;
 }
 
 [data-theme="dark"] .feature-kicker,
 .dark-theme .feature-kicker {
-    color: var(--color-accent);
-    border-bottom-color: var(--color-accent);
+    color: var(--color-link);
+    border-bottom-color: var(--color-link);
 }
 
 /* Error Page */
@@ -1911,7 +1915,7 @@ a.share-option:link {
 .error-content h1 {
     font-size: clamp(2rem, 10vw, 3rem);
     line-height: 1.1;
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-sm);
 }
 
@@ -1968,7 +1972,7 @@ a.share-option:link {
 }
 
 .error-search .search-input:focus {
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
     outline: none;
 }
 
@@ -2001,19 +2005,19 @@ a.share-option:link {
     color: var(--color-text-dark);
 }
 
-/* Dark theme error buttons alignment */
+/* Dark theme error buttons — inherit global .btn-primary dark override */
 [data-theme="dark"] .error-actions .btn-primary,
 .dark-theme .error-actions .btn-primary {
-    background-color: var(--color-accent-dark);
-    color: var(--color-background-dark);
-    border-color: var(--color-accent-dark);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    border-color: var(--color-primary);
 }
 
 [data-theme="dark"] .error-actions .btn-primary:hover,
 .dark-theme .error-actions .btn-primary:hover {
-    background-color: #5a8ccf;
-    border-color: #5a8ccf;
-    color: var(--color-white);
+    background-color: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
 }
 
 [data-theme="dark"] .error-actions .btn-secondary,
@@ -2033,13 +2037,13 @@ a.share-option:link {
 /* Specific Search Form Dark Mode Enhancements */
 [data-theme="dark"] .error-search .btn-primary,
 .dark-theme .error-search .btn-primary {
-    background-color: var(--color-accent-dark);
-    color: var(--color-background-dark);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
 }
 
 [data-theme="dark"] .error-search .btn-primary:hover,
 .dark-theme .error-search .btn-primary:hover {
-    background-color: #5a8ccf;
+    background-color: var(--color-primary-hover);
     color: var(--color-white);
 }
 
@@ -2173,7 +2177,7 @@ a.share-option:link {
 
 .term-dictionary-content a {
     text-decoration: none;
-    color: var(--color-navy);
+    color: var(--color-primary);
     font-weight: 500;
 }
 
@@ -2226,7 +2230,7 @@ a.share-option:link {
 
 .stat-headline {
   font-size: var(--font-size-lg);
-  color: var(--color-navy);
+  color: var(--color-primary);
   margin-bottom: var(--spacing-sm);
 }
 
@@ -2269,7 +2273,7 @@ a.share-option:link {
 }
 
 .about-card h2 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-lg);
     font-size: var(--font-size-xxl);
     line-height: 1.2;
@@ -2327,7 +2331,7 @@ a.share-option:link {
 }
 
 .creator-card .creator-info h3 {
-  color: var(--color-navy);
+  color: var(--color-primary);
   font-size: var(--font-size-xl);
   margin-bottom: var(--spacing-sm);
   text-wrap: balance;
@@ -2373,6 +2377,20 @@ h1, h2, h3, h4, h5, h6 {
   white-space: normal;
   text-wrap: balance;
   font-size: var(--font-size-xl);
+}
+
+/* Page titles on /bills, /resources — use brand color instead of plain
+   body-text so the page has a clear focal point without needing a full
+   hero block. Auto-themes navy → indigo via the token. */
+.resources-header h1,
+.archive-header h1 {
+  color: var(--color-primary);
+}
+[data-theme="dark"] .resources-header h1,
+[data-theme="dark"] .archive-header h1,
+.dark-theme .resources-header h1,
+.dark-theme .archive-header h1 {
+  color: var(--color-link);
 }
 
 /* Tablet: Stack controls earlier for better UX */
@@ -2473,7 +2491,7 @@ h1, h2, h3, h4, h5, h6 {
     /* Light mode mobile nav link hover */
     .nav-menu .nav-link:hover {
         background-color: var(--color-light-gray);
-        color: var(--color-navy);
+        color: var(--color-primary);
     }
     
     /* Dark mode mobile nav link */
@@ -2492,7 +2510,7 @@ h1, h2, h3, h4, h5, h6 {
     /* Active page in mobile menu - light mode */
     .nav-menu .nav-link[aria-current="page"] {
         background-color: var(--color-light-gray);
-        color: var(--color-navy);
+        color: var(--color-primary);
         font-weight: 600;
     }
     
@@ -2644,17 +2662,16 @@ h1, h2, h3, h4, h5, h6 {
   height: 56px;
   border-radius: 50%;
   background: var(--color-white);
-  border: 2px solid var(--color-navy);
+  border: 2px solid var(--color-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   cursor: pointer;
-  /* Remove flex to avoid conflict with absolute children */
-  display: block; 
+  display: block;
   font-size: 1.75rem;
   transition: all 0.3s ease;
   z-index: 1000;
   padding: 0;
   outline: none;
-  color: var(--color-navy);
+  color: var(--color-primary);
 }
 
 .floating-theme-toggle:hover {
@@ -2667,7 +2684,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .floating-theme-toggle:focus {
-  outline: 3px solid var(--color-accent);
+  outline: 3px solid var(--color-brand-accent);
   outline-offset: 3px;
 }
 
@@ -2717,20 +2734,22 @@ h1, h2, h3, h4, h5, h6 {
   color: #FFFFFF; /* white stroke on dark background */
 }
 
-/* Dark mode button styling */
+/* Dark mode toggle — inverted: dark fill, light-indigo outline (matches
+   the "small UI accent" role of --color-link rather than the bigger
+   button-CTA primary). Pops more against the charcoal bg. */
 [data-theme="dark"] .floating-theme-toggle {
   background: var(--color-background-dark);
-  border-color: var(--color-accent-dark);
-  box-shadow: 0 4px 12px rgba(107, 163, 232, 0.2);
-  color: var(--color-white);
+  border-color: var(--color-link);
+  box-shadow: 0 4px 12px rgba(164, 171, 228, 0.22);  /* Indigo 200 @ 22% */
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .floating-theme-toggle:hover {
-  box-shadow: 0 6px 20px rgba(107, 163, 232, 0.3);
+  box-shadow: 0 6px 20px rgba(164, 171, 228, 0.32);
 }
 
 [data-theme="dark"] .floating-theme-toggle:focus {
-  outline-color: var(--color-accent-dark);
+  outline-color: var(--color-brand-accent);
 }
 
 /* Mobile adjustments */
@@ -2796,7 +2815,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Bill card: dark mode keeps the brighter accent border */
 [data-theme="dark"] .bill-card,
 .dark-theme .bill-card {
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .bill-short-title,
@@ -2833,19 +2852,19 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .poll-option:hover,
 .dark-theme .poll-option:hover {
   background-color: #454545;
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .poll-option.selected,
 .dark-theme .poll-option.selected {
-  background-color: var(--color-navy);
+  background-color: var(--color-primary);
   color: var(--color-white);
-  border-color: var(--color-navy);
+  border-color: var(--color-primary);
 }
 
 [data-theme="dark"] .poll-option.selected:hover,
 .dark-theme .poll-option.selected:hover {
-  background-color: var(--color-navy);
+  background-color: var(--color-primary);
   color: var(--color-white);
 }
 
@@ -2870,25 +2889,25 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .resource-card,
 .dark-theme .resource-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .resource-card h2,
 .dark-theme .resource-card h2 {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .resource-link,
 .dark-theme .resource-link {
   background-color: #383838;
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .social-icon-link,
 .dark-theme .social-icon-link {
   background-color: #383838;
-  color: #4a9eff;
-  border-color: #4a9eff;
+  color: var(--color-link);
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .social-icon-link:hover,
@@ -2900,12 +2919,12 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .feature-card,
 .dark-theme .feature-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .feature-card h3,
 .dark-theme .feature-card h3 {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .feature-card p,
@@ -2917,19 +2936,19 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .about-card,
 .dark-theme .about-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .about-card h2,
 .dark-theme .about-card h2 {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 /* Dark theme mission card */
 [data-theme="dark"] .mission-card,
 .dark-theme .mission-card {
   background: linear-gradient(135deg, var(--color-cards-dark) 0%, #2d2d2d 100%);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .about-text p,
@@ -2947,12 +2966,12 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .stat-card,
 .dark-theme .stat-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .stat-headline,
 .dark-theme .stat-headline {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .stat-text,
@@ -2967,10 +2986,12 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ===== HERO SECTION DARK MODE ===== */
 
-/* Hero in dark mode: flat near-black for editorial credibility (no purple gradient) */
+/* Hero in dark mode: noticeable indigo wash, not just near-black. Pulls
+   from the brand primary so the hero feels like an extension of the
+   palette instead of a dim void. */
 [data-theme="dark"] .hero-section:not(.hero-with-image),
 .dark-theme .hero-section:not(.hero-with-image) {
-  background: #14172b;
+  background: linear-gradient(180deg, #2D3470 0%, #1F2547 100%);
 }
 
 /* Dark mode homepage hero: darken overlay more for readability */
@@ -2986,7 +3007,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Make logo/heading bright in dark mode */
 [data-theme="dark"] .nav-logo h1,
 .dark-theme .nav-logo h1 {
-  color: #4a9eff; /* Bright cyan - visible on dark background */
+  color: var(--color-link); /* Bright cyan - visible on dark background */
 }
 
 [data-theme="dark"] h1,
@@ -3008,7 +3029,7 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .additional-info,
 .dark-theme .additional-info {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .term-dictionary-section,
@@ -3041,6 +3062,13 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .meta-value,
 .dark-theme .meta-value {
   color: var(--color-text);
+}
+
+/* Ensure the status pill keeps its dedicated foreground in dark mode
+   when an element also carries .meta-value (homepage featured bill). */
+[data-theme="dark"] .meta-value.bill-status,
+.dark-theme .meta-value.bill-status {
+  color: var(--color-status-pill-text);
 }
 
 [data-theme="dark"] .stats-section,
@@ -3100,7 +3128,7 @@ h1, h2, h3, h4, h5, h6 {
 .search-form input:focus,
 .search-form select:focus,
 .search-form button:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -3214,10 +3242,13 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: var(--spacing-md);
 }
 
+/* Achievement gold — muted warm-honey gold (Congress.gov-coded
+   "official seal" mustard) that pairs with terracotta rather than
+   the bright pure yellow it replaced. */
 .achievement-badge {
   display: inline-block;
-  background-color: #ffd700;
-  color: #3e2723;
+  background-color: #C99B2D;
+  color: #FFFFFF;
   font-weight: 600;
   font-size: var(--font-size-sm);
   padding: 4px 12px;
@@ -3226,8 +3257,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 [data-theme="dark"] .achievement-badge {
-  background-color: #ffca28;
-  color: #000;
+  background-color: #E5BF6B;
+  color: #1e1e1e;
 }
 
 /* ========================================
@@ -3267,8 +3298,8 @@ h1, h2, h3, h4, h5, h6 {
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: var(--color-accent);
-    color: var(--color-white);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3309,7 +3340,7 @@ h1, h2, h3, h4, h5, h6 {
    ======================================== */
 [data-theme="dark"],
 .dark-theme {
-    --card-border-color: #4a9eff;
+    --card-border-color: var(--color-link);
     --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
@@ -3321,7 +3352,7 @@ h1, h2, h3, h4, h5, h6 {
 .nav-user {
     display: inline-flex;
     align-items: stretch;
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
     border-radius: 999px;
     font-weight: 500;
@@ -3405,15 +3436,15 @@ h1, h2, h3, h4, h5, h6 {
 /* Dark mode overrides */
 [data-theme="dark"] .nav-user,
 .dark-theme .nav-user {
-    background-color: var(--color-accent);
-    color: var(--color-background);
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 
 [data-theme="dark"] .nav-user-left,
 [data-theme="dark"] .nav-user-right,
 .dark-theme .nav-user-left,
 .dark-theme .nav-user-right {
-    color: var(--color-background);
+    color: #ffffff;
 }
 
 [data-theme="dark"] .nav-user-divider,
@@ -3422,15 +3453,16 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .nav-signin {
-    border: 1px solid var(--color-navy);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
     border-radius: 999px;
     padding: 0.35rem 1rem;
 }
 
 [data-theme="dark"] .nav-signin,
 .dark-theme .nav-signin {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    border-color: var(--color-primary);
+    color: var(--color-link);
 }
 
 /* --- Right-side rail (desktop only) --- */
@@ -3451,14 +3483,14 @@ h1, h2, h3, h4, h5, h6 {
 .rail-tier {
     font-weight: 700;
     font-size: var(--font-size-md);
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: 0.5rem;
     line-height: 1.2;
 }
 
 [data-theme="dark"] .rail-tier,
 .dark-theme .rail-tier {
-    color: var(--color-accent);
+    color: var(--color-link);
 }
 
 .rail-progress-wrap {
@@ -3480,13 +3512,13 @@ h1, h2, h3, h4, h5, h6 {
 
 .rail-progress-fill {
     height: 100%;
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     transition: width 0.3s ease;
 }
 
 [data-theme="dark"] .rail-progress-fill,
 .dark-theme .rail-progress-fill {
-    background-color: var(--color-accent);
+    background-color: var(--color-primary);
 }
 
 .rail-progress-text {
@@ -3565,9 +3597,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .auth-error {
-    background-color: #FEE;
-    color: #B71C1C;
-    border: 1px solid #F44336;
+    background-color: #F8E4DD;  /* terracotta wash — matches no-vote badge */
+    color: #8B3A2A;
+    border: 1px solid #C75D4F;
     padding: 0.75rem 1rem;
     border-radius: var(--border-radius);
     margin-bottom: 1rem;
@@ -3576,9 +3608,9 @@ h1, h2, h3, h4, h5, h6 {
 
 [data-theme="dark"] .auth-error,
 .dark-theme .auth-error {
-    background-color: rgba(244, 67, 54, 0.18);
-    color: #EF9A9A;
-    border-color: #EF5350;
+    background-color: rgba(232, 145, 127, 0.18);
+    color: #F3B5A6;
+    border-color: #E8917F;
 }
 
 .auth-form {
@@ -3613,7 +3645,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .auth-form input:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -3652,7 +3684,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .profile-tier-pill {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
     padding: 0.4rem 1rem;
     border-radius: 999px;
@@ -3681,13 +3713,13 @@ h1, h2, h3, h4, h5, h6 {
 .profile-stat-number {
     font-size: 2rem;
     font-weight: 700;
-    color: var(--color-navy);
+    color: var(--color-primary);
     line-height: 1.1;
 }
 
 [data-theme="dark"] .profile-stat-number,
 .dark-theme .profile-stat-number {
-    color: var(--color-accent);
+    color: var(--color-link);
 }
 
 .profile-stat-label {
@@ -3721,13 +3753,13 @@ h1, h2, h3, h4, h5, h6 {
 
 .profile-progress-fill {
     height: 100%;
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     transition: width 0.3s ease;
 }
 
 [data-theme="dark"] .profile-progress-fill,
 .dark-theme .profile-progress-fill {
-    background-color: var(--color-accent);
+    background-color: var(--color-primary);
 }
 
 .profile-ladder {
@@ -3768,9 +3800,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .tier-current {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
 }
 
 .tier-current .tier-num,
@@ -3780,16 +3812,16 @@ h1, h2, h3, h4, h5, h6 {
 
 [data-theme="dark"] .tier-current,
 .dark-theme .tier-current {
-    background-color: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-background);
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 
 [data-theme="dark"] .tier-current .tier-num,
 [data-theme="dark"] .tier-current .tier-threshold,
 .dark-theme .tier-current .tier-num,
 .dark-theme .tier-current .tier-threshold {
-    color: rgba(0, 0, 0, 0.7);
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .tier-done {
@@ -3849,7 +3881,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .panel-tier {
     font-size: var(--font-size-xs);
-    color: var(--color-navy);
+    color: var(--color-primary);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -3857,7 +3889,7 @@ h1, h2, h3, h4, h5, h6 {
 
 [data-theme="dark"] .panel-tier,
 .dark-theme .panel-tier {
-    color: var(--color-accent);
+    color: var(--color-link);
 }
 
 .panel-progress {
@@ -3879,13 +3911,13 @@ h1, h2, h3, h4, h5, h6 {
 
 .panel-progress-fill {
     height: 100%;
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     transition: width 0.3s ease;
 }
 
 [data-theme="dark"] .panel-progress-fill,
 .dark-theme .panel-progress-fill {
-    background-color: var(--color-accent);
+    background-color: var(--color-primary);
 }
 
 .panel-progress-text {
@@ -3925,7 +3957,7 @@ h1, h2, h3, h4, h5, h6 {
 .panel-link {
     display: block;
     padding: 0.5rem 0;
-    color: var(--color-navy);
+    color: var(--color-primary);
     font-weight: 600;
     text-decoration: none;
 }
@@ -3952,7 +3984,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.25rem 0;
 }
 
-.panel-logout-btn:hover { color: var(--color-error); }
+.panel-logout-btn:hover { color: #8B3A2A; }  /* terracotta-family destructive hint */
 
 @media (max-width: 768px) {
     .nav-user-panel {
@@ -3966,10 +3998,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* --- Email verification banner --- */
+/* Verify banner — palette-aligned: needs-action uses muted honey-gold
+   (matches achievement badge family). Success uses sage. */
 .verify-banner {
-  background: #fff4d6;
-  color: #5a4400;
-  border-bottom: 1px solid #f0d77b;
+  background: #F4E6C5;
+  color: #6B4D1F;
+  border-bottom: 1px solid #D9BC73;
   padding: 10px 16px;
   text-align: center;
   font-size: 14px;
@@ -3979,9 +4013,9 @@ h1, h2, h3, h4, h5, h6 {
   gap: 12px;
 }
 .verify-banner-success {
-  background: #d8f3dc;
-  color: #1f5132;
-  border-bottom: 1px solid #95d5b2;
+  background: #E6EFE2;
+  color: #2D5C3F;
+  border-bottom: 1px solid #7FA189;
 }
 .verify-banner-btn {
   background: transparent;
@@ -3993,8 +4027,8 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 13px;
 }
 .verify-banner-btn:hover { background: rgba(0,0,0,0.05); }
-[data-theme="dark"] .verify-banner { background: #3a2f0f; color: #ffe9a8; border-bottom-color: #5a4a1c; }
-[data-theme="dark"] .verify-banner-success { background: #0f3a23; color: #b6e8c4; border-bottom-color: #1c5a3a; }
+[data-theme="dark"] .verify-banner { background: #3A2F1A; color: #E5BF6B; border-bottom-color: #5A4A2C; }
+[data-theme="dark"] .verify-banner-success { background: #1F3424; color: #B5D4BD; border-bottom-color: #2D5C3F; }
 
 /* --- Signup OAuth divider + Google button --- */
 .auth-divider {
@@ -4038,9 +4072,9 @@ h1, h2, h3, h4, h5, h6 {
 /* Poll vote pills */
 [data-theme="dark"] .poll-option.selected,
 .dark-theme .poll-option.selected {
-    background-color: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-background);
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 
 /* Search + filter focus rings (navy outline against dark bg is invisible) */
@@ -4080,21 +4114,21 @@ h1, h2, h3, h4, h5, h6 {
 }
 [data-theme="dark"] .page-link:hover,
 .dark-theme .page-link:hover {
-    background-color: var(--color-accent);
-    color: var(--color-background);
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 [data-theme="dark"] .page-link.current,
 .dark-theme .page-link.current {
-    background-color: var(--color-accent);
-    color: var(--color-background);
-    border-color: var(--color-accent);
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+    border-color: var(--color-primary-dark);
 }
 
 /* Profile page: tier pill next to username */
 [data-theme="dark"] .profile-tier-pill,
 .dark-theme .profile-tier-pill {
-    background-color: var(--color-accent);
-    color: var(--color-background);
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 
 /* Bill card title text in dark — was dark-brown on near-black */
@@ -4123,17 +4157,18 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Primary buttons in dark mode (Sign in / Create account / etc.)
-   The base .btn-primary uses --color-navy which is invisible against
-   the dark background; swap to --color-accent. */
+   Use --color-primary-dark (Material Indigo 500) — same indigo family
+   as light-mode --color-navy, just lighter for contrast. White text
+   on indigo passes WCAG AA at 5.42:1. */
 [data-theme="dark"] .btn-primary,
 .dark-theme .btn-primary {
-    background-color: var(--color-accent);
-    color: var(--color-background);
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
 }
 [data-theme="dark"] .btn-primary:hover,
 .dark-theme .btn-primary:hover {
-    background-color: #4a9eff;
-    color: var(--color-background);
+    background-color: var(--color-primary-dark-hover);
+    color: #ffffff;
 }
 
 /* Secondary buttons in dark mode (Sign out / cancel-style actions).
@@ -4147,6 +4182,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 [data-theme="dark"] .btn-secondary:hover,
 .dark-theme .btn-secondary:hover {
-    background-color: var(--color-accent);
-    color: var(--color-background);
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+    border-color: var(--color-primary-dark);
 }

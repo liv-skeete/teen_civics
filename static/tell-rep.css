@@ -27,8 +27,8 @@
     align-items: center;
     gap: var(--spacing-sm);
     padding: var(--spacing-md) var(--spacing-xl);
-    background-color: var(--color-accent);
-    color: var(--color-white) !important;
+    background-color: var(--color-primary);
+    color: var(--color-on-primary) !important;
     border: none;
     border-radius: var(--border-radius);
     font-size: var(--font-size-md);
@@ -39,7 +39,7 @@
 }
 
 .btn-tell-rep:hover {
-    background-color: #283593;
+    background-color: var(--color-primary-hover);
     transform: translateY(-1px);
     color: var(--color-white) !important;
 }
@@ -50,12 +50,12 @@
 
 [data-theme="dark"] .btn-tell-rep,
 .dark-theme .btn-tell-rep {
-    background-color: var(--color-accent);
+    background-color: var(--color-primary);
 }
 
 [data-theme="dark"] .btn-tell-rep:hover,
 .dark-theme .btn-tell-rep:hover {
-    background-color: #5a8ccf;
+    background-color: var(--color-primary-hover);
 }
 
 .btn-tell-rep .btn-icon {
@@ -272,8 +272,8 @@
     width: 60px;
     height: 60px;
     border-radius: 50%;
-    background-color: var(--color-accent);
-    color: var(--color-white);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -311,8 +311,8 @@
     font-weight: 600;
     padding: 2px 8px;
     border-radius: 999px;
-    background-color: var(--color-accent);
-    color: var(--color-white);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
     margin-top: 4px;
 }
 
@@ -432,22 +432,22 @@
 }
 
 .btn-contact-website {
-    background-color: var(--color-accent);
-    color: var(--color-white) !important;
-    border: 2px solid var(--color-accent);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary) !important;
+    border: 2px solid var(--color-primary);
 }
 
 .btn-contact-website:hover {
-    background-color: #283593;
-    border-color: #283593;
+    background-color: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
     transform: translateY(-1px);
     color: var(--color-white) !important;
 }
 
 [data-theme="dark"] .btn-contact-website:hover,
 .dark-theme .btn-contact-website:hover {
-    background-color: #5a8ccf;
-    border-color: #5a8ccf;
+    background-color: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
 }
 
 .contact-divider {
@@ -546,32 +546,32 @@
 
 .btn-copy-email {
     background-color: var(--color-white);
-    color: var(--color-accent) !important;
-    border: 2px solid var(--color-accent);
+    color: var(--color-primary) !important;
+    border: 2px solid var(--color-primary);
 }
 
 .btn-copy-email:hover {
-    background-color: var(--color-accent);
-    color: var(--color-white) !important;
+    background-color: var(--color-primary);
+    color: var(--color-on-primary) !important;
 }
 
 .btn-copy-email.copied {
-    background-color: var(--color-success);
-    border-color: var(--color-success);
+    background-color: #4F7A5A;  /* sage — matches yes-vote palette */
+    border-color: #4F7A5A;
     color: var(--color-white) !important;
 }
 
 [data-theme="dark"] .btn-copy-email,
 .dark-theme .btn-copy-email {
     background-color: var(--color-cards-dark);
-    color: var(--color-accent) !important;
-    border-color: var(--color-accent);
+    color: var(--color-primary) !important;
+    border-color: var(--color-primary);
 }
 
 [data-theme="dark"] .btn-copy-email:hover,
 .dark-theme .btn-copy-email:hover {
-    background-color: var(--color-accent);
-    color: var(--color-white) !important;
+    background-color: var(--color-primary);
+    color: var(--color-on-primary) !important;
 }
 
 /* --- Copy Confirmation Toast --- */
@@ -580,7 +580,7 @@
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%) translateY(80px);
-    background-color: var(--color-success);
+    background-color: #4F7A5A;  /* sage — palette success */
     color: var(--color-white);
     padding: var(--spacing-sm) var(--spacing-lg);
     border-radius: var(--border-radius);
