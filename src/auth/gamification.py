@@ -35,9 +35,9 @@ TIERS: List[Tier] = [
     Tier(10, "Senator",               800),
     Tier(11, "Senior Senator",       1000),
     Tier(12, "Senate Majority Leader", 1300),
-    Tier(13, "Speaker of the House", 1600),
-    Tier(14, "Vice President",       1900),
-    Tier(15, "President",            2200),
+    Tier(13, "Speaker of the House", 1700),
+    Tier(14, "Vice President",       2200),
+    Tier(15, "President",            2800),
 ]
 
 DAILY_VOTE_CAP = 5
