@@ -86,14 +86,7 @@ jobs:
           KEY_ID=$(echo "$key_json" | python -c "import sys, json; print(json.load(sys.stdin)['key_id'])")
           PUBLIC_KEY=$(echo "$key_json" | python -c "import sys, json; print(json.load(sys.stdin)['key'])")
           python -m pip install pynacl --quiet
-          ENCRYPTED=$(PUBLIC_KEY="$PUBLIC_KEY" NEW_TOKEN="$NEW_TOKEN" python <<'PY'
-import os, base64
-from nacl import encoding, public
-pk = public.PublicKey(os.environ['PUBLIC_KEY'].encode(), encoding.Base64Encoder)
-sealed = public.SealedBox(pk).encrypt(os.environ['NEW_TOKEN'].encode())
-print(base64.b64encode(sealed).decode())
-PY
-)
+          ENCRYPTED=$(PUBLIC_KEY="$PUBLIC_KEY" NEW_TOKEN="$NEW_TOKEN" python -c "import os, base64; from nacl import encoding, public; pk = public.PublicKey(os.environ['PUBLIC_KEY'].encode(), encoding.Base64Encoder); sealed = public.SealedBox(pk).encrypt(os.environ['NEW_TOKEN'].encode()); print(base64.b64encode(sealed).decode())")
           gh api --method PUT "/repositories/$repo_id/environments/$ENV_NAME/secrets/THREADS_ACCESS_TOKEN" \
             -f encrypted_value="$ENCRYPTED" \
             -f key_id="$KEY_ID" >/dev/null
