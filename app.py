@@ -1118,24 +1118,57 @@ def google_callback():
         auth_db.update_last_login(user["id"])
         return redirect(url_for("profile"))
 
-    # 3) New user — pick a unique username derived from the email local part
+    # 3) Brand-new user — stash the OAuth identity in the session and bounce
+    # them to /welcome to pick their own username, rather than silently
+    # auto-generating one from the email prefix (which users hate).
     from src.auth.oauth import derive_username_from_email
-    base = derive_username_from_email(email)
-    candidate = base
-    suffix = 1
-    while auth_db.get_user_by_username(candidate) is not None:
-        suffix += 1
-        candidate = f"{base[:26]}{suffix}"
-        if suffix > 999:
-            candidate = f"user{secrets.token_hex(4)}"
-            break
+    session["pending_oauth"] = {
+        "provider": "google",
+        "subject": subject,
+        "email": email,
+        "suggested_username": derive_username_from_email(email),
+    }
+    return redirect(url_for("welcome"))
+
+
+@app.route("/welcome", methods=["GET", "POST"])
+@limiter.limit("20 per hour")
+def welcome():
+    """First-time OAuth signup — choose your username before the account
+    is created. Reachable only with a pending_oauth stash in the session
+    (set by google_callback). Refusing this page is a no-op; the user
+    can re-initiate Google sign-in to get a fresh stash."""
+    pending = session.get("pending_oauth")
+    if not pending or pending.get("provider") != "google":
+        return redirect(url_for("login"))
+
+    suggested = pending.get("suggested_username", "")
+    email = pending.get("email", "")
+
+    if request.method == "GET":
+        return render_template("welcome.html", error=None, username=suggested, email=email)
+
+    chosen_raw = (request.form.get("username") or "").strip()
+    try:
+        username = auth_passwords.validate_username(chosen_raw)
+    except ValueError as e:
+        return render_template("welcome.html", error=str(e), username=chosen_raw, email=email), 400
+
+    if auth_db.get_user_by_username(username) is not None:
+        return render_template("welcome.html", error="That username is already taken.", username=chosen_raw, email=email), 400
 
     voter_id, _ = _get_or_create_voter_id()
-    result = auth_db.create_oauth_user(candidate, email, "google", subject, voter_id=voter_id)
+    result = auth_db.create_oauth_user(
+        username, email, pending["provider"], pending["subject"], voter_id=voter_id,
+    )
     if not result:
-        return render_template("login.html", error="Could not create account. Try a different Google account.", username=""), 400
+        return render_template(
+            "welcome.html", error="Could not create account. Try a different username.",
+            username=chosen_raw, email=email,
+        ), 400
     new_id, voter_id = result
 
+    session.pop("pending_oauth", None)
     auth_session.login_user(new_id)
     auth_db.update_last_login(new_id)
     response = make_response(redirect(url_for("profile")))
