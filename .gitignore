@@ -82,3 +82,7 @@ scripts/_*.py
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Private product vision — DO NOT COMMIT (Liv's roadmap, kept local-only
+# to prevent open-source observers from cribbing the strategy).
+plans/PRIVATE_VISION.md
