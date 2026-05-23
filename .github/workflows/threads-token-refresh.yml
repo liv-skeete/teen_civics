@@ -1,0 +1,105 @@
+name: Threads Token Refresh
+
+# Refreshes THREADS_ACCESS_TOKEN before its 60-day expiry. Threads tokens
+# can be refreshed only when they are still valid AND at least 24h old,
+# so we run every 25 days — well inside the window, well outside the
+# 24h lockout.
+#
+# Updates the stored secret via the GitHub REST API using GH_PAT, which
+# must be a fine-grained PAT scoped to this repo with `secrets:write`
+# permission. Same updated value is written to both staging + production
+# environments so the daily.yml job always reads a fresh token.
+#
+# IMPORTANT: this workflow can ONLY update GitHub Secrets. Railway env
+# vars are managed separately and are NOT touched here. If Railway is
+# the source of truth at runtime (e.g. teencivics.org and /beta read
+# THREADS_ACCESS_TOKEN from Railway, not from GH Actions runs), this
+# cron will silently rot. See README.md threads_token_refresh notes.
+
+on:
+  schedule:
+    # Every 25 days at 14:07 UTC. Off-hour minute (07) to avoid Meta
+    # API peak traffic and to dodge the :00 / :30 cron stampede.
+    - cron: '7 14 */25 * *'
+  workflow_dispatch:  # manual run for testing or emergency refresh
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [staging, production]
+    environment: ${{ matrix.env }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Refresh token via Threads Graph API
+        id: refresh
+        env:
+          OLD_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OLD_TOKEN:-}" ]; then
+            echo "::error::THREADS_ACCESS_TOKEN secret is empty in this environment"
+            exit 1
+          fi
+          response=$(curl -sS -w "\n%{http_code}" \
+            "https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=$OLD_TOKEN")
+          body=$(echo "$response" | head -n 1)
+          status=$(echo "$response" | tail -n 1)
+          if [ "$status" != "200" ]; then
+            echo "::error::Threads refresh returned $status. Body: $body"
+            echo "$body"
+            exit 1
+          fi
+          new_token=$(echo "$body" | python -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+          expires_in=$(echo "$body" | python -c "import sys, json; print(json.load(sys.stdin).get('expires_in', 0))")
+          if [ -z "$new_token" ]; then
+            echo "::error::Could not parse access_token from response: $body"
+            exit 1
+          fi
+          # Mask the new token so it doesn't appear in logs.
+          echo "::add-mask::$new_token"
+          echo "new_token=$new_token" >> "$GITHUB_OUTPUT"
+          echo "Refreshed token. New expiry: ${expires_in}s (~$((expires_in / 86400)) days)."
+
+      - name: Update GitHub secret in this environment
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          NEW_TOKEN: ${{ steps.refresh.outputs.new_token }}
+          ENV_NAME: ${{ matrix.env }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::GH_PAT secret is missing in $ENV_NAME environment. Create a fine-grained PAT with Secrets:write on this repo and add it as GH_PAT in both staging + production environments."
+            exit 1
+          fi
+          repo_id=$(gh api "/repos/$GITHUB_REPOSITORY" -q '.id')
+          key_json=$(gh api "/repositories/$repo_id/environments/$ENV_NAME/secrets/public-key")
+          KEY_ID=$(echo "$key_json" | python -c "import sys, json; print(json.load(sys.stdin)['key_id'])")
+          PUBLIC_KEY=$(echo "$key_json" | python -c "import sys, json; print(json.load(sys.stdin)['key'])")
+          python -m pip install pynacl --quiet
+          ENCRYPTED=$(PUBLIC_KEY="$PUBLIC_KEY" NEW_TOKEN="$NEW_TOKEN" python <<'PY'
+import os, base64
+from nacl import encoding, public
+pk = public.PublicKey(os.environ['PUBLIC_KEY'].encode(), encoding.Base64Encoder)
+sealed = public.SealedBox(pk).encrypt(os.environ['NEW_TOKEN'].encode())
+print(base64.b64encode(sealed).decode())
+PY
+)
+          gh api --method PUT "/repositories/$repo_id/environments/$ENV_NAME/secrets/THREADS_ACCESS_TOKEN" \
+            -f encrypted_value="$ENCRYPTED" \
+            -f key_id="$KEY_ID" >/dev/null
+          echo "Updated THREADS_ACCESS_TOKEN in $ENV_NAME environment."
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::warning::Threads token refresh failed for ${{ matrix.env }}. Manual refresh required within ~30 days or the token will expire."
