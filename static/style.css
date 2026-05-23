@@ -4210,6 +4210,7 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     gap: 0.5rem;
 }
+.username-display-row[hidden] { display: none; }
 .username-display {
     margin: 0;
 }
@@ -4235,6 +4236,7 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     flex-wrap: wrap;
 }
+.username-edit-form[hidden] { display: none; }
 .username-edit-form input[type="text"] {
     padding: 0.4rem 0.6rem;
     border: 1px solid var(--color-borders);
