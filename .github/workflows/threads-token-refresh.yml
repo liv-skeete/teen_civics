@@ -16,7 +16,7 @@ name: Threads Token Refresh
 # THREADS_ACCESS_TOKEN from Railway, not from GH Actions runs), this
 # cron will silently rot. See README.md threads_token_refresh notes.
 
-on:
+"on":
   schedule:
     # Every 25 days at 14:07 UTC. Off-hour minute (07) to avoid Meta
     # API peak traffic and to dodge the :00 / :30 cron stampede.
