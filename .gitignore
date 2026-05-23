@@ -86,3 +86,4 @@ scripts/_*.py
 # Private product vision — DO NOT COMMIT (Liv's roadmap, kept local-only
 # to prevent open-source observers from cribbing the strategy).
 plans/PRIVATE_VISION.md
+plans/SHORT_TERM_TODO.md
