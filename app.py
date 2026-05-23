@@ -961,6 +961,25 @@ def resend_verification():
     return redirect(request.referrer or url_for("profile"))
 
 
+@app.route("/threads-uninstall", methods=["GET", "POST"])
+@app.route("/threads-delete", methods=["GET", "POST"])
+@csrf.exempt
+@limiter.exempt
+def threads_meta_callback():
+    """Webhook target Meta calls when a user uninstalls the TeenCivics
+    Threads app or requests data deletion. Required by Meta's platform
+    terms even though we're a single-user (founder-only) publisher and
+    will never legitimately receive one. Log the ping, return 200 so
+    Meta doesn't retry."""
+    logger.info(
+        "Threads platform webhook hit: path=%s method=%s ip=%s ua=%s body=%s",
+        request.path, request.method, request.remote_addr,
+        request.headers.get("User-Agent", "-"),
+        (request.get_data(as_text=True) or "")[:500],
+    )
+    return jsonify({"received": True}), 200
+
+
 @app.route("/forgot-password", methods=["GET", "POST"])
 @limiter.limit("5 per hour")
 def forgot_password():
