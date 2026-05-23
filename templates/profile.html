@@ -5,11 +5,12 @@
 {% block content %}
 <div class="container profile-container">
   <header class="profile-header">
-    {# Accessible-only h1 so screen readers + page title still know who this is #}
-    <h1 class="visually-hidden">{{ stats.username }}</h1>
     <div class="username-wrap" data-username-wrap>
-      <button type="button" class="username-edit-btn" data-username-edit-btn
-              aria-label="Change username" title="Change username">✎</button>
+      <div class="username-display-row" data-username-view>
+        <h1 class="username-display" data-username-display>{{ stats.username }}</h1>
+        <button type="button" class="username-edit-btn" data-username-edit-btn
+                aria-label="Change username" title="Change username">✎</button>
+      </div>
       <form class="username-edit-form" data-username-edit-form hidden>
         <input type="text" name="username" value="{{ stats.username }}"
                minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+" required
@@ -76,6 +77,8 @@
   (function () {
     const wrap = document.querySelector('[data-username-wrap]');
     if (!wrap) return;
+    const view = wrap.querySelector('[data-username-view]');
+    const display = wrap.querySelector('[data-username-display]');
     const editBtn = wrap.querySelector('[data-username-edit-btn]');
     const form = wrap.querySelector('[data-username-edit-form]');
     const input = wrap.querySelector('[data-username-input]');
@@ -83,14 +86,15 @@
     const error = wrap.querySelector('[data-username-error]');
 
     function openEdit() {
-      editBtn.hidden = true;
+      view.hidden = true;
       form.hidden = false;
       error.hidden = true;
+      input.value = display.textContent.trim();
       input.focus();
       input.select();
     }
     function closeEdit() {
-      editBtn.hidden = false;
+      view.hidden = false;
       form.hidden = true;
       error.hidden = true;
     }
@@ -121,6 +125,7 @@
           error.hidden = false;
           return;
         }
+        if (data.user && data.user.username) display.textContent = data.user.username;
         if (window.TC && window.TC.applyUserStats && data.user) window.TC.applyUserStats(data.user);
         closeEdit();
       } catch (_) {

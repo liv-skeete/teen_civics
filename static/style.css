@@ -4205,6 +4205,14 @@ h1, h2, h3, h4, h5, h6 {
     flex-wrap: wrap;
     margin-bottom: var(--spacing-xs);
 }
+.username-display-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.username-display {
+    margin: 0;
+}
 .username-edit-btn {
     background: transparent;
     border: 1px solid var(--color-borders);
