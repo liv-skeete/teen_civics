@@ -1048,7 +1048,15 @@ def reset_password(token):
 def google_login():
     if not is_google_enabled():
         abort(404)
-    redirect_uri = url_for("google_callback", _external=True)
+    # Build the callback URL from APP_BASE_URL rather than url_for(_external=True)
+    # so it doesn't leak Railway's internal hostname (web-production-*.up.railway.app)
+    # when Cloudflare's Host header isn't preserved through Railway's edge. Single
+    # source of truth = whatever's registered in Google Cloud Console.
+    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
+    if base:
+        redirect_uri = f"{base}{url_for('google_callback')}"
+    else:
+        redirect_uri = url_for("google_callback", _external=True)
     return _oauth_registry.google.authorize_redirect(redirect_uri)
 
 
