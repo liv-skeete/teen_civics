@@ -9,6 +9,8 @@ httpx<0.28
 Flask==3.0.0
 Flask-Limiter==3.5.0
 Flask-WTF==1.2.1
+Authlib==1.7.2
+resend==2.30.1
 beautifulsoup4==4.12.3
 lxml==5.1.0
 PyMuPDF>=1.25.1

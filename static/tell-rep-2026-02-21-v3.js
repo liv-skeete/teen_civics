@@ -782,8 +782,40 @@
         }
 
         copyToClipboard(textToCopy, btn);
+        awardTellRep(container);
       });
     });
+  }
+
+  // Fire-and-forget award request when the user copies a message. Awards
+  // are 1/day per server-side cap; client doesn't need to gate or retry.
+  function awardTellRep(container) {
+    try {
+      const section = container.closest(".tell-rep-section");
+      const billId = section && section.dataset ? section.dataset.billId : null;
+      if (!billId) return;
+      const TC = window.TC || {};
+      const base = TC.API_BASE != null ? TC.API_BASE : "";
+      const csrf = TC.getCsrfToken ? TC.getCsrfToken() : "";
+      fetch(base + "/api/award-tell-rep", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrf,
+        },
+        body: JSON.stringify({ bill_id: billId }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data || !data.user) return;
+          if (TC.applyUserStats) TC.applyUserStats(data.user);
+          if (data.votes_awarded > 0) {
+            showToast(`+${data.votes_awarded} Votes for contacting your rep!`);
+          }
+        })
+        .catch(() => {});
+    } catch (_) {}
   }
 
   // --- Clipboard ---

@@ -14,14 +14,22 @@
 
     <form method="post" action="{{ url_for('login') }}" class="auth-form" autocomplete="on">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label for="username">Username</label>
-      <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="30" autofocus>
+      <label for="username">Username or email</label>
+      <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="254" autofocus>
 
       <label for="password">Password</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8" maxlength="128">
 
       <button type="submit" class="btn btn-primary">Sign in</button>
+      <p class="auth-foot auth-foot-link"><a href="{{ url_for('forgot_password') }}">Forgot password?</a></p>
     </form>
+
+    {% if google_oauth_enabled %}
+    <div class="auth-divider"><span>or</span></div>
+    <a href="{{ url_for('google_login') }}" class="btn btn-oauth btn-google" role="button">
+      Continue with Google
+    </a>
+    {% endif %}
 
     <p class="auth-foot">New here? <a href="{{ url_for('signup') }}">Create an account</a>.</p>
   </div>

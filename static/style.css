@@ -3427,6 +3427,12 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0.35rem 1rem;
 }
 
+[data-theme="dark"] .nav-signin,
+.dark-theme .nav-signin {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
 /* --- Right-side rail (desktop only) --- */
 .user-rail {
     position: fixed;
@@ -3594,6 +3600,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .auth-form input[type="text"],
+.auth-form input[type="email"],
 .auth-form input[type="password"] {
     padding: 0.6rem 0.75rem;
     border: 1px solid var(--color-borders);
@@ -3771,6 +3778,20 @@ h1, h2, h3, h4, h5, h6 {
     color: rgba(255, 255, 255, 0.85);
 }
 
+[data-theme="dark"] .tier-current,
+.dark-theme .tier-current {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-background);
+}
+
+[data-theme="dark"] .tier-current .tier-num,
+[data-theme="dark"] .tier-current .tier-threshold,
+.dark-theme .tier-current .tier-num,
+.dark-theme .tier-current .tier-threshold {
+    color: rgba(0, 0, 0, 0.7);
+}
+
 .tier-done {
     opacity: 0.6;
 }
@@ -3942,4 +3963,190 @@ h1, h2, h3, h4, h5, h6 {
         left: 1rem;
         width: auto;
     }
+}
+
+/* --- Email verification banner --- */
+.verify-banner {
+  background: #fff4d6;
+  color: #5a4400;
+  border-bottom: 1px solid #f0d77b;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+.verify-banner-success {
+  background: #d8f3dc;
+  color: #1f5132;
+  border-bottom: 1px solid #95d5b2;
+}
+.verify-banner-btn {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.verify-banner-btn:hover { background: rgba(0,0,0,0.05); }
+[data-theme="dark"] .verify-banner { background: #3a2f0f; color: #ffe9a8; border-bottom-color: #5a4a1c; }
+[data-theme="dark"] .verify-banner-success { background: #0f3a23; color: #b6e8c4; border-bottom-color: #1c5a3a; }
+
+/* --- Signup OAuth divider + Google button --- */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: #888;
+  font-size: 13px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #ddd;
+}
+.auth-divider span { padding: 0 12px; }
+[data-theme="dark"] .auth-divider { color: #aaa; }
+[data-theme="dark"] .auth-divider::before,
+[data-theme="dark"] .auth-divider::after { border-bottom-color: #444; }
+
+.btn-oauth {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 10px 16px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #3c4043;
+}
+.btn-oauth:hover { background: #f8f9fa; }
+[data-theme="dark"] .btn-oauth { background: #2a2a2a; color: #eee; border-color: #555; }
+[data-theme="dark"] .btn-oauth:hover { background: #333; }
+
+/* --- Dark mode audit (2026-05-22): swap hardcoded navy to accent on
+   elements that are visible in dark mode but lack a dark override. --- */
+
+/* Poll vote pills */
+[data-theme="dark"] .poll-option.selected,
+.dark-theme .poll-option.selected {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-background);
+}
+
+/* Search + filter focus rings (navy outline against dark bg is invisible) */
+[data-theme="dark"] .search-input:focus,
+[data-theme="dark"] .filter-form select:focus,
+.dark-theme .search-input:focus,
+.dark-theme .filter-form select:focus {
+    border-color: var(--color-accent);
+    outline-color: var(--color-accent);
+}
+[data-theme="dark"] .search-form input:focus,
+[data-theme="dark"] .search-form select:focus,
+[data-theme="dark"] .search-form button:focus,
+.dark-theme .search-form input:focus,
+.dark-theme .search-form select:focus,
+.dark-theme .search-form button:focus {
+    outline-color: var(--color-accent);
+}
+
+/* Checkbox tick in sort controls */
+[data-theme="dark"] .sort-control input[type="checkbox"],
+.dark-theme .sort-control input[type="checkbox"] {
+    accent-color: var(--color-accent);
+}
+
+/* Loading spinner stripe */
+[data-theme="dark"] .search-form.loading::after,
+.dark-theme .search-form.loading::after {
+    border-top-color: var(--color-accent);
+}
+
+/* Pagination links — invisible in dark without this */
+[data-theme="dark"] .page-link,
+.dark-theme .page-link {
+    color: var(--color-accent);
+    border-color: var(--color-borders);
+}
+[data-theme="dark"] .page-link:hover,
+.dark-theme .page-link:hover {
+    background-color: var(--color-accent);
+    color: var(--color-background);
+}
+[data-theme="dark"] .page-link.current,
+.dark-theme .page-link.current {
+    background-color: var(--color-accent);
+    color: var(--color-background);
+    border-color: var(--color-accent);
+}
+
+/* Profile page: tier pill next to username */
+[data-theme="dark"] .profile-tier-pill,
+.dark-theme .profile-tier-pill {
+    background-color: var(--color-accent);
+    color: var(--color-background);
+}
+
+/* Bill card title text in dark — was dark-brown on near-black */
+[data-theme="dark"] .bill-title,
+.dark-theme .bill-title {
+    color: var(--color-text);
+}
+
+/* Tags section header on bill page */
+[data-theme="dark"] .tags-section h4,
+.dark-theme .tags-section h4 {
+    color: var(--color-text);
+}
+
+/* Auth form inputs (login + signup) — focus ring and border */
+[data-theme="dark"] .auth-form input,
+.dark-theme .auth-form input {
+    background-color: var(--color-cards);
+    color: var(--color-text);
+    border-color: var(--color-borders);
+}
+[data-theme="dark"] .auth-form input:focus,
+.dark-theme .auth-form input:focus {
+    border-color: var(--color-accent);
+    outline-color: var(--color-accent);
+}
+
+/* Primary buttons in dark mode (Sign in / Create account / etc.)
+   The base .btn-primary uses --color-navy which is invisible against
+   the dark background; swap to --color-accent. */
+[data-theme="dark"] .btn-primary,
+.dark-theme .btn-primary {
+    background-color: var(--color-accent);
+    color: var(--color-background);
+}
+[data-theme="dark"] .btn-primary:hover,
+.dark-theme .btn-primary:hover {
+    background-color: #4a9eff;
+    color: var(--color-background);
+}
+
+/* Secondary buttons in dark mode (Sign out / cancel-style actions).
+   Base uses --color-navy border+text against white; in dark mode the
+   navy border on dark background is invisible. */
+[data-theme="dark"] .btn-secondary,
+.dark-theme .btn-secondary {
+    background-color: transparent;
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+[data-theme="dark"] .btn-secondary:hover,
+.dark-theme .btn-secondary:hover {
+    background-color: var(--color-accent);
+    color: var(--color-background);
 }

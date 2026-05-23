@@ -164,6 +164,21 @@
     </div>
   </nav>
 
+  {% if flash_verify %}
+    <div class="verify-banner verify-banner-success" role="status">
+      {{ flash_verify }}
+    </div>
+  {% endif %}
+
+  {% if verify_banner_needed %}
+    <div class="verify-banner" role="alert">
+      <span>Verify your email to vote on bills and earn Votes. <small>(Check spam if you don't see it.)</small></span>
+      <form method="post" action="{{ url_for('resend_verification') }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="verify-banner-btn">Resend link</button>
+      </form>
+    </div>
+  {% endif %}
 
   {% if current_user %}
   <aside id="user-rail" class="user-rail" aria-label="Your civic standing" data-user-rail hidden>
@@ -193,6 +208,14 @@
     <div class="rail-stat rail-stat-small">
       <span data-rail-daily>{{ current_user.daily_used }}/{{ current_user.daily_cap }}</span>
       <span class="rail-stat-label">today</span>
+    </div>
+    <div class="rail-stat">
+      <span class="rail-stat-num" data-rail-tell-rep-lifetime>{{ current_user.lifetime_stances_sent }}</span>
+      <span class="rail-stat-label">Stances sent</span>
+    </div>
+    <div class="rail-stat rail-stat-small">
+      <span data-rail-tell-rep-daily>{{ current_user.daily_tell_rep_used }}/{{ current_user.daily_tell_rep_cap }}</span>
+      <span class="rail-stat-label">today (+2 Votes)</span>
     </div>
   </aside>
   {% endif %}

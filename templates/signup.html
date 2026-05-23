@@ -12,19 +12,58 @@
     <div class="auth-error" role="alert">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="{{ url_for('signup') }}" class="auth-form" autocomplete="on">
+    <form method="post" action="{{ url_for('signup') }}" class="auth-form" autocomplete="on" id="signup-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <label for="username">Username <span class="auth-hint">(3-30 characters, letters/numbers/_/-)</span></label>
       <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+" autofocus>
+
+      <label for="email">Email <span class="auth-hint">(we'll send a verification link)</span></label>
+      <input type="email" id="email" name="email" value="{{ email or '' }}" autocomplete="email" required maxlength="254">
 
       <label for="password">Password <span class="auth-hint">(at least 8 characters)</span></label>
       <input type="password" id="password" name="password" autocomplete="new-password" required minlength="8" maxlength="128">
 
+      <label for="password_confirm">Confirm password</label>
+      <input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required minlength="8" maxlength="128">
+      <div class="auth-hint" id="pw-match-hint" aria-live="polite"></div>
+
       <button type="submit" class="btn btn-primary">Create account</button>
     </form>
 
+    {% if google_oauth_enabled %}
+    <div class="auth-divider"><span>or</span></div>
+    <a href="{{ url_for('google_login') }}" class="btn btn-oauth btn-google" role="button">
+      Continue with Google
+    </a>
+    {% endif %}
+
     <p class="auth-foot">Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.</p>
-    <p class="auth-foot auth-note">Heads up: there's no password reset yet. Pick something you'll remember.</p>
   </div>
 </div>
+
+<script>
+  (function () {
+    var pw = document.getElementById('password');
+    var pw2 = document.getElementById('password_confirm');
+    var hint = document.getElementById('pw-match-hint');
+    var form = document.getElementById('signup-form');
+    if (!pw || !pw2 || !hint || !form) return;
+
+    function update() {
+      if (!pw2.value) { hint.textContent = ''; pw2.setCustomValidity(''); return; }
+      if (pw.value === pw2.value) {
+        hint.textContent = 'Passwords match.';
+        hint.style.color = 'var(--success, #198754)';
+        pw2.setCustomValidity('');
+      } else {
+        hint.textContent = "Passwords don't match.";
+        hint.style.color = 'var(--danger, #b00020)';
+        pw2.setCustomValidity("Passwords don't match.");
+      }
+    }
+    pw.addEventListener('input', update);
+    pw2.addEventListener('input', update);
+  })();
+</script>
 {% endblock %}

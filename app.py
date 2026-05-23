@@ -155,6 +155,10 @@ app.config["WTF_CSRF_SSL_STRICT"] = False
 # CSRF + rate limiting
 csrf = CSRFProtect(app)
 
+# Third-party sign-in (Google now, Apple reserved for staging push).
+from src.auth.oauth import oauth as _oauth_registry, init_oauth, is_google_enabled
+init_oauth(app)
+
 
 @app.errorhandler(CSRFError)
 def _handle_csrf_error(e):
@@ -756,17 +760,24 @@ def _user_stats(user_id):
         return None
     balance = auth_db.get_balance(user_id)
     today_count = auth_db.count_today_vote_awards(user_id)
+    today_tell_rep = auth_db.count_today_tell_rep_awards_paid(user_id)
+    lifetime_tell_rep = auth_db.count_lifetime_tell_rep(user_id)
     tier = gam_get_tier(balance)
     return {
         "user_id": user_id,
         "username": user["username"],
+        "email": user.get("email"),
+        "email_verified_at": user.get("email_verified_at"),
         "balance": balance,
         "tier": tier.title,
         "tier_rank": tier.rank,
         "progress": gam_progress(balance),
         "lifetime_votes_cast": int(user.get("total_votes_cast") or 0),
+        "lifetime_stances_sent": lifetime_tell_rep,
         "daily_used": today_count,
         "daily_cap": DAILY_VOTE_CAP,
+        "daily_tell_rep_used": today_tell_rep,
+        "daily_tell_rep_cap": 1,
     }
 
 
@@ -777,7 +788,12 @@ def inject_current_user():
     if not uid:
         return {"current_user": None}
     stats = _user_stats(uid)
-    return {"current_user": stats}
+    flash_verify = session.pop("flash_verify", None)
+    return {
+        "current_user": stats,
+        "verify_banner_needed": bool(stats and not stats.get("email_verified_at")),
+        "flash_verify": flash_verify,
+    }
 
 
 @app.before_request
@@ -792,25 +808,55 @@ def _set_is_authenticated():
 def signup():
     if auth_session.is_authenticated():
         return redirect(url_for("profile"))
+    google_enabled = bool(os.environ.get("GOOGLE_CLIENT_ID"))
     if request.method == "GET":
-        return render_template("signup.html", error=None, username="")
+        return render_template(
+            "signup.html",
+            error=None, username="", email="",
+            google_oauth_enabled=google_enabled,
+        )
 
     username_raw = (request.form.get("username") or "").strip()
+    email_raw = (request.form.get("email") or "").strip()
     password = request.form.get("password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+
+    def _err(msg, code=400):
+        return render_template(
+            "signup.html",
+            error=msg, username=username_raw, email=email_raw,
+            google_oauth_enabled=google_enabled,
+        ), code
 
     try:
         username = auth_passwords.validate_username(username_raw)
+        email = auth_passwords.validate_email(email_raw)
         auth_passwords.validate_password(password)
     except ValueError as e:
-        return render_template("signup.html", error=str(e), username=username_raw), 400
+        return _err(str(e))
 
-    # Link existing anonymous voter_id (if present) so prior votes
-    # follow the user once they sign up.
+    if password != password_confirm:
+        return _err("Passwords don't match.")
+
+    if auth_db.get_user_by_email(email):
+        return _err("An account with that email already exists.")
+
     voter_id, _ = _get_or_create_voter_id()
     password_hash = auth_passwords.hash_password(password)
-    new_id = auth_db.create_user(username, password_hash, voter_id=voter_id)
-    if not new_id:
-        return render_template("signup.html", error="That username is already taken.", username=username_raw), 400
+    result = auth_db.create_user(username, password_hash, voter_id=voter_id, email=email)
+    if not result:
+        return _err("That username or email is already taken.")
+    new_id, voter_id = result
+
+    from src.email_sender import send_verification_email
+    try:
+        send_verification_email(new_id, email)
+    except Exception as e:
+        logger.error("verification email send failed for new user %s: %s", new_id, e)
+        session["flash_verify"] = (
+            "Account created, but we couldn't send the verification email. "
+            "Try the 'Resend link' button in the banner above."
+        )
 
     auth_session.login_user(new_id)
     auth_db.update_last_login(new_id)
@@ -824,15 +870,25 @@ def signup():
 def login():
     if auth_session.is_authenticated():
         return redirect(url_for("profile"))
+    google_enabled = is_google_enabled()
     if request.method == "GET":
-        return render_template("login.html", error=None, username="")
+        return render_template("login.html", error=None, username="", google_oauth_enabled=google_enabled)
 
-    username = (request.form.get("username") or "").strip()
+    identifier = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
 
-    user = auth_db.get_user_by_username(username) if username else None
-    if not user or not auth_passwords.verify_password(password, user["password_hash"]):
-        return render_template("login.html", error="Invalid username or password.", username=username), 401
+    # Accept either username or email in the same field.
+    user = None
+    if identifier:
+        if "@" in identifier:
+            user = auth_db.get_user_by_email(identifier)
+        else:
+            user = auth_db.get_user_by_username(identifier)
+    if not user or not user.get("password_hash") or not auth_passwords.verify_password(password, user["password_hash"]):
+        return render_template(
+            "login.html", error="Invalid username/email or password.",
+            username=identifier, google_oauth_enabled=google_enabled,
+        ), 401
 
     auth_session.login_user(user["id"])
     auth_db.update_last_login(user["id"])
@@ -843,6 +899,221 @@ def login():
 def logout():
     auth_session.logout_user()
     return redirect(url_for("index"))
+
+
+@app.route("/verify/<token>")
+@limiter.limit("30 per hour")
+def verify_email(token):
+    from src.auth.tokens import read_verify_email_token
+    uid, err = read_verify_email_token(token)
+    if err == "expired":
+        return render_template(
+            "verify_result.html",
+            ok=False,
+            heading="Link expired",
+            message="That verification link has expired. Sign in and request a new one.",
+        ), 400
+    if err or not uid:
+        return render_template(
+            "verify_result.html",
+            ok=False,
+            heading="Invalid link",
+            message="We couldn't verify that link. It may be malformed or already used.",
+        ), 400
+
+    user = auth_db.get_user_by_id(uid)
+    if not user:
+        return render_template(
+            "verify_result.html",
+            ok=False,
+            heading="Account not found",
+            message="That account no longer exists.",
+        ), 404
+
+    auth_db.mark_email_verified(uid)
+    return render_template(
+        "verify_result.html",
+        ok=True,
+        heading="Email verified",
+        message="Thanks — your account is now active. You can vote on bills and earn Votes.",
+    )
+
+
+@app.route("/resend-verification", methods=["POST"])
+@limiter.limit("3 per hour")
+def resend_verification():
+    uid = auth_session.current_user_id()
+    if not uid:
+        return redirect(url_for("login"))
+    user = auth_db.get_user_by_id(uid)
+    if not user or not user.get("email"):
+        return redirect(url_for("profile"))
+    if user.get("email_verified_at"):
+        return redirect(url_for("profile"))
+    try:
+        from src.email_sender import send_verification_email
+        send_verification_email(uid, user["email"])
+        flash_msg = "Verification email sent. Check your inbox."
+    except Exception as e:
+        logger.error("resend_verification failed for uid=%s: %s", uid, e)
+        flash_msg = "We couldn't send the email right now. Try again in a minute."
+    session["flash_verify"] = flash_msg
+    return redirect(request.referrer or url_for("profile"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("5 per hour")
+def forgot_password():
+    """Request a password-reset link. Always returns the same generic
+    confirmation regardless of whether the email exists, so attackers
+    can't enumerate accounts by trying emails here."""
+    if request.method == "GET":
+        return render_template("forgot_password.html", sent=False)
+
+    email_raw = (request.form.get("email") or "").strip()
+    try:
+        email = auth_passwords.validate_email(email_raw)
+    except ValueError:
+        # Even invalid emails get the generic success page — same enumeration argument.
+        return render_template("forgot_password.html", sent=True)
+
+    user = auth_db.get_user_by_email(email)
+    if user and user.get("password_hash"):
+        try:
+            from src.email_sender import send_password_reset_email
+            send_password_reset_email(user["id"], email, user["password_hash"])
+        except Exception as e:
+            logger.error("password reset send failed for %s: %s", email, e)
+            # Don't leak the failure to the form — generic response stands.
+
+    return render_template("forgot_password.html", sent=True)
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+@limiter.limit("10 per hour")
+def reset_password(token):
+    from src.auth.tokens import read_password_reset_token
+
+    # Resolve token. Need user's current hash to detect "already consumed."
+    uid_only, _ = read_password_reset_token(token, current_hash=None)
+    user = auth_db.get_user_by_id(uid_only) if uid_only else None
+    uid, err = read_password_reset_token(token, current_hash=user.get("password_hash") if user else None)
+
+    if err == "expired":
+        return render_template(
+            "verify_result.html", ok=False,
+            heading="Link expired",
+            message="That reset link has expired. Request a new one.",
+        ), 400
+    if err == "consumed":
+        return render_template(
+            "verify_result.html", ok=False,
+            heading="Link already used",
+            message="That reset link has already been used. Request a new one if you need to.",
+        ), 400
+    if err or not uid or not user:
+        return render_template(
+            "verify_result.html", ok=False,
+            heading="Invalid link",
+            message="We couldn't verify that reset link.",
+        ), 400
+
+    if request.method == "GET":
+        return render_template("reset_password.html", token=token, error=None, username=user.get("username") or "")
+
+    password = request.form.get("password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+
+    try:
+        auth_passwords.validate_password(password)
+    except ValueError as e:
+        return render_template("reset_password.html", token=token, error=str(e), username=user.get("username") or ""), 400
+
+    if password != password_confirm:
+        return render_template("reset_password.html", token=token, error="Passwords don't match."), 400
+
+    new_hash = auth_passwords.hash_password(password)
+    if not auth_db.update_password_hash(uid, new_hash):
+        return render_template("reset_password.html", token=token, error="Could not update password. Try again."), 500
+
+    # Auto-login the user so they don't have to type the new password again.
+    auth_session.login_user(uid)
+    auth_db.update_last_login(uid)
+    session["flash_verify"] = "Password updated. You're signed in."
+    return redirect(url_for("profile"))
+
+
+@app.route("/auth/google/login")
+@limiter.limit("20 per hour")
+def google_login():
+    if not is_google_enabled():
+        abort(404)
+    redirect_uri = url_for("google_callback", _external=True)
+    return _oauth_registry.google.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/google/callback")
+@limiter.limit("20 per hour")
+@csrf.exempt  # OAuth callback isn't a form submit; state param protects against CSRF
+def google_callback():
+    if not is_google_enabled():
+        abort(404)
+    try:
+        token = _oauth_registry.google.authorize_access_token()
+    except Exception as e:
+        logger.warning("Google OAuth callback failed: %s", e)
+        return render_template("login.html", error="Google sign-in failed. Try again.", username=""), 400
+
+    userinfo = token.get("userinfo") or {}
+    subject = userinfo.get("sub")
+    email = (userinfo.get("email") or "").lower().strip()
+    email_verified = userinfo.get("email_verified", False)
+    if not subject or not email:
+        return render_template("login.html", error="Google sign-in returned no email.", username=""), 400
+    if not email_verified:
+        return render_template("login.html", error="Your Google email isn't verified.", username=""), 400
+
+    # 1) Existing OAuth-linked user
+    user = auth_db.get_user_by_oauth("google", subject)
+    if user:
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(url_for("profile"))
+
+    # 2) Existing user by email — link this Google account to it
+    user = auth_db.get_user_by_email(email)
+    if user:
+        auth_db.link_oauth_subject(user["id"], "google", subject)
+        # Trust Google's verified flag — mark the email verified if not already.
+        if not user.get("email_verified_at"):
+            auth_db.mark_email_verified(user["id"])
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(url_for("profile"))
+
+    # 3) New user — pick a unique username derived from the email local part
+    from src.auth.oauth import derive_username_from_email
+    base = derive_username_from_email(email)
+    candidate = base
+    suffix = 1
+    while auth_db.get_user_by_username(candidate) is not None:
+        suffix += 1
+        candidate = f"{base[:26]}{suffix}"
+        if suffix > 999:
+            candidate = f"user{secrets.token_hex(4)}"
+            break
+
+    voter_id, _ = _get_or_create_voter_id()
+    result = auth_db.create_oauth_user(candidate, email, "google", subject, voter_id=voter_id)
+    if not result:
+        return render_template("login.html", error="Could not create account. Try a different Google account.", username=""), 400
+    new_id, voter_id = result
+
+    auth_session.login_user(new_id)
+    auth_db.update_last_login(new_id)
+    response = make_response(redirect(url_for("profile")))
+    _set_voter_cookie(response, voter_id)
+    return response
 
 
 @app.route("/profile")
@@ -1598,17 +1869,23 @@ def record_vote():
         if not updated:
             abort(404, description="Bill not found or vote update failed")
 
-        # Award Votes currency only for NEW votes (not vote switches).
-        # Switching an existing vote moves the poll tally but doesn't
-        # count as a new civic action for reward purposes.
+        # Engagement vs reward decoupling:
+        #   - total_votes_cast bumps on every new vote (verified or not, capped or not).
+        #     It's a private counter only the user sees — drives "you voted on N bills".
+        #   - Votes currency only accrues when (a) account has a verified email AND
+        #     (b) under the daily cap. Currency feeds the public rank ladder, which
+        #     needs anti-abuse friction.
         votes_awarded = 0.0
         uid = auth_session.current_user_id()
         is_new_vote = not previous_vote
         if uid and is_new_vote:
-            today_count = auth_db.count_today_vote_awards(uid)
-            votes_awarded = reward_for_nth_vote_of_day(today_count + 1)
-            if votes_awarded > 0:
-                auth_db.award_vote(uid, bill_id, votes_awarded)
+            auth_db.increment_total_votes_cast(uid)
+            user_row = auth_db.get_user_by_id(uid)
+            if user_row and user_row.get("email_verified_at"):
+                today_count = auth_db.count_today_vote_awards(uid)
+                votes_awarded = reward_for_nth_vote_of_day(today_count + 1)
+                if votes_awarded > 0:
+                    auth_db.award_vote(uid, bill_id, votes_awarded)
 
         # Include fresh user stats in the response so the client can update
         # the navbar pill / rail without a follow-up /api/me round-trip.
@@ -1625,6 +1902,45 @@ def record_vote():
     except Exception as e:
         logger.error(f"Error recording vote: {e}", exc_info=True)
         abort(500, description="Internal server error")
+
+
+@app.route("/api/award-tell-rep", methods=["POST"])
+@limiter.limit("10 per minute")
+def award_tell_rep():
+    """User clicked Copy Message — record a stance for this (user, bill)
+    and award +2 Votes when eligible.
+
+    Engagement/reward decoupling mirrors record_vote():
+      - "Stances sent" counter = distinct bills the user has copied a
+        message for. Incremented for anyone (verified or not, capped or
+        not), but only once per bill — re-copying is a no-op.
+      - +2 currency = gated by (a) email verified AND (b) under daily cap
+        of 1 paid award per UTC day. When not eligible, we still insert
+        the ledger row with delta=0 so the counter increments."""
+    uid = auth_session.current_user_id()
+    data = request.get_json(silent=True) or {}
+    bill_id = (data.get("bill_id") or "").strip()
+    if not bill_id:
+        abort(400, description="bill_id required")
+
+    awarded = 0
+    if uid:
+        already = auth_db.has_tell_rep_for_bill(uid, bill_id)
+        if not already:
+            user_row = auth_db.get_user_by_id(uid)
+            eligible = bool(user_row and user_row.get("email_verified_at"))
+            if eligible:
+                today_paid = auth_db.count_today_tell_rep_awards_paid(uid)
+                if today_paid < 1:
+                    awarded = 2
+            auth_db.award_tell_rep(uid, bill_id, delta=awarded)
+
+    user_stats = _user_stats(uid) if uid else None
+    return jsonify({
+        "success": True,
+        "votes_awarded": awarded,
+        "user": user_stats,
+    })
 
 
 @app.route("/api/my-votes")

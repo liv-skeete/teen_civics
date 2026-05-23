@@ -38,6 +38,14 @@
     document.querySelectorAll("[data-rail-next-tier]").forEach((el) => {
       if (me.progress && me.progress.next_tier) el.textContent = me.progress.next_tier;
     });
+    document.querySelectorAll("[data-rail-tell-rep-lifetime]").forEach((el) => {
+      if (me.lifetime_stances_sent != null) el.textContent = String(me.lifetime_stances_sent);
+    });
+    document.querySelectorAll("[data-rail-tell-rep-daily]").forEach((el) => {
+      if (me.daily_tell_rep_used != null && me.daily_tell_rep_cap != null) {
+        el.textContent = `${me.daily_tell_rep_used}/${me.daily_tell_rep_cap}`;
+      }
+    });
   }
 
   // Fallback path: fetch fresh stats from /api/me. Used when we don't
@@ -64,6 +72,12 @@
     const el = document.querySelector('meta[name="csrf-token"]');
     return el ? (el.getAttribute("content") || "") : "";
   }
+
+  // Expose for the tell-rep script (separate IIFE) to award bonus Votes.
+  window.TC = window.TC || {};
+  window.TC.applyUserStats = applyUserStats;
+  window.TC.getCsrfToken = getCsrfToken;
+  window.TC.API_BASE = API_BASE;
 
   // Safe localStorage helpers (handles Safari private mode)
   function getStored(key) { try { return localStorage.getItem(key); } catch { return null; } }

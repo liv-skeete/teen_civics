@@ -582,3 +582,28 @@ To revisit before implementation:
   - Several open questions resolved per gamification research findings.
   - Cross-referenced `PYTHON_CLEANUP_PLAN_2026-05-18.md` for the
     foundation work that must precede auth.
+
+---
+
+## Apple Sign-In — deferred plan (added 2026-05-22)
+
+Skipped from the 2026-05-22 auth build because Apple's OAuth flow requires:
+1. An HTTPS callback on a registered domain — `http://localhost` is rejected at the Service ID configuration step, so we cannot end-to-end test on a dev laptop.
+2. Apple Developer Program membership ($99/yr).
+3. A `.p8` private key, Team ID, Key ID, and a ES256-signed JWT minted as the OAuth `client_secret` (must be re-minted every ≤6 months).
+
+### Implementation outline (when ready)
+- Build on the same Authlib registry already wired in `src/auth/oauth.py`; Apple registers as a generic OIDC client with a custom `client_secret` callable.
+- Mint the client-secret JWT lazily, caching for ~5 months. Algorithm = ES256, claims = `{iss: team_id, iat, exp, aud: "https://appleid.apple.com", sub: client_id}`. PyJWT can do this; the `.p8` file is loaded once at startup.
+- Authorize URL: `https://appleid.apple.com/auth/authorize`. Token URL: `https://appleid.apple.com/auth/token`. JWKS: `https://appleid.apple.com/auth/keys`.
+- Apple POSTs the callback (not GET) when `response_mode=form_post` is requested — Flask route must allow `methods=["GET", "POST"]` AND `@csrf.exempt` (the OAuth `state` param carries the CSRF guarantee, like the Google callback already does).
+- Apple returns email + name **only on first consent** — persist both in `users` row on the callback's "new user" branch. Subsequent logins yield only `sub`.
+- Reference: `rlid/flask-apple-signin` on GitHub shows the Authlib + client-secret-JWT pattern in <100 lines.
+
+### Prereq checklist before coding
+- [ ] Apple Developer Program enrollment confirmed.
+- [ ] Service ID created with `https://teencivics.org/auth/apple/callback` as Return URL.
+- [ ] `.p8` key downloaded, stored in Railway secrets as base64 (not committed).
+- [ ] `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY_PEM` added to Railway environment.
+
+DB columns already in place (`users.apple_sub`) per migration `f88fa0e69ea9`.
