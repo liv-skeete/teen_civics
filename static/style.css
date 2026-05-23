@@ -4196,3 +4196,60 @@ h1, h2, h3, h4, h5, h6 {
     color: #ffffff;
     border-color: var(--color-primary-dark);
 }
+
+/* --- Profile: editable username with inline pencil --- */
+.username-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-xs);
+}
+.username-edit-btn {
+    background: transparent;
+    border: 1px solid var(--color-borders);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: var(--border-radius);
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.username-edit-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: rgba(0, 0, 0, 0.03);
+}
+.username-edit-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.username-edit-form input[type="text"] {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-lg);
+    font-family: var(--font-family);
+    background-color: var(--color-cards);
+    color: var(--color-text);
+    min-width: 200px;
+}
+.username-edit-form input[type="text"]:focus {
+    border-color: var(--color-primary);
+    outline: 2px solid var(--color-brand-accent);
+    outline-offset: 1px;
+}
+.username-edit-form .btn-small {
+    padding: 0.4rem 0.9rem;
+    font-size: var(--font-size-sm);
+}
+.username-edit-error {
+    color: #8B3A2A;
+    font-size: var(--font-size-sm);
+    margin-top: 0.25rem;
+    flex-basis: 100%;
+}
+[data-theme="dark"] .username-edit-error { color: #F3B5A6; }

@@ -753,30 +753,28 @@ from src.auth.gamification import (
 
 
 def _user_stats(user_id):
-    """Build the dict the navbar / rail / profile pages need.
-    Returns None if user_id resolves to nothing (deleted account)."""
-    user = auth_db.get_user_by_id(user_id)
-    if not user:
+    """Build the dict the navbar / rail / profile pages need. Single
+    round-trip to the DB (see get_user_stats_bundle). Returns None if
+    user_id resolves to nothing (deleted account)."""
+    bundle = auth_db.get_user_stats_bundle(user_id)
+    if not bundle:
         return None
-    balance = auth_db.get_balance(user_id)
-    today_count = auth_db.count_today_vote_awards(user_id)
-    today_tell_rep = auth_db.count_today_tell_rep_awards_paid(user_id)
-    lifetime_tell_rep = auth_db.count_lifetime_tell_rep(user_id)
+    balance = float(bundle.get("balance") or 0)
     tier = gam_get_tier(balance)
     return {
         "user_id": user_id,
-        "username": user["username"],
-        "email": user.get("email"),
-        "email_verified_at": user.get("email_verified_at"),
+        "username": bundle["username"],
+        "email": bundle.get("email"),
+        "email_verified_at": bundle.get("email_verified_at"),
         "balance": balance,
         "tier": tier.title,
         "tier_rank": tier.rank,
         "progress": gam_progress(balance),
-        "lifetime_votes_cast": int(user.get("total_votes_cast") or 0),
-        "lifetime_stances_sent": lifetime_tell_rep,
-        "daily_used": today_count,
+        "lifetime_votes_cast": int(bundle.get("total_votes_cast") or 0),
+        "lifetime_stances_sent": int(bundle.get("lifetime_tell_rep") or 0),
+        "daily_used": int(bundle.get("today_vote_awards") or 0),
         "daily_cap": DAILY_VOTE_CAP,
-        "daily_tell_rep_used": today_tell_rep,
+        "daily_tell_rep_used": int(bundle.get("today_tell_rep_paid") or 0),
         "daily_tell_rep_cap": 1,
     }
 
@@ -872,22 +870,19 @@ def login():
         return redirect(url_for("profile"))
     google_enabled = is_google_enabled()
     if request.method == "GET":
-        return render_template("login.html", error=None, username="", google_oauth_enabled=google_enabled)
+        return render_template("login.html", error=None, email="", google_oauth_enabled=google_enabled)
 
-    identifier = (request.form.get("username") or "").strip()
+    email_raw = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
 
-    # Accept either username or email in the same field.
-    user = None
-    if identifier:
-        if "@" in identifier:
-            user = auth_db.get_user_by_email(identifier)
-        else:
-            user = auth_db.get_user_by_username(identifier)
+    # Email is now the login credential (username is a freely-editable
+    # display name). Accounts that pre-date this change may have no
+    # email — they can use password reset / OAuth to get back in.
+    user = auth_db.get_user_by_email(email_raw) if email_raw else None
     if not user or not user.get("password_hash") or not auth_passwords.verify_password(password, user["password_hash"]):
         return render_template(
-            "login.html", error="Invalid username/email or password.",
-            username=identifier, google_oauth_enabled=google_enabled,
+            "login.html", error="Invalid email or password.",
+            email=email_raw, google_oauth_enabled=google_enabled,
         ), 401
 
     auth_session.login_user(user["id"])
@@ -1187,6 +1182,34 @@ def profile():
         return redirect(url_for("login"))
     from src.auth.gamification import TIERS
     return render_template("profile.html", stats=stats, tiers=TIERS)
+
+
+@app.route("/api/me/username", methods=["POST"])
+@limiter.limit("5 per hour")
+def api_update_username():
+    """Let a logged-in user change their display username. Email is the
+    real login credential — username is a free handle."""
+    uid = auth_session.current_user_id()
+    if not uid:
+        return jsonify({"error": "not_authenticated"}), 401
+    data = request.get_json(silent=True) or {}
+    new_raw = (data.get("username") or "").strip()
+    try:
+        new_username = auth_passwords.validate_username(new_raw)
+    except ValueError as e:
+        return jsonify({"error": "invalid", "message": str(e)}), 400
+
+    user = auth_db.get_user_by_username(new_username)
+    if user and user.get("id") != uid:
+        return jsonify({"error": "taken", "message": "That username is already taken."}), 409
+    if user and user.get("id") == uid:
+        # No-op rename to the same name (or case variant). Return current stats.
+        return jsonify({"success": True, "user": _user_stats(uid)})
+
+    if not auth_db.update_username(uid, new_username):
+        return jsonify({"error": "conflict", "message": "Could not update username. Try a different one."}), 409
+
+    return jsonify({"success": True, "user": _user_stats(uid)})
 
 
 @app.route("/api/me")

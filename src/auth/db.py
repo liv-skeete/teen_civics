@@ -170,6 +170,26 @@ def create_oauth_user(
         return None
 
 
+def update_username(user_id: str, new_username: str) -> bool:
+    """Change a user's display username. Returns False on UNIQUE collision
+    (someone else has it) so caller can return a user-friendly error."""
+    try:
+        with postgres_connect() as conn:
+            if conn is None:
+                return False
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET username = %s WHERE id = %s",
+                    (new_username, user_id),
+                )
+                return cur.rowcount > 0
+    except psycopg2.errors.UniqueViolation:
+        return False
+    except Exception as e:
+        logger.error(f"update_username failed: {e}", exc_info=True)
+        return False
+
+
 def update_password_hash(user_id: str, new_hash: str) -> bool:
     """Replace the user's bcrypt hash. Used by the password-reset flow."""
     try:
@@ -250,6 +270,57 @@ def count_lifetime_tell_rep(user_id: str) -> int:
     except Exception as e:
         logger.error(f"count_lifetime_tell_rep failed: {e}", exc_info=True)
         return 0
+
+
+def get_user_stats_bundle(user_id: str) -> Optional[Dict[str, Any]]:
+    """Single-round-trip fetch of everything _user_stats() needs for the
+    rail / pill / profile page. Replaces 5 separate queries (which were
+    causing ~1.25s page loads against staging due to round-trip latency).
+
+    Returns None if the user no longer exists; otherwise a dict with all
+    the user-row fields plus balance, today's vote count, today's paid
+    tell-rep count, and lifetime distinct tell-rep bills.
+    """
+    try:
+        with postgres_connect() as conn:
+            if conn is None:
+                return None
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        u.*,
+                        COALESCE((
+                            SELECT SUM(delta) FROM civitas_ledger
+                            WHERE user_id = u.id
+                        ), 0) AS balance,
+                        COALESCE((
+                            SELECT COUNT(*) FROM civitas_ledger
+                            WHERE user_id = u.id
+                              AND reason LIKE 'vote:%%'
+                              AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
+                        ), 0) AS today_vote_awards,
+                        COALESCE((
+                            SELECT COUNT(*) FROM civitas_ledger
+                            WHERE user_id = u.id
+                              AND reason LIKE 'tell_rep:%%'
+                              AND delta > 0
+                              AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
+                        ), 0) AS today_tell_rep_paid,
+                        COALESCE((
+                            SELECT COUNT(DISTINCT source_bill_id) FROM civitas_ledger
+                            WHERE user_id = u.id AND reason LIKE 'tell_rep:%%'
+                        ), 0) AS lifetime_tell_rep
+                    FROM users u
+                    WHERE u.id = %s
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"get_user_stats_bundle failed: {e}", exc_info=True)
+        return None
 
 
 def has_tell_rep_for_bill(user_id: str, bill_id: str) -> bool:

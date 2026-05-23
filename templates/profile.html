@@ -5,7 +5,18 @@
 {% block content %}
 <div class="container profile-container">
   <header class="profile-header">
-    <h1>{{ stats.username }}</h1>
+    <div class="username-wrap" data-username-wrap>
+      <h1 class="username-display" data-username-display>{{ stats.username }}</h1>
+      <button type="button" class="username-edit-btn" data-username-edit-btn aria-label="Change username" title="Change username">✎</button>
+      <form class="username-edit-form" data-username-edit-form hidden>
+        <input type="text" name="username" value="{{ stats.username }}"
+               minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+" required
+               data-username-input>
+        <button type="submit" class="btn btn-primary btn-small">Save</button>
+        <button type="button" class="btn btn-secondary btn-small" data-username-cancel>Cancel</button>
+      </form>
+      <div class="username-edit-error" data-username-error role="alert" hidden></div>
+    </div>
     <div class="profile-tier-pill">{{ stats.tier }}</div>
   </header>
 
@@ -58,4 +69,63 @@
     </form>
   </section>
 </div>
+
+<script>
+  (function () {
+    const wrap = document.querySelector('[data-username-wrap]');
+    if (!wrap) return;
+    const display = wrap.querySelector('[data-username-display]');
+    const editBtn = wrap.querySelector('[data-username-edit-btn]');
+    const form = wrap.querySelector('[data-username-edit-form]');
+    const input = wrap.querySelector('[data-username-input]');
+    const cancel = wrap.querySelector('[data-username-cancel]');
+    const error = wrap.querySelector('[data-username-error]');
+
+    function openEdit() {
+      display.hidden = true;
+      editBtn.hidden = true;
+      form.hidden = false;
+      error.hidden = true;
+      input.focus();
+      input.select();
+    }
+    function closeEdit() {
+      display.hidden = false;
+      editBtn.hidden = false;
+      form.hidden = true;
+      input.value = display.textContent.trim();
+    }
+
+    editBtn.addEventListener('click', openEdit);
+    cancel.addEventListener('click', closeEdit);
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const next = input.value.trim();
+      if (next === display.textContent.trim()) { closeEdit(); return; }
+      const csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+      const base = (window.TC && window.TC.API_BASE) || '';
+      try {
+        const r = await fetch(base + '/api/me/username', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+          body: JSON.stringify({ username: next }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          error.textContent = (data && data.message) || 'Could not update.';
+          error.hidden = false;
+          return;
+        }
+        display.textContent = next;
+        if (window.TC && window.TC.applyUserStats && data.user) window.TC.applyUserStats(data.user);
+        closeEdit();
+      } catch (_) {
+        error.textContent = 'Network error. Try again.';
+        error.hidden = false;
+      }
+    });
+  })();
+</script>
 {% endblock %}
