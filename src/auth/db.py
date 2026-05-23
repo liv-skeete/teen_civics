@@ -171,8 +171,10 @@ def create_oauth_user(
 
 
 def update_username(user_id: str, new_username: str) -> bool:
-    """Change a user's display username. Returns False on UNIQUE collision
-    (someone else has it) so caller can return a user-friendly error."""
+    """Change a user's display username. Returns False ONLY on UNIQUE
+    collision (someone else has it) or hard DB error. A rowcount of 0
+    (no actual change — e.g. case-identical rename) still counts as
+    success since the desired state is satisfied."""
     try:
         with postgres_connect() as conn:
             if conn is None:
@@ -182,7 +184,7 @@ def update_username(user_id: str, new_username: str) -> bool:
                     "UPDATE users SET username = %s WHERE id = %s",
                     (new_username, user_id),
                 )
-                return cur.rowcount > 0
+                return True
     except psycopg2.errors.UniqueViolation:
         return False
     except Exception as e:
