@@ -146,14 +146,14 @@
         <a href="{{ url_for('contact') }}" class="nav-link" {% if request.endpoint == 'contact' %}aria-current="page"{% endif %}>Contact</a>
         {% if current_user %}
           <div class="nav-user" role="group" aria-label="Your civic standing">
-            <button type="button" class="nav-user-left" aria-label="View your stats" aria-expanded="false" aria-controls="user-rail" id="user-pill-btn">
+            <a href="{{ url_for('profile') }}" class="nav-user-left" {% if request.endpoint == 'profile' %}aria-current="page"{% endif %} aria-label="Go to profile">
               <span class="nav-user-tier" data-rail-tier>{{ current_user.tier }}</span>
-            </button>
+            </a>
             <span class="nav-user-divider" aria-hidden="true"></span>
-            <a href="{{ url_for('profile') }}" class="nav-user-right" {% if request.endpoint == 'profile' %}aria-current="page"{% endif %} aria-label="Go to profile">
+            <button type="button" class="nav-user-right" aria-label="View your stats" aria-expanded="false" aria-controls="user-rail" id="user-pill-btn">
               <span class="nav-user-balance" data-rail-balance>{{ current_user.balance|int }}</span>
               <span class="nav-user-suffix">Kudos</span>
-            </a>
+            </button>
           </div>
         {% else %}
           <a href="{{ url_for('login') }}" class="nav-link nav-signin">Sign in</a>
