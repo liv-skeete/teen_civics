@@ -152,7 +152,7 @@
             <span class="nav-user-divider" aria-hidden="true"></span>
             <a href="{{ url_for('profile') }}" class="nav-user-right" {% if request.endpoint == 'profile' %}aria-current="page"{% endif %} aria-label="Go to profile">
               <span class="nav-user-balance" data-rail-balance>{{ current_user.balance|int }}</span>
-              <span class="nav-user-suffix">Votes</span>
+              <span class="nav-user-suffix">Kudos</span>
             </a>
           </div>
         {% else %}
@@ -173,7 +173,7 @@
 
   {% if verify_banner_needed %}
     <div class="verify-banner" role="alert">
-      <span>Verify your email to vote on bills and earn Votes. <small>(Check spam if you don't see it.)</small></span>
+      <span>Verify your email to vote on bills and earn Kudos. <small>(Check spam if you don't see it.)</small></span>
       <form method="post" action="{{ url_for('resend_verification') }}" style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="verify-banner-btn">Resend link</button>
@@ -200,7 +200,7 @@
     <hr class="rail-divider">
     <div class="rail-stat">
       <span class="rail-stat-num" data-rail-balance>{{ current_user.balance|int }}</span>
-      <span class="rail-stat-label">Votes</span>
+      <span class="rail-stat-label">Kudos</span>
     </div>
     <div class="rail-stat">
       <span class="rail-stat-num" data-rail-lifetime>{{ current_user.lifetime_votes_cast }}</span>
@@ -216,8 +216,9 @@
     </div>
     <div class="rail-stat rail-stat-small">
       <span data-rail-tell-rep-daily>{{ current_user.daily_tell_rep_used }}/{{ current_user.daily_tell_rep_cap }}</span>
-      <span class="rail-stat-label">today (+2 Votes)</span>
+      <span class="rail-stat-label">today (+2 Kudos)</span>
     </div>
+    <p class="rail-reset-hint">Daily counts reset at midnight ET.</p>
   </aside>
   {% endif %}
 

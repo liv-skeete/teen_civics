@@ -811,7 +811,7 @@
           if (!data || !data.user) return;
           if (TC.applyUserStats) TC.applyUserStats(data.user);
           if (data.votes_awarded > 0) {
-            showToast(`+${data.votes_awarded} Votes for contacting your rep!`);
+            showToast(`+${data.votes_awarded} Kudos for contacting your rep!`);
           }
         })
         .catch(() => {});

@@ -219,7 +219,7 @@ def count_today_tell_rep_awards(user_id: str) -> int:
                     SELECT COUNT(*) FROM civitas_ledger
                     WHERE user_id = %s
                       AND reason LIKE 'tell_rep:%%'
-                      AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
+                      AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
                     """,
                     (user_id,),
                 )
@@ -288,7 +288,7 @@ def count_today_tell_rep_awards_paid(user_id: str) -> int:
                     WHERE user_id = %s
                       AND reason LIKE 'tell_rep:%%'
                       AND delta > 0
-                      AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
+                      AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
                     """,
                     (user_id,),
                 )
@@ -395,7 +395,7 @@ def count_today_vote_awards(user_id: str) -> int:
                     SELECT COUNT(*) FROM civitas_ledger
                     WHERE user_id = %s
                       AND reason LIKE 'vote:%%'
-                      AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
+                      AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
                     """,
                     (user_id,),
                 )

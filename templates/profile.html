@@ -12,7 +12,7 @@
   <section class="profile-stats">
     <div class="profile-stat">
       <div class="profile-stat-number">{{ stats.balance|int }}</div>
-      <div class="profile-stat-label">Votes</div>
+      <div class="profile-stat-label">Kudos</div>
     </div>
     <div class="profile-stat">
       <div class="profile-stat-number">{{ stats.lifetime_votes_cast }}</div>
@@ -27,7 +27,7 @@
   <section class="profile-progress">
     {% if stats.progress.next_tier %}
     <div class="profile-progress-label">
-      <strong>{{ stats.progress.votes_to_next }}</strong> Votes to <strong>{{ stats.progress.next_tier }}</strong>
+      <strong>{{ stats.progress.votes_to_next }}</strong> Kudos to <strong>{{ stats.progress.next_tier }}</strong>
     </div>
     <div class="profile-progress-bar" aria-label="Progress to next tier">
       <div class="profile-progress-fill" style="width: {{ stats.progress.percent }}%"></div>
@@ -45,7 +45,7 @@
           {% if t.rank == stats.tier_rank %}tier-current{% elif t.rank < stats.tier_rank %}tier-done{% else %}tier-locked{% endif %}">
         <span class="tier-num">{{ t.rank }}</span>
         <span class="tier-name">{{ t.title }}</span>
-        <span class="tier-threshold">{{ t.threshold }} Votes</span>
+        <span class="tier-threshold">{{ t.threshold }} Kudos</span>
       </li>
       {% endfor %}
     </ol>
