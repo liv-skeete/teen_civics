@@ -3623,6 +3623,26 @@ h1, h2, h3, h4, h5, h6 {
     border-color: #E8917F;
 }
 
+/* Friendly status banner (e.g. "Sign in to vote on bills and earn Kudos.")
+   rendered when the user lands on /login or /signup from a soft-wall. Uses
+   the primary-color family so it reads as informational, not as an error. */
+.auth-notice {
+    background-color: rgba(79, 91, 184, 0.10);
+    color: var(--color-primary);
+    border: 1px solid rgba(79, 91, 184, 0.30);
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 1rem;
+    font-size: var(--font-size-sm);
+}
+
+[data-theme="dark"] .auth-notice,
+.dark-theme .auth-notice {
+    background-color: rgba(164, 171, 228, 0.12);
+    color: #C9CFEF;
+    border-color: rgba(164, 171, 228, 0.35);
+}
+
 .auth-form {
     display: flex;
     flex-direction: column;

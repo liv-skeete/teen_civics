@@ -821,14 +821,25 @@ def _set_is_authenticated():
 @app.route("/signup", methods=["GET", "POST"])
 @limiter.limit("10 per hour")
 def signup():
+    def _safe_next(raw):
+        if not raw or not raw.startswith("/") or raw.startswith("//"):
+            return None
+        return raw
+
+    next_url = _safe_next(request.values.get("next"))
+    reason = request.values.get("reason") if request.method == "GET" else request.form.get("reason")
+    if reason not in {"vote"}:
+        reason = None
+
     if auth_session.is_authenticated():
-        return redirect(url_for("profile"))
+        return redirect(next_url or url_for("profile"))
     google_enabled = bool(os.environ.get("GOOGLE_CLIENT_ID"))
     if request.method == "GET":
         return render_template(
             "signup.html",
             error=None, username="", email="",
             google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
         )
 
     username_raw = (request.form.get("username") or "").strip()
@@ -841,6 +852,7 @@ def signup():
             "signup.html",
             error=msg, username=username_raw, email=email_raw,
             google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
         ), code
 
     try:
@@ -875,7 +887,7 @@ def signup():
 
     auth_session.login_user(new_id)
     auth_db.update_last_login(new_id)
-    response = make_response(redirect(url_for("profile")))
+    response = make_response(redirect(next_url or url_for("profile")))
     _set_voter_cookie(response, voter_id)
     return response
 
@@ -883,11 +895,27 @@ def signup():
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("20 per hour")
 def login():
+    # Safe same-origin redirect target. Anything with a netloc or starting
+    # with "//" is rejected — open-redirect prevention.
+    def _safe_next(raw: Optional[str]) -> Optional[str]:
+        if not raw or not raw.startswith("/") or raw.startswith("//"):
+            return None
+        return raw
+
+    next_url = _safe_next(request.values.get("next"))
+    reason = request.values.get("reason") if request.method == "GET" else request.form.get("reason")
+    if reason not in {"vote"}:
+        reason = None
+
     if auth_session.is_authenticated():
-        return redirect(url_for("profile"))
+        return redirect(next_url or url_for("profile"))
     google_enabled = is_google_enabled()
     if request.method == "GET":
-        return render_template("login.html", error=None, email="", google_oauth_enabled=google_enabled)
+        return render_template(
+            "login.html", error=None, email="",
+            google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
+        )
 
     email_raw = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
@@ -900,11 +928,12 @@ def login():
         return render_template(
             "login.html", error="Invalid email or password.",
             email=email_raw, google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
         ), 401
 
     auth_session.login_user(user["id"])
     auth_db.update_last_login(user["id"])
-    return redirect(url_for("profile"))
+    return redirect(next_url or url_for("profile"))
 
 
 @app.route("/logout", methods=["POST"])
@@ -1074,11 +1103,30 @@ def reset_password(token):
     return redirect(url_for("profile"))
 
 
+def _stash_post_login_next() -> None:
+    """Save a safe same-origin ?next= into the session so OAuth callbacks
+    can land the user back where they started after sign-in. Used by the
+    soft-wall flow (e.g. /api/vote 401 -> /login?next=/bill/foo)."""
+    raw = request.args.get("next") or ""
+    if raw and raw.startswith("/") and not raw.startswith("//"):
+        session["post_login_next"] = raw
+    else:
+        session.pop("post_login_next", None)
+
+
+def _pop_post_login_next() -> Optional[str]:
+    nxt = session.pop("post_login_next", None)
+    if isinstance(nxt, str) and nxt.startswith("/") and not nxt.startswith("//"):
+        return nxt
+    return None
+
+
 @app.route("/auth/google/login")
 @limiter.limit("20 per hour")
 def google_login():
     if not is_google_enabled():
         abort(404)
+    _stash_post_login_next()
     # Build the callback URL from APP_BASE_URL rather than url_for(_external=True)
     # so it doesn't leak Railway's internal hostname (web-production-*.up.railway.app)
     # when Cloudflare's Host header isn't preserved through Railway's edge. Single
@@ -1112,12 +1160,14 @@ def google_callback():
     if not email_verified:
         return render_template("login.html", error="Your Google email isn't verified.", username=""), 400
 
+    next_url = _pop_post_login_next()
+
     # 1) Existing OAuth-linked user
     user = auth_db.get_user_by_oauth("google", subject)
     if user:
         auth_session.login_user(user["id"])
         auth_db.update_last_login(user["id"])
-        return redirect(url_for("profile"))
+        return redirect(next_url or url_for("profile"))
 
     # 2) Existing user by email — link this Google account to it
     user = auth_db.get_user_by_email(email)
@@ -1128,7 +1178,7 @@ def google_callback():
             auth_db.mark_email_verified(user["id"])
         auth_session.login_user(user["id"])
         auth_db.update_last_login(user["id"])
-        return redirect(url_for("profile"))
+        return redirect(next_url or url_for("profile"))
 
     # 3) Brand-new user — stash the OAuth identity in the session and bounce
     # them to /welcome to pick their own username, rather than silently
@@ -1148,6 +1198,7 @@ def google_callback():
 def microsoft_login():
     if not is_microsoft_enabled():
         abort(404)
+    _stash_post_login_next()
     # Mirror google_login: build redirect_uri from APP_BASE_URL to avoid
     # leaking Railway's internal hostname when Cloudflare's Host header
     # isn't preserved.
@@ -1187,12 +1238,14 @@ def microsoft_callback():
     # signup through /welcome where they confirm their identity by
     # picking a username (consistent with the Google path).
 
+    next_url = _pop_post_login_next()
+
     # 1) Existing OAuth-linked user
     user = auth_db.get_user_by_oauth("microsoft", subject)
     if user:
         auth_session.login_user(user["id"])
         auth_db.update_last_login(user["id"])
-        return redirect(url_for("profile"))
+        return redirect(next_url or url_for("profile"))
 
     # 2) Existing user by email — link this Microsoft account to it
     user = auth_db.get_user_by_email(email)
@@ -1200,7 +1253,7 @@ def microsoft_callback():
         auth_db.link_oauth_subject(user["id"], "microsoft", subject)
         auth_session.login_user(user["id"])
         auth_db.update_last_login(user["id"])
-        return redirect(url_for("profile"))
+        return redirect(next_url or url_for("profile"))
 
     # 3) Brand-new user — stash and bounce to /welcome
     from src.auth.oauth import derive_username_from_email
@@ -2015,6 +2068,24 @@ def _set_voter_cookie(response, voter_id):
 @limiter.limit("10 per minute")
 def record_vote():
     try:
+        if not auth_session.is_authenticated():
+            # Build a safe same-origin next-URL from the Referer header so
+            # the user lands back on the bill they were trying to vote on.
+            # Falls back to "/" if the header is missing or off-origin.
+            ref = request.referrer or ""
+            next_path = "/"
+            if ref:
+                try:
+                    parsed = urllib.parse.urlparse(ref)
+                    if parsed.netloc == request.host and parsed.path.startswith("/"):
+                        next_path = parsed.path + (("?" + parsed.query) if parsed.query else "")
+                except Exception:
+                    pass
+            return jsonify({
+                "error": "auth_required",
+                "login_url": url_for("login", next=next_path, reason="vote"),
+            }), 401
+
         data = request.get_json()
         bill_id = data.get("bill_id")
         vote_type = data.get("vote_type")

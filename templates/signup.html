@@ -8,6 +8,12 @@
     <h1>Create your account</h1>
     <p>Pick a sign-in method to start earning Kudos and climbing the ranks.</p>
 
+    {% if reason == "vote" %}
+    <div class="auth-notice" role="status">
+      Create an account to vote on bills and earn Kudos.
+    </div>
+    {% endif %}
+
     {% if error %}
     <div class="auth-error" role="alert">{{ error }}</div>
     {% endif %}
@@ -15,16 +21,17 @@
     {# --- OAuth-first: same provider stack as /login. Identical buttons,
        only the email form differs (signup needs username + password
        confirm; login just needs email + password). --- #}
+    {% set oauth_query = ('?next=' ~ (next_url | urlencode)) if next_url else '' %}
     <div class="auth-oauth-stack">
       {% if google_oauth_enabled %}
-      <a href="{{ url_for('google_login') }}" class="btn btn-oauth btn-oauth--google" role="button">
+      <a href="{{ url_for('google_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--google" role="button">
         <img src="{{ url_for('static', filename='img/oauth/google.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
         <span>Continue with Google</span>
       </a>
       {% endif %}
 
       {% if microsoft_oauth_enabled %}
-      <a href="{{ url_for('microsoft_login') }}" class="btn btn-oauth btn-oauth--microsoft" role="button">
+      <a href="{{ url_for('microsoft_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--microsoft" role="button">
         <img src="{{ url_for('static', filename='img/oauth/microsoft.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
         <span>Continue with Microsoft</span>
       </a>
@@ -47,6 +54,8 @@
       <summary>Sign up with email</summary>
       <form method="post" action="{{ url_for('signup') }}" class="auth-form" autocomplete="on" id="signup-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        {% if reason %}<input type="hidden" name="reason" value="{{ reason }}">{% endif %}
 
         <label for="username">Username <span class="auth-hint">(3-30 characters, letters/numbers/_/-)</span></label>
         <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+">
@@ -65,7 +74,7 @@
       </form>
     </details>
 
-    <p class="auth-foot">Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.</p>
+    <p class="auth-foot">Already have an account? <a href="{{ url_for('login', next=next_url, reason=reason) if next_url else url_for('login') }}">Sign in</a>.</p>
   </div>
 </div>
 

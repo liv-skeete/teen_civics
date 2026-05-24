@@ -187,6 +187,13 @@
     .then(async (response) => {
       let data = {};
       try { data = await response.json(); } catch (_) {}
+      // Soft-wall: voting requires an account. Server returns 401 with a
+      // contextual login URL that bounces the user back to this bill after
+      // sign-in. Hard redirect — no inline error, the login page explains.
+      if (response.status === 401 && data && data.error === "auth_required" && data.login_url) {
+        window.location.href = data.login_url;
+        return new Promise(() => {}); // Block subsequent .then() during nav
+      }
       if (!response.ok || !data.success) {
         const msg = (data && data.error) ? data.error : `Failed to record vote (HTTP ${response.status})`;
         throw new Error(msg);
