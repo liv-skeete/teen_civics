@@ -982,31 +982,35 @@ def _deduplicate_headers_and_scores(text: str) -> str:
     return '\n'.join(new_lines)
 
 def _validate_summary_format(detailed: str) -> bool:
-    """Validate summary structure (non-production only)."""
+    """Validate summary structure (non-production only).
+
+    Post-2026-05 prompt produces a 4-section structure:
+    'The gist', 'Who wins, who loses', 'What it does', 'Why should I care?'.
+    'What it does' is allowed to be missing for symbolic resolutions.
+    """
     if not detailed:
         return False
-    
+
     required = [
-        "overview",
-        "who does this affect?",
-        "what this bill does",
-        "in short",
-        "why should i care?"
+        "the gist",
+        "who wins, who loses",
+        "what it does",
+        "why should i care?",
     ]
-    
-    found = []
-    for line in detailed.lower().split('\n'):
+    optional = {"what it does"}
+
+    found = set()
+    for line in detailed.lower().split("\n"):
         stripped = line.strip()
         if not stripped:
             continue
-        
-        # Check for section headers
         for section in required:
-            if section in stripped and section not in found:
-                found.append(section)
-    
-    # Allow missing "Legislative Status" (it's optional)
-    return len(found) >= len(required) - 1
+            if section in stripped:
+                found.add(section)
+
+    missing = set(required) - found
+    # Allow up to one optional section to be absent.
+    return len(missing - optional) == 0 and len(missing) <= 1
 
 def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     """
@@ -1086,11 +1090,11 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     if os.getenv('FLASK_ENV') != 'production':
         if not _validate_summary_format(detailed):
             logger.warning("Summary format validation failed")
-        
-        # Check for exactly one teen impact score
-        scores = re.findall(r'Teen\s+impact\s+score:\s*\d{1,2}/10', detailed, re.IGNORECASE)
-        if len(scores) != 1:
-            logger.warning(f"Found {len(scores)} teen impact scores, expected 1")
+
+        # Score now lives in the JSON field, not the prose. Warn if it
+        # leaked back into the visible text — that's a prompt regression.
+        if re.search(r'Teen\s+impact\s+score:\s*\d{1,2}/10', detailed, re.IGNORECASE):
+            logger.warning("Teen impact score leaked into the visible summary prose")
     
     elapsed = time.monotonic() - start
     logger.info(f"Summary complete in {elapsed:.2f}s")

@@ -727,6 +727,16 @@ textarea:focus-visible {
     margin-bottom: 0.6rem;
 }
 
+/* Re-assert the indigo color in dark mode. The generic
+   [data-theme="dark"] h1-h6 rule above forces all headings to
+   --color-text (white) and beats .summary-header on specificity;
+   this selector wins it back so the section headers stay indigo
+   in both themes. */
+[data-theme="dark"] .summary-header,
+.dark-theme .summary-header {
+    color: var(--color-link);
+}
+
 .summary-header .lucide-icon {
     width: 22px;
     height: 22px;
