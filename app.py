@@ -431,7 +431,7 @@ def format_detailed_html_filter(text: str) -> Markup:
         '⚖️': 'scale',
         '🔎': 'eye',
         '👥': 'users',
-        '🔑': 'key',
+        '🔑': 'clipboard-list',
         '📌': 'landmark',
         '👉': 'arrow-right',
         '💡': 'lightbulb',

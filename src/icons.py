@@ -144,6 +144,14 @@ _LUCIDE_PATHS = {
         '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>'
         '<circle cx="12" cy="12" r="3"/>'
     ),
+    "clipboard-list": (
+        '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>'
+        '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>'
+        '<path d="M12 11h4"/>'
+        '<path d="M12 16h4"/>'
+        '<path d="M8 11h.01"/>'
+        '<path d="M8 16h.01"/>'
+    ),
     "file-text": (
         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
         '<polyline points="14 2 14 8 20 8"/>'
