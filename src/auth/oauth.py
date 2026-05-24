@@ -15,9 +15,40 @@ env vars are unset (i.e., in dev environments without OAuth creds).
 """
 
 import os
+import re
 import logging
 
 from authlib.integrations.flask_client import OAuth
+
+# Microsoft multi-tenant /common returns an iss with the signer's actual
+# tenant ID baked in, e.g.
+#   https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+# (the GUID is "personal MSAs" — every other org has its own GUID). The
+# OIDC discovery doc advertises a templated issuer that doesn't match,
+# so Authlib's strict equality check fails. This validator confirms the
+# host + path shape but accepts any tenant.
+_MS_ISSUER_RE = re.compile(
+    r"^https://login\.microsoftonline\.com/[0-9a-fA-F-]{36}/v2\.0/?$"
+)
+
+
+def _validate_microsoft_issuer(claims, value):  # noqa: ARG001
+    # Authlib calls this with (BaseClaims, claim_value). Truthy → accept.
+    return bool(value) and bool(_MS_ISSUER_RE.match(value))
+
+
+def microsoft_claims_options() -> dict:
+    """Claims options to pass to authorize_access_token() so the iss check
+    accepts any Microsoft tenant. Must be supplied at call time, not at
+    register time — Authlib only consults registration-level options as
+    a fallback when the discovery doc lacks an issuer (Microsoft's does
+    provide one, so the override at registration is silently ignored)."""
+    return {
+        "iss": {
+            "essential": True,
+            "validate": _validate_microsoft_issuer,
+        }
+    }
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +81,8 @@ def init_oauth(app) -> None:
         # Multi-tenant /common endpoint — accepts personal Microsoft
         # accounts (Outlook/Hotmail/Live) plus Azure AD work/school
         # accounts. Required for teens who likely have a personal MSA.
+        # Issuer validation override is passed at authorize_access_token()
+        # time via microsoft_claims_options(); see microsoft_callback.
         oauth.register(
             name="microsoft",
             client_id=microsoft_id,

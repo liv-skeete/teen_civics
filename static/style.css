@@ -4115,10 +4115,14 @@ h1, h2, h3, h4, h5, h6 {
 .btn-google:hover,
 .btn-oauth--google:hover { background: #f8f9fa; }
 
+/* Match Google's lighter chrome — Microsoft's brand spec calls for a
+   darker grey but the row looks more cohesive with both buttons sharing
+   the same border + text treatment. The 4-square logo still reads as
+   Microsoft. */
 .btn-microsoft,
-.btn-oauth--microsoft { background: #fff; color: #5e5e5e; border-color: #8c8c8c; }
+.btn-oauth--microsoft { background: #fff; color: #1f1f1f; border-color: #dadce0; }
 .btn-microsoft:hover,
-.btn-oauth--microsoft:hover { background: #f3f3f3; }
+.btn-oauth--microsoft:hover { background: #f8f9fa; }
 
 .btn-apple,
 .btn-oauth--apple { background: #000; color: #fff; border-color: #000; }

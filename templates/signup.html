@@ -6,13 +6,7 @@
 <div class="container auth-container">
   <div class="auth-card">
     <h1>Create your account</h1>
-    <p>Pick a sign-in method to start earning Kudos and climbing the ranks.</p>
-
-    {% if reason == "vote" %}
-    <div class="auth-notice" role="status">
-      Create an account to vote on bills and earn Kudos.
-    </div>
-    {% endif %}
+    <p>Create an account to vote and earn Kudos.</p>
 
     {% if error %}
     <div class="auth-error" role="alert">{{ error }}</div>

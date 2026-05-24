@@ -1217,7 +1217,15 @@ def microsoft_callback():
     if not is_microsoft_enabled():
         abort(404)
     try:
-        token = _oauth_registry.microsoft.authorize_access_token()
+        # Override default iss validation: Microsoft's /common discovery doc
+        # advertises a templated issuer (with literal "{tenantid}"), but the
+        # id_token's iss carries the signer's actual tenant GUID. We accept
+        # any login.microsoftonline.com/<guid>/v2.0 issuer — signature +
+        # audience + nonce remain enforced by Authlib's default chain.
+        from src.auth.oauth import microsoft_claims_options
+        token = _oauth_registry.microsoft.authorize_access_token(
+            claims_options=microsoft_claims_options()
+        )
     except Exception as e:
         logger.warning("Microsoft OAuth callback failed: %s", e)
         return render_template("login.html", error="Microsoft sign-in failed. Try again.", email=""), 400
