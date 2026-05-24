@@ -418,6 +418,8 @@ def format_detailed_html_filter(text: str) -> Markup:
     # leading glyphs in the DB; we strip them at render time and swap in
     # an inline SVG so the section headers match the rest of the UI.
     emoji_to_icon = {
+        '⚡': 'zap',
+        '⚖️': 'scale',
         '🔎': 'eye',
         '👥': 'users',
         '🔑': 'key',
@@ -429,7 +431,6 @@ def format_detailed_html_filter(text: str) -> Markup:
         '🏠': 'landmark',
         '💰': 'landmark',
         '🛠️': 'landmark',
-        '⚖️': 'landmark',
         '🚀': 'landmark',
     }
     lines = text.split("\n")
@@ -1421,6 +1422,17 @@ def robots_txt():
 @app.route('/sitemap.xml')
 def sitemap_xml():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'sitemap.xml')
+
+@app.route('/.well-known/apple-developer-domain-association.txt')
+@csrf.exempt
+def apple_domain_association():
+    """Domain verification file for Sign In with Apple. Apple fetches this
+    over HTTPS to confirm we own the domain bound to the Services ID."""
+    return send_from_directory(
+        os.path.join(app.root_path, 'static', '.well-known'),
+        'apple-developer-domain-association.txt',
+        mimetype='text/plain',
+    )
 
 # --- Admin Constants ---
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")

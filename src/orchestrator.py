@@ -50,14 +50,38 @@ def snake_case(text: str) -> str:
     result = re.sub(r'[^a-zA-Z0-9]+', '_', text.lower())
     return result.strip('_')
 
-def extract_teen_impact_score(summary_detailed: str) -> Optional[int]:
+def extract_teen_impact_score(summary: Any) -> Optional[int]:
     """
-    Extract Teen Impact Score from the detailed summary text.
+    Extract Teen Impact Score.
+
+    Preferred path: read the 'teen_impact_score' JSON field from the
+    summarizer's structured output (post-2026-05 prompt — score lives
+    in JSON, not in the visible prose).
+
+    Fallback: regex-extract 'Teen impact score: X/10' from the detailed
+    prose (pre-2026-05 prompt). Kept for back-compat with older summaries
+    being regenerated.
+
+    Accepts either a dict (the summary object) or a raw string (legacy
+    callers that only have the detailed prose).
     """
-    if not summary_detailed:
+    if isinstance(summary, dict):
+        raw = summary.get("teen_impact_score")
+        if raw is not None:
+            try:
+                score = int(raw)
+                if 0 <= score <= 10:
+                    return score
+            except (ValueError, TypeError):
+                pass
+        text = summary.get("detailed") or ""
+    else:
+        text = summary or ""
+
+    if not text:
         return None
     import re
-    match = re.search(r"Teen impact score:\s*(\d+)/10", summary_detailed, re.IGNORECASE)
+    match = re.search(r"Teen impact score:\s*(\d+)/10", text, re.IGNORECASE)
     if match:
         try:
             return int(match.group(1))
@@ -747,7 +771,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     return 1
 
                 term_dict_json = ""
-                teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+                teen_impact_score = extract_teen_impact_score(summary)
                 logger.info(f"⭐️ Extracted Teen Impact Score (regen): {teen_impact_score}")
 
                 # Persist regenerated summaries
@@ -840,7 +864,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             
             term_dict_json = ""
 
-            teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+            teen_impact_score = extract_teen_impact_score(summary)
             logger.info(f"⭐️ Extracted Teen Impact Score: {teen_impact_score}")
             
             # Title length validation and truncation
@@ -994,7 +1018,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     bill_data["summary_tweet"] = summary.get("tweet", "")
                     bill_data["summary_overview"] = summary.get("overview", "")
                     bill_data["summary_detailed"] = summary.get("detailed", "")
-                    bill_data["teen_impact_score"] = extract_teen_impact_score(summary.get("detailed", ""))
+                    bill_data["teen_impact_score"] = extract_teen_impact_score(summary)
                     
                     # Re-format tweet with regenerated summaries
                     formatted_tweet = format_bill_tweet(bill_data)

@@ -1,0 +1,4 @@
+# Placeholder. Replace this entire file with the contents Apple provides
+# when configuring the Services ID at https://developer.apple.com/
+# Once replaced, Apple's Verify button on the Web Authentication panel
+# will confirm domain ownership.
