@@ -818,10 +818,21 @@ def _user_stats(user_id):
     bundle = auth_db.get_user_stats_bundle(user_id)
     if not bundle:
         return None
+    return _user_stats_from_bundle(bundle, user_id)
+
+
+def _user_stats_from_bundle(bundle, user_id=None):
+    """Shape a get_user_stats_bundle()-style dict into the response
+    payload. Pulled out of _user_stats so vote_award_bundle (which
+    returns the same shape from inside its own transaction) can reuse
+    it without doing a second DB round-trip."""
+    if not bundle:
+        return None
+    uid = user_id or bundle.get("id")
     balance = float(bundle.get("balance") or 0)
     tier = gam_get_tier(balance)
     return {
-        "user_id": user_id,
+        "user_id": uid,
         "username": bundle["username"],
         "email": bundle.get("email"),
         "email_verified_at": bundle.get("email_verified_at"),
@@ -2335,27 +2346,27 @@ def record_vote():
         if not updated:
             abort(404, description="Bill not found or vote update failed")
 
-        # Engagement vs reward decoupling:
-        #   - total_votes_cast bumps on every new vote (verified or not, capped or not).
-        #     It's a private counter only the user sees — drives "you voted on N bills".
-        #   - Votes currency only accrues when (a) account has a verified email AND
-        #     (b) under the daily cap. Currency feeds the public rank ladder, which
-        #     needs anti-abuse friction.
+        # Engagement vs reward decoupling, in a SINGLE DB round-trip:
+        #   - total_votes_cast bumps on every new vote (verified or not,
+        #     capped or not) → private "you voted on N bills" counter.
+        #   - Votes currency only accrues when (a) email verified AND
+        #     (b) under the daily cap → public rank ladder.
+        # vote_award_bundle() reads user row + today's count, decides
+        # eligibility, writes both mutations, and returns a stats bundle
+        # — replacing what used to be 4 separate connections (1 read +
+        # 3 writes/reads). Net: 6 round-trips → 2 (record_vote_and_update_poll
+        # + vote_award_bundle).
         votes_awarded = 0.0
         uid = auth_session.current_user_id()
         is_new_vote = not previous_vote
-        if uid and is_new_vote:
-            auth_db.increment_total_votes_cast(uid)
-            user_row = auth_db.get_user_by_id(uid)
-            if user_row and user_row.get("email_verified_at"):
-                today_count = auth_db.count_today_vote_awards(uid)
-                votes_awarded = reward_for_nth_vote_of_day(today_count + 1)
-                if votes_awarded > 0:
-                    auth_db.award_vote(uid, bill_id, votes_awarded)
-
-        # Include fresh user stats in the response so the client can update
-        # the navbar pill / rail without a follow-up /api/me round-trip.
-        user_stats = _user_stats(uid) if uid else None
+        user_stats = None
+        if uid:
+            bundle = auth_db.vote_award_bundle(
+                uid, bill_id, is_new_vote, reward_for_nth_vote_of_day,
+            )
+            if bundle is not None:
+                votes_awarded = float(bundle.pop("_votes_awarded_this_call", 0.0))
+                user_stats = _user_stats_from_bundle(bundle)
 
         response = make_response(jsonify({
             "success": True,

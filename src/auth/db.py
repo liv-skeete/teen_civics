@@ -526,3 +526,104 @@ def award_vote(user_id: str, bill_id: str, delta: float) -> bool:
     except Exception as e:
         logger.error(f"award_vote failed: {e}", exc_info=True)
         return False
+
+
+def vote_award_bundle(
+    user_id: str, bill_id: str, is_new_vote: bool, reward_fn
+) -> Optional[Dict[str, Any]]:
+    """Combined vote-side user mutations in a single DB round-trip.
+
+    Does in ONE connection what previously took 4 separate ones:
+      1. Read the user's verified-email + tier-related state
+      2. Count today's vote awards (for daily-cap check)
+      3. If eligible: insert ledger row + increment total_votes_cast
+      4. Return fresh user-stats bundle for the response
+
+    `reward_fn(today_count_inclusive_of_new)` is called server-side
+    to compute how much currency the new vote earns. Passed as a
+    callable so this module doesn't need to import gamification.
+
+    Returns the SAME shape as get_user_stats_bundle() so the caller
+    can use it interchangeably to populate the response. Returns None
+    on DB error.
+    """
+    try:
+        with postgres_connect() as conn:
+            if conn is None:
+                return None
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                # Step 1: read everything we need to compute the award.
+                # COALESCEs match get_user_stats_bundle's column shape so
+                # the caller's response payload doesn't need branching.
+                cur.execute(
+                    """
+                    SELECT
+                        u.*,
+                        COALESCE((
+                            SELECT SUM(delta) FROM civitas_ledger
+                            WHERE user_id = u.id
+                        ), 0) AS balance,
+                        COALESCE((
+                            SELECT COUNT(*) FROM civitas_ledger
+                            WHERE user_id = u.id
+                              AND reason LIKE 'vote:%%'
+                              AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
+                        ), 0) AS today_vote_awards,
+                        COALESCE((
+                            SELECT COUNT(*) FROM civitas_ledger
+                            WHERE user_id = u.id
+                              AND reason LIKE 'tell_rep:%%'
+                              AND delta > 0
+                              AND awarded_at >= date_trunc('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
+                        ), 0) AS today_tell_rep_paid,
+                        COALESCE((
+                            SELECT COUNT(DISTINCT source_bill_id) FROM civitas_ledger
+                            WHERE user_id = u.id AND reason LIKE 'tell_rep:%%'
+                        ), 0) AS lifetime_tell_rep
+                    FROM users u
+                    WHERE u.id = %s
+                    """,
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                bundle = dict(row)
+
+                # Step 2: decide eligibility for the new vote
+                email_verified = bool(bundle.get("email_verified_at"))
+                today_count = int(bundle["today_vote_awards"])
+                delta = 0.0
+                if is_new_vote and email_verified:
+                    delta = float(reward_fn(today_count + 1))
+
+                # Step 3a: lifetime counter (every new vote, no gating)
+                if is_new_vote:
+                    cur.execute(
+                        "UPDATE users SET total_votes_cast = total_votes_cast + 1 WHERE id = %s",
+                        (user_id,),
+                    )
+                    bundle["total_votes_cast"] = int(bundle.get("total_votes_cast") or 0) + 1
+
+                # Step 3b: insert ledger row only when delta > 0
+                if delta > 0:
+                    cur.execute(
+                        """
+                        INSERT INTO civitas_ledger (user_id, delta, reason, source_bill_id)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (user_id, Decimal(str(delta)), f"vote:{bill_id}", bill_id),
+                    )
+                    # Reflect the new ledger row in the response bundle
+                    # so the client's pill / rail update inline without
+                    # waiting for an /api/me round-trip.
+                    bundle["balance"] = (bundle.get("balance") or Decimal(0)) + Decimal(str(delta))
+                    bundle["today_vote_awards"] = today_count + 1
+
+                # Surface the reward back so the caller can include
+                # votes_awarded in the response without doing math.
+                bundle["_votes_awarded_this_call"] = delta
+                return bundle
+    except Exception as e:
+        logger.error(f"vote_award_bundle failed: {e}", exc_info=True)
+        return None
