@@ -9,7 +9,7 @@
       <div class="username-display-row" data-username-view>
         <h1 class="username-display" data-username-display>{{ stats.username }}</h1>
         <button type="button" class="username-edit-btn" data-username-edit-btn
-                aria-label="Change username" title="Change username">✎</button>
+                aria-label="Change username" title="Change username">{{ icon('pencil') }}</button>
       </div>
       <form class="username-edit-form" data-username-edit-form hidden>
         <input type="text" name="username" value="{{ stats.username }}"

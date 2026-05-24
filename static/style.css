@@ -686,11 +686,27 @@ textarea:focus-visible {
 /* Lucide SVG icons inherit currentColor (color matches surrounding
    text) and sit on the baseline. Used everywhere we replaced OS emoji
    for cross-platform visual consistency. Size defaults to 18px from
-   the Python helper; override with width/height in component CSS. */
+   the Python helper; override with width/height in component CSS.
+   stroke-width override: Lucide's default 2 is tuned for icon-button
+   chrome where the glyph stands alone. Inline next to bold heading
+   text it reads thin, so we bump to 2.25 here — `stroke-width` is an
+   SVG presentation attribute and is overridable via CSS. */
 .lucide-icon {
     display: inline-block;
     vertical-align: -0.18em;
     flex-shrink: 0;
+    stroke-width: 2.25;
+}
+
+/* Icons that sit next to bold section headings (the most common case
+   in the resources / grants / contact / admin pages) need a touch
+   more presence to balance the type weight. */
+.h3-style .lucide-icon,
+.stat-headline .lucide-icon,
+.admin-header h2 .lucide-icon,
+.admin-nav-card h3 .lucide-icon {
+    width: 20px;
+    height: 20px;
 }
 
 /* Fixed-width icon area so all text labels start at the same position */
@@ -1009,6 +1025,18 @@ a.share-option:link {
     cursor: pointer;
     transition: all var(--transition-fast);
     font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+/* The default Lucide size (18px) looks thin next to the chunky button
+   label — bump it so the thumbs read as the dominant signal. */
+.poll-option .lucide-icon {
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
 }
 
 .poll-option:hover {

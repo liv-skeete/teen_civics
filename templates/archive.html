@@ -145,7 +145,7 @@
                             </a>
                             <a href="https://www.threads.net/intent/post?text={{ ('Check out this bill on @teen.civics: ' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True))|urlencode }}"
                                target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
-                                <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
+                                <span class="share-icon" aria-hidden="true">{{ icon('at-sign') }}</span> Share on Threads
                             </a>
                             <a href="https://www.facebook.com/sharer/sharer.php?u={{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode }}"
                                target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">

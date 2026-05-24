@@ -20,7 +20,7 @@
   <div class="admin-table-list">
     {% for table in tables %}
     <a href="{{ url_for('admin_table_rows', table_name=table) }}" class="admin-table-item">
-      <span class="admin-table-icon">📄</span>
+      <span class="admin-table-icon">{{ icon('file-text') }}</span>
       <span class="admin-table-name">{{ table }}</span>
       <span class="admin-table-arrow">→</span>
     </a>
