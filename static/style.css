@@ -1063,6 +1063,16 @@ a.share-option:link {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    /* iOS Safari was rendering button text in its default link-blue
+       because we never declared an explicit color, and iOS heuristic-
+       detects "phone-number-like" strings + applies link styling. Lock
+       the color to the theme text color so neither OS nor browser
+       default leaks through. */
+    color: var(--color-text);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    font-family: inherit;
 }
 
 /* The default Lucide size (18px) looks thin next to the chunky button
@@ -2759,11 +2769,23 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
   outline: none;
   color: var(--color-primary);
+  /* iOS Safari shows a grey rectangle "tap highlight" around any
+     touchable element by default — visible as a square outline behind
+     the circular toggle on mobile. Disable it. Also clear default
+     button styles that some browsers apply. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-.floating-theme-toggle:hover {
-  transform: scale(1.1) rotate(15deg);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+/* Hover effects fire on touch devices when you tap, and STAY until the
+   next tap elsewhere — leaving the toggle stuck in its hover state.
+   Restrict hover styling to devices that genuinely hover. */
+@media (hover: hover) {
+  .floating-theme-toggle:hover {
+    transform: scale(1.1) rotate(15deg);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
 }
 
 .floating-theme-toggle:active {
