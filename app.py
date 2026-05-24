@@ -1335,10 +1335,25 @@ def apple_login():
 def apple_callback():
     if not is_apple_enabled():
         abort(404)
+    # Log everything Apple sent us so we can see exactly what's coming in
+    # when something fails. Apple POSTs form-encoded — form params (state,
+    # code, id_token, user) or error params (error, error_description) end
+    # up in request.form on POST and request.args on GET. We sanitize the
+    # values to keep them log-safe (no full id_tokens).
+    incoming = {**request.args.to_dict(), **request.form.to_dict()}
+    log_safe = {
+        k: (v[:30] + "...[trunc]" if k in ("code", "id_token", "user") and len(v) > 30 else v)
+        for k, v in incoming.items()
+    }
+    logger.info("Apple callback received: method=%s params=%s", request.method, log_safe)
+
     try:
         token = _oauth_registry.apple.authorize_access_token()
     except Exception as e:
-        logger.warning("Apple OAuth callback failed: %s", e)
+        logger.error(
+            "Apple OAuth callback failed: %s (exception_type=%s)",
+            e, type(e).__name__, exc_info=True,
+        )
         return render_template("login.html", error="Apple sign-in failed. Try again.", email=""), 400
 
     # Apple's id_token carries sub + email. The first-signup user form
