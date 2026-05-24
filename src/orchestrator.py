@@ -1054,8 +1054,19 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
         any_posted = False
         tweet_url = None
 
-        # Twitter
-        if not is_twitter_configured():
+        # Twitter — intentionally disabled 2026-05-24.
+        # X moved to a pay-per-use credit model in late 2025; our free-tier
+        # credits depleted and posts started returning 402 CreditsDepleted.
+        # Topping up is ~$200/mo for the Basic tier with no audience ROI
+        # for a teen civics site (X median user age is ~40, trending older,
+        # and organic reach for off-platform civic content has collapsed
+        # since 2023). Bluesky + Threads + Facebook cover our actual
+        # audience. To re-enable: remove TWITTER_DISABLED and ensure the
+        # account has API credits.
+        TWITTER_DISABLED = True
+        if TWITTER_DISABLED:
+            logger.info("ℹ️ Twitter posting disabled — see orchestrator comment")
+        elif not is_twitter_configured():
             logger.info("ℹ️ Twitter not configured, skipping")
         else:
             logger.info("🚀 Posting tweet...")
