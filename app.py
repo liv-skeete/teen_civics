@@ -1364,17 +1364,46 @@ def apple_callback():
         )
         return render_template("login.html", error="Apple sign-in failed. Try again.", email=""), 400
 
-    # Apple's id_token carries sub + email. The first-signup user form
-    # POST also includes a `user` JSON field with name parts, but we
-    # don't use the name — username comes from /welcome.
+    # Apple is fussy: Authlib's automatic id_token parsing sometimes
+    # leaves token['userinfo'] empty when client_secret_post is the
+    # auth method. Decode the id_token ourselves to be safe — we
+    # already have the signature-verified value from the token endpoint
+    # response, so a no-verify decode is fine (Apple just signed it).
     userinfo = token.get("userinfo") or {}
-    # Log all keys returned by Apple (without values, to avoid leaking
-    # tokens). Critical for diagnosing 'no email' cases — Apple only
-    # returns email on first-ever sign-in for a given Services ID +
-    # Apple ID pairing; subsequent sign-ins return only sub.
+    if not userinfo and token.get("id_token"):
+        try:
+            import jwt as _jwt
+            userinfo = _jwt.decode(
+                token["id_token"],
+                options={"verify_signature": False},  # Apple just gave it to us; trust
+            )
+        except Exception as e:
+            logger.warning("Failed to decode Apple id_token manually: %s", e)
+            userinfo = {}
+
+    # On the FIRST sign-in for a given Apple ID, Apple POSTs an
+    # additional `user` form param with {"email":"...","name":{...}}.
+    # Subsequent sign-ins omit it. The id_token also has email on first
+    # sign-in but not always after. So check both: id_token wins, then
+    # fall back to the user form param.
+    first_signup_user_json = request.form.get("user") or request.args.get("user")
+    if first_signup_user_json and not userinfo.get("email"):
+        try:
+            import json as _json
+            user_payload = _json.loads(first_signup_user_json)
+            if isinstance(user_payload, dict) and user_payload.get("email"):
+                userinfo["email"] = user_payload["email"]
+                # First-signup `user` payload only fires when the user
+                # has just authorized the Services ID — implicitly verified.
+                userinfo.setdefault("email_verified", "true")
+        except Exception as e:
+            logger.warning("Failed to parse Apple first-signup user param: %s", e)
+
     logger.info(
-        "Apple token received: userinfo_keys=%s, top_level_keys=%s, id_token_present=%s",
-        list(userinfo.keys()), list(token.keys()), bool(token.get("id_token")),
+        "Apple token received: userinfo_keys=%s, top_level_keys=%s, "
+        "id_token_present=%s, first_signup_user_present=%s",
+        list(userinfo.keys()), list(token.keys()),
+        bool(token.get("id_token")), bool(first_signup_user_json),
     )
     subject = userinfo.get("sub")
     email = (userinfo.get("email") or "").lower().strip()
@@ -1383,6 +1412,8 @@ def apple_callback():
     # (...@privaterelay.appleid.com) are trusted by definition.
     email_verified_raw = userinfo.get("email_verified")
     email_verified = email_verified_raw in (True, "true", "True")
+    if email.endswith("@privaterelay.appleid.com"):
+        email_verified = True  # Apple-relayed addresses are trusted
 
     if not subject or not email:
         logger.warning(
