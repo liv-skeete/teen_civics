@@ -130,8 +130,9 @@ def _build_enhanced_system_prompt() -> str:
         "    is the only section where opposing perspectives belong.\n"
         "  - Use 'Supporters say... Critics argue...' or 'An alternative being\n"
         "    debated...' constructions.\n"
-        "  - End with one concrete site-feature CTA, phrased like: 'Vote on\n"
-        "    this bill below, then click \"Tell Your Rep\" to send your stance.'\n"
+        "  - End with one concrete site-feature CTA, phrased exactly like:\n"
+        "    'Where do you land? Vote below and use \"Tell Your Rep\" to make\n"
+        "    sure your voice reaches Congress.'\n"
         "  - DO NOT editorialize. Stay neutral. Both sides get fair framing.\n\n"
 
         "**SELF-CHECK before output:**\n"
@@ -156,7 +157,7 @@ def _build_enhanced_system_prompt() -> str:
         "- Applies to commercial ads only; user-generated content (TikTok, podcasts) is exempt.\n"
         "- Enforcement falls under the FCC's existing Communications Act authority.\n\n"
         "💡 Why should I care?\n"
-        "Supporters say streaming is now most teens' main viewing, so the 2010 cable rule needs to follow. Critics argue the FCC has bigger priorities and platforms self-regulate fine. An alternative: require platforms to give users a built-in ad-volume cap. Vote on this bill below, then click \"Tell Your Rep\" to send your stance.\n"
+        "Supporters say streaming is now most teens' main viewing, so the 2010 cable rule needs to follow. Critics argue the FCC has bigger priorities and platforms self-regulate fine. An alternative: require platforms to give users a built-in ad-volume cap. Where do you land? Vote below and use \"Tell Your Rep\" to make sure your voice reaches Congress.\n"
         "</example_1>\n\n"
 
         "<example_2>\n"
@@ -174,7 +175,7 @@ def _build_enhanced_system_prompt() -> str:
         "- Cites CDC data linking fluoride to a 25% reduction in childhood tooth decay.\n"
         "- Counters a wave of 2024-2025 state and city decisions removing fluoride.\n\n"
         "💡 Why should I care?\n"
-        "Supporters point to decades of research showing fluoride prevents cavities, especially in low-income kids who skip dentist visits. Critics say it's medicine forced on residents without consent and want individual fluoride supplements instead. The actual decision happens at your local water utility. Vote on this bill below, then click \"Tell Your Rep\" to send your stance.\n"
+        "Supporters point to decades of research showing fluoride prevents cavities, especially in low-income kids who skip dentist visits. Critics say it's medicine forced on residents without consent and want individual fluoride supplements instead. The actual decision happens at your local water utility. Where do you land? Vote below and use \"Tell Your Rep\" to make sure your voice reaches Congress.\n"
         "</example_2>\n\n"
 
         "**INTERNAL TEEN IMPACT SCORING (JSON ONLY — DO NOT write in prose):**\n\n"
@@ -931,13 +932,13 @@ def _synthesize_from_metadata_py(bill: Dict[str, Any]) -> Dict[str, Any]:
     if is_resolution:
         lines.append("Supporters say resolutions like this signal where Congress stands and "
                      "can prompt local action. Critics see them as symbolic gestures that don't "
-                     "change law or funding. Vote on this bill below, then click \"Tell Your Rep\" "
-                     "to send your stance.")
+                     "change law or funding. Where do you land? Vote below and use "
+                     "\"Tell Your Rep\" to make sure your voice reaches Congress.")
     else:
         lines.append(f"Supporters of this bill argue it addresses {ltitle or 'an important policy area'}. "
                      "Critics may raise concerns about cost, scope, or unintended effects. Full bill "
-                     "text would clarify the tradeoffs. Vote on this bill below, then click "
-                     "\"Tell Your Rep\" to send your stance.")
+                     "text would clarify the tradeoffs. Where do you land? Vote below and use "
+                     "\"Tell Your Rep\" to make sure your voice reaches Congress.")
 
     detailed = "\n".join(lines)
 
