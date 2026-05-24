@@ -10,6 +10,12 @@ Flask==3.0.0
 Flask-Limiter==3.5.0
 Flask-WTF==1.2.1
 Authlib==1.7.2
+# Sign In with Apple — client_secret is an ES256 JWT signed from the .p8,
+# regenerated every ~6 months. PyJWT handles signing; cryptography
+# provides the EC backend. Authlib used to pull both in transitively;
+# newer versions ship joserfc instead, so we depend on them explicitly.
+PyJWT==2.10.1
+cryptography==46.0.1
 resend==2.30.1
 beautifulsoup4==4.12.3
 lxml==5.1.0
