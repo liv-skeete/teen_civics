@@ -452,7 +452,7 @@ def format_detailed_html_filter(text: str) -> Markup:
                 in_list = False
             svg = _icon_fn(matched_icon)
             html_parts.append(
-                f'<h4 class="summary-section">{svg} {escape(rest)}</h4>'
+                f'<h4 class="summary-header">{svg} {escape(rest)}</h4>'
             )
         elif line.startswith('•') or line.startswith('-'):
             if not in_list:

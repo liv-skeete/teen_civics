@@ -714,7 +714,7 @@ textarea:focus-visible {
    these breaks for younger readers; we keep the visual rhythm but
    render Lucide icons in the indigo link color so they match the
    rest of the icon system instead of relying on OS emoji. */
-.summary-section {
+.summary-header {
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -727,7 +727,7 @@ textarea:focus-visible {
     margin-bottom: 0.6rem;
 }
 
-.summary-section .lucide-icon {
+.summary-header .lucide-icon {
     width: 22px;
     height: 22px;
     flex-shrink: 0;
