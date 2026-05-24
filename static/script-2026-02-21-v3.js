@@ -193,7 +193,12 @@
       // Soft-wall: voting requires an account. Server returns 401 with a
       // contextual login URL that bounces the user back to this bill after
       // sign-in. Hard redirect — no inline error, the login page explains.
+      // Re-enable the widget first so the bfcache snapshot is the clean
+      // pre-click state, not the "Recording your vote..." disabled state.
+      // Without this, hitting back after the redirect restores a frozen UI.
       if (response.status === 401 && data && data.error === "auth_required" && data.login_url) {
+        enablePollOptions(options);
+        if (messageContainer) messageContainer.style.display = "none";
         window.location.href = data.login_url;
         return new Promise(() => {}); // Block subsequent .then() during nav
       }
@@ -756,6 +761,20 @@
     // already ready
     bootstrap();
   }
+
+  // bfcache restore: when the user hits Back after being redirected to /login,
+  // Safari/Chrome restore the DOM exactly as it was — buttons disabled, "Recording
+  // your vote..." still shown. Reset every poll widget so the page is interactive
+  // again. event.persisted === true means the page came from bfcache.
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    $all(".poll-widget").forEach((widget) => {
+      const options = $all(".poll-option", widget);
+      const messageContainer = widget.querySelector(".poll-message");
+      enablePollOptions(options);
+      if (messageContainer) messageContainer.style.display = "none";
+    });
+  });
 
   // --- Share Dropdown ---
   function initializeShareDropdowns() {
