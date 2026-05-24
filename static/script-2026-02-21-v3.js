@@ -239,8 +239,9 @@
       if (response.status === 403 && data && data.error === "email_unverified") {
         enablePollOptions(options);
         if (messageContainer) {
+          // Use API_BASE so the link respects the /beta prefix on staging.
           messageContainer.innerHTML =
-            'Please <a href="/profile" style="text-decoration:underline">verify your email</a> before voting. Check your inbox for the verification link.';
+            'Please <a href="' + API_BASE + '/profile" style="text-decoration:underline">verify your email</a> before voting. Check your inbox for the verification link.';
           messageContainer.className = "poll-message";
           messageContainer.style.display = "block";
         }
