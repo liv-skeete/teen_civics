@@ -31,12 +31,8 @@
       </a>
       {% endif %}
 
-      {# Apple button is rendered only when APPLE_CLIENT_ID is set. The
-         apple_login route doesn't exist yet (Apple wiring is deferred
-         pending Developer Program enrollment — see oauth.py), so we
-         use a placeholder href until the route lands. #}
       {% if apple_oauth_enabled %}
-      <a href="#" class="btn btn-oauth btn-oauth--apple" role="button" aria-disabled="true">
+      <a href="{{ url_for('apple_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--apple" role="button">
         <img src="{{ url_for('static', filename='img/oauth/apple.svg') }}" alt="" class="btn-oauth-mark" width="16" height="18">
         <span>Continue with Apple</span>
       </a>

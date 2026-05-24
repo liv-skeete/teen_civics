@@ -161,6 +161,7 @@ from src.auth.oauth import (
     init_oauth,
     is_google_enabled,
     is_microsoft_enabled,
+    is_apple_enabled,
 )
 init_oauth(app)
 
@@ -283,13 +284,13 @@ app.jinja_env.globals["icon"] = _icon_fn
 @app.context_processor
 def inject_oauth_flags():
     """Expose OAuth provider availability to templates so login/signup
-    can conditionally render each button. Apple is rendered only when
-    APPLE_CLIENT_ID is set (it isn't yet — column reserved, wiring
-    deferred). Google/Microsoft use the actual Authlib registry state."""
+    can conditionally render each button. Apple/Google/Microsoft each
+    read from the actual Authlib registry state — set only when the
+    required env vars + (for Apple) .p8 key are configured."""
     return {
         "google_oauth_enabled": is_google_enabled(),
         "microsoft_oauth_enabled": is_microsoft_enabled(),
-        "apple_oauth_enabled": bool(os.environ.get("APPLE_CLIENT_ID", "").strip()),
+        "apple_oauth_enabled": is_apple_enabled(),
     }
 
 # --- Jinja filters ---
@@ -1307,15 +1308,96 @@ def microsoft_callback():
     return redirect(url_for("welcome"))
 
 
+@app.route("/auth/apple/login")
+@limiter.limit("20 per hour")
+def apple_login():
+    if not is_apple_enabled():
+        abort(404)
+    _stash_post_login_next()
+    # Mirror google/microsoft: build redirect_uri from APP_BASE_URL.
+    # Apple is especially strict about exact-match redirect URIs —
+    # whatever's in the Services ID Return URLs list is what we must
+    # use here, character for character.
+    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
+    if base:
+        redirect_uri = f"{base}{url_for('apple_callback')}"
+    else:
+        redirect_uri = url_for("apple_callback", _external=True)
+    return _oauth_registry.apple.authorize_redirect(redirect_uri)
+
+
+# Apple uses response_mode=form_post when scopes include name/email,
+# so the callback arrives as a POST. Accept both for symmetry — Apple
+# falls back to GET if no name/email scope is requested.
+@app.route("/auth/apple/callback", methods=["GET", "POST"])
+@limiter.limit("20 per hour")
+@csrf.exempt  # OAuth callback — state param protects against CSRF
+def apple_callback():
+    if not is_apple_enabled():
+        abort(404)
+    try:
+        token = _oauth_registry.apple.authorize_access_token()
+    except Exception as e:
+        logger.warning("Apple OAuth callback failed: %s", e)
+        return render_template("login.html", error="Apple sign-in failed. Try again.", email=""), 400
+
+    # Apple's id_token carries sub + email. The first-signup user form
+    # POST also includes a `user` JSON field with name parts, but we
+    # don't use the name — username comes from /welcome.
+    userinfo = token.get("userinfo") or {}
+    subject = userinfo.get("sub")
+    email = (userinfo.get("email") or "").lower().strip()
+    # Apple sets email_verified="true" as a STRING, not a bool, for
+    # Apple-issued addresses. Privately-relayed addresses
+    # (...@privaterelay.appleid.com) are trusted by definition.
+    email_verified_raw = userinfo.get("email_verified")
+    email_verified = email_verified_raw in (True, "true", "True")
+
+    if not subject or not email:
+        return render_template("login.html", error="Apple sign-in returned no email.", email=""), 400
+    if not email_verified:
+        return render_template("login.html", error="Your Apple email isn't verified.", email=""), 400
+
+    next_url = _pop_post_login_next()
+
+    # 1) Existing Apple-linked user
+    user = auth_db.get_user_by_oauth("apple", subject)
+    if user:
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # 2) Existing user by email — link this Apple account to it
+    user = auth_db.get_user_by_email(email)
+    if user:
+        auth_db.link_oauth_subject(user["id"], "apple", subject)
+        if not user.get("email_verified_at"):
+            auth_db.mark_email_verified(user["id"])
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # 3) Brand-new user — stash and bounce to /welcome
+    from src.auth.oauth import derive_username_from_email
+    session["pending_oauth"] = {
+        "provider": "apple",
+        "subject": subject,
+        "email": email,
+        "suggested_username": derive_username_from_email(email),
+    }
+    return redirect(url_for("welcome"))
+
+
 @app.route("/welcome", methods=["GET", "POST"])
 @limiter.limit("20 per hour")
 def welcome():
     """First-time OAuth signup — choose your username before the account
     is created. Reachable only with a pending_oauth stash in the session
-    (set by google_callback or microsoft_callback). Refusing this page is
-    a no-op; the user can re-initiate OAuth sign-in to get a fresh stash."""
+    (set by google_callback, microsoft_callback, or apple_callback).
+    Refusing this page is a no-op; the user can re-initiate OAuth sign-in
+    to get a fresh stash."""
     pending = session.get("pending_oauth")
-    if not pending or pending.get("provider") not in ("google", "microsoft"):
+    if not pending or pending.get("provider") not in ("google", "microsoft", "apple"):
         return redirect(url_for("login"))
 
     suggested = pending.get("suggested_username", "")

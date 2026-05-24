@@ -74,6 +74,13 @@ def init_oauth(app) -> None:
     else:
         logger.info("Google OAuth disabled (GOOGLE_CLIENT_ID/SECRET not set).")
 
+    from src.auth.apple import register_apple as _register_apple
+
+    if _register_apple(oauth):
+        logger.info("Apple OAuth registered.")
+    else:
+        logger.info("Apple OAuth disabled (APPLE_CLIENT_ID/TEAM_ID/KEY_ID/.p8 not set).")
+
     microsoft_id = os.environ.get("MICROSOFT_CLIENT_ID", "").strip()
     microsoft_secret = os.environ.get("MICROSOFT_CLIENT_SECRET", "").strip()
 
@@ -104,6 +111,10 @@ def is_google_enabled() -> bool:
 
 def is_microsoft_enabled() -> bool:
     return "microsoft" in oauth._clients  # noqa: SLF001
+
+
+def is_apple_enabled() -> bool:
+    return "apple" in oauth._clients  # noqa: SLF001
 
 
 def derive_username_from_email(email: str) -> str:
