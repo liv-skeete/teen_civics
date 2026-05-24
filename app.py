@@ -1415,25 +1415,48 @@ def apple_callback():
     if email.endswith("@privaterelay.appleid.com"):
         email_verified = True  # Apple-relayed addresses are trusted
 
-    if not subject or not email:
+    # `sub` is the immutable per-Services-ID Apple identifier. Without
+    # it we have nothing to look up by — bail. Email comes second:
+    # Apple deliberately omits it after the first sign-in, so we MUST
+    # be able to log in returning users using only `sub`.
+    if not subject:
         logger.warning(
-            "Apple sign-in missing email: sub_present=%s, email_value=%r, "
-            "email_verified=%r — possibly a returning user (Apple omits email "
-            "after the first sign-in) or scope not approved on consent screen.",
-            bool(subject), email, email_verified_raw,
+            "Apple sign-in missing sub: email_value=%r, "
+            "userinfo_keys=%s — unusual; likely malformed id_token.",
+            email, list(userinfo.keys()),
         )
-        return render_template("login.html", error="Apple sign-in returned no email.", email=""), 400
-    if not email_verified:
-        return render_template("login.html", error="Your Apple email isn't verified.", email=""), 400
+        return render_template("login.html", error="Apple sign-in failed. Try again.", email=""), 400
 
     next_url = _pop_post_login_next()
 
-    # 1) Existing Apple-linked user
+    # 1) Existing Apple-linked user. CRITICAL: this lookup happens
+    # BEFORE the email check because Apple omits email on every
+    # sign-in after the first. A returning user must be able to log
+    # in with just `sub`.
     user = auth_db.get_user_by_oauth("apple", subject)
     if user:
         auth_session.login_user(user["id"])
         auth_db.update_last_login(user["id"])
         return redirect(next_url or url_for("profile"))
+
+    # Past this point we're creating a new link or new user. Both
+    # require email, which Apple gave us on this first sign-in.
+    if not email:
+        logger.warning(
+            "Apple first-time sign-in but no email returned: sub=%s, "
+            "first_signup_user_present=%s, userinfo_keys=%s — Apple "
+            "should have included email on first sign-in. Possible "
+            "scope rejection on consent screen.",
+            subject, bool(first_signup_user_json), list(userinfo.keys()),
+        )
+        return render_template(
+            "login.html",
+            error="Apple sign-in didn't return your email. Try Sign In with Apple again, "
+                  "and tap 'Share My Email' on Apple's confirmation screen.",
+            email="",
+        ), 400
+    if not email_verified:
+        return render_template("login.html", error="Your Apple email isn't verified.", email=""), 400
 
     # 2) Existing user by email — link this Apple account to it
     user = auth_db.get_user_by_email(email)
