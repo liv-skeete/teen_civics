@@ -149,6 +149,10 @@ def register_apple(oauth) -> bool:
             # Apple requires response_mode=form_post when scopes include
             # name or email — callback arrives via POST, not GET.
             "response_mode": "form_post",
+            # Apple rejects client_secret_basic (the Authlib default).
+            # Per Apple's docs, client_id and client_secret must be sent
+            # in the POST form body, not the Authorization header.
+            "token_endpoint_auth_method": "client_secret_post",
         },
         # Issuer claim from id_token equals https://appleid.apple.com.
         # Authlib's default OIDC validator handles this when jwks_uri is
