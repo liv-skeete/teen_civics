@@ -142,7 +142,15 @@ app.config["SECRET_KEY"] = _secret_key
 # when actually deployed; leave off for local dev.
 app.config["SESSION_COOKIE_SECURE"] = _is_deployed()
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# SameSite=None (with Secure=True) is required for Sign in with Apple to
+# work. Apple uses response_mode=form_post, which POSTs the callback to
+# our site from appleid.apple.com — browsers treat that as a cross-site
+# request and strip Lax cookies, breaking Authlib's state check.
+# Locally (HTTP), Secure is off and browsers downgrade None→Lax anyway,
+# so dev keeps Lax-equivalent behavior. CSRF protection on form posts
+# is unaffected because we validate csrf_token explicitly via Flask-WTF
+# on every state-changing endpoint, independent of cookie attributes.
+app.config["SESSION_COOKIE_SAMESITE"] = "None" if _is_deployed() else "Lax"
 # Sessions persist 30 days when "remember me" is set via permanent=True
 from datetime import timedelta as _timedelta
 app.config["PERMANENT_SESSION_LIFETIME"] = _timedelta(days=30)
