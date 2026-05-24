@@ -993,19 +993,35 @@ def login():
 def logout():
     auth_session.logout_user()
     response = make_response(redirect(url_for("index")))
-    # Set a one-shot cookie that the client JS detects on next page
-    # load and uses to sweep `voted_*` localStorage entries. Without
-    # this, a signed-out user keeps seeing their old "voted yes"
-    # highlights on bill cards from before they logged out — confusing
-    # because it feels like a privacy bleed even though the data is
-    # already theirs. The cookie is non-HttpOnly so JS can read it,
-    # but it's harmless to anyone else (just a marker, no data).
-    # JS deletes it after acting.
+
+    # Clear the voter_id cookie so the next user on this browser
+    # (different account on a shared machine, e.g. school computer,
+    # family laptop) starts fresh and doesn't inherit the previous
+    # user's vote history via /api/my-votes (which is keyed by
+    # voter_id, not user_id — see TODO below).
+    #
+    # Tradeoff: we lose the "anonymous votes carry into signup"
+    # behavior for that browser. Acceptable because (a) once you're
+    # signed up, you don't need the cookie's attribution anyway, and
+    # (b) shared-browser correctness is way more important than the
+    # one-shot anon→signup flow. The next page load mints a fresh
+    # voter_id for the next visitor.
+    #
+    # TODO (v1.5.1): add user_id column to votes table so
+    # authenticated users' votes follow their account regardless of
+    # browser. Then /api/my-votes can key by user_id when signed in,
+    # voter_id when anonymous, and clearing the cookie here becomes
+    # purely cosmetic instead of load-bearing.
+    response.delete_cookie("voter_id", path="/", samesite="Lax")
+
+    # Set a one-shot marker the client JS uses to sweep `voted_*`
+    # localStorage entries on next page load. The marker is
+    # non-HttpOnly so JS can read it, harmless to anyone else.
     response.set_cookie(
         "clear_local_vote_cache", "1",
-        max_age=60,        # one-shot — JS clears it on next load
+        max_age=60,
         secure=_is_deployed(),
-        httponly=False,    # JS must read it
+        httponly=False,
         samesite="Lax",
     )
     return response
