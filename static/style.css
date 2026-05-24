@@ -2441,12 +2441,29 @@ h1, h2, h3, h4, h5, h6 {
 .resource-card h2,
 .archive-header h1,
 .contact-header h1 {
+  /* Three layers of "never split words" defense — needed because
+     a global .container { overflow-wrap: anywhere } cascades into
+     these headings and was causing mid-word breaks like
+     "Understand-/ing Government" in narrow card layouts. */
   hyphens: none;
-  word-break: normal;
-  overflow-wrap: break-word;
+  word-break: keep-all;
+  overflow-wrap: normal;
   white-space: normal;
-  text-wrap: balance;
+  /* `pretty` keeps reasonable line breaks; `balance` was sometimes
+     forcing premature wraps because it tries to even out line
+     lengths even when one long line would fit fine. */
+  text-wrap: pretty;
   font-size: var(--font-size-xl);
+}
+
+/* Resource-card headings need even more breathing room — they
+   sit inside narrow 3-up grid cells with a leading icon. Bump
+   them slightly smaller than other page-level h1/h2 so multi-word
+   titles like "Contact Your Representatives" fit on two lines
+   instead of three. */
+.resource-card h2 {
+  font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+  line-height: 1.25;
 }
 
 /* Page titles on /bills, /resources — use brand color instead of plain
