@@ -1710,7 +1710,12 @@ a.share-option:link {
 
 .resources-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    /* Was minmax(300px, 1fr) — that put 3 cols on iPad-landscape
+       (~1024px) where each card collapsed to ~267px content width
+       and titles like "Contact Your Representatives" wrapped to
+       3 lines. Raising the floor to 340px forces 2 cols below
+       ~1080px and 3 cols above, giving headings room. */
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-xl);
 }
@@ -2312,6 +2317,14 @@ a.share-option:link {
   font-size: var(--font-size-lg);
   color: var(--color-primary);
   margin-bottom: var(--spacing-sm);
+  /* The global h1-h6 rule sets text-wrap: balance, which evens out
+     line lengths and prematurely wraps short headlines like
+     "Misinformation Hits Gen Z" inside the 3-col stats grid at iPad
+     landscape (~992-1100px). `pretty` keeps natural breaks. */
+  text-wrap: pretty;
+  hyphens: none;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .stat-text {
