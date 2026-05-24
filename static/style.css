@@ -3425,7 +3425,40 @@ h1, h2, h3, h4, h5, h6 {
    kudos-side as the trigger for the side rail / sign-out menu, so
    neither can disappear). Drop the "Kudos" suffix and ellipsis-trim
    the tier label to a reasonable width. */
-@media (min-width: 769px) and (max-width: 950px) {
+/* Nav-only mobile breakpoint: kick the full nav out for hamburger
+   earlier than the global 768px breakpoint, since 6 links + logo +
+   user pill won't fit between ~769-824px no matter how we shrink
+   the pill. Other 768px-based layout rules (bills grid, share
+   dropdown, etc.) stay where they are so the rest of the page
+   doesn't lurch. */
+@media (max-width: 824px) {
+    .nav-menu {
+        display: none;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: var(--color-white);
+        box-shadow: var(--shadow-md);
+        padding: var(--spacing-md);
+        gap: var(--spacing-xs);
+    }
+    [data-theme="dark"] .nav-menu,
+    .dark-theme .nav-menu {
+        background-color: var(--color-cards-dark) !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        border-top: 1px solid var(--color-borders-dark);
+    }
+    .nav-menu.active {
+        display: flex;
+    }
+    .nav-toggle {
+        display: flex;
+    }
+}
+
+@media (min-width: 825px) and (max-width: 950px) {
     .nav-user-tier {
         display: inline-block;
         max-width: 9ch;
