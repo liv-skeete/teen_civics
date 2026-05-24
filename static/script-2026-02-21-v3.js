@@ -231,6 +231,21 @@
         window.location.href = data.login_url;
         return new Promise(() => {}); // Block subsequent .then() during nav
       }
+      // Email-verification gate: signed in but unverified. Show an
+      // inline message + verification CTA instead of recording the
+      // vote. OAuth signups (Google/Microsoft/Apple) auto-pass this
+      // check because the provider verifies the email for us; only
+      // email/password accounts that haven't clicked the link land here.
+      if (response.status === 403 && data && data.error === "email_unverified") {
+        enablePollOptions(options);
+        if (messageContainer) {
+          messageContainer.innerHTML =
+            'Please <a href="/profile" style="text-decoration:underline">verify your email</a> before voting. Check your inbox for the verification link.';
+          messageContainer.className = "poll-message";
+          messageContainer.style.display = "block";
+        }
+        return new Promise(() => {});
+      }
       if (!response.ok || !data.success) {
         const msg = (data && data.error) ? data.error : `Failed to record vote (HTTP ${response.status})`;
         throw new Error(msg);

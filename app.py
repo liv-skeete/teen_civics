@@ -2354,6 +2354,21 @@ def record_vote():
                 "login_url": url_for("login", next=next_path, reason="vote"),
             }), 401
 
+        # Hard email-verification gate on voting. Without this, anyone
+        # can sign up using somebody else's email and vote — pollutes
+        # poll data + opens an email-spoofing surface. OAuth signups
+        # (Google/Microsoft/Apple) are auto-verified by the provider so
+        # they sail past this check; only email/password signups need
+        # to confirm their inbox before voting.
+        uid_pre = auth_session.current_user_id()
+        user_pre = auth_db.get_user_by_id(uid_pre) if uid_pre else None
+        if user_pre and not user_pre.get("email_verified_at"):
+            return jsonify({
+                "error": "email_unverified",
+                "resend_url": url_for("resend_verification"),
+                "message": "Please verify your email before voting. Check your inbox for the verification link.",
+            }), 403
+
         data = request.get_json()
         bill_id = data.get("bill_id")
         vote_type = data.get("vote_type")
