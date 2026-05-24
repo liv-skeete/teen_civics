@@ -3418,6 +3418,22 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
 }
 
+/* The widest tier labels ("Coffee Runner", "Congressional Page", etc.)
+   push the pill wide enough to collide with the nav links in the
+   ~769-1280px band. Hide the tier name + the divider in that band;
+   the Kudos count alone still tells the user they're signed in, and
+   the full tier shows on /profile + the side rail. Above 1280px the
+   row has the breathing room to fit everything. */
+@media (min-width: 769px) and (max-width: 1280px) {
+    .nav-user-left,
+    .nav-user-divider {
+        display: none;
+    }
+    .nav-user-right {
+        border-radius: 999px;
+    }
+}
+
 .nav-user-balance {
     background-color: rgba(255, 255, 255, 0.18);
     padding: 0.1rem 0.5rem;

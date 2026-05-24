@@ -181,7 +181,10 @@
       body: JSON.stringify({
         bill_id: billId,
         vote_type: voteType,
-        previous_vote: previousVote || null
+        previous_vote: previousVote || null,
+        // Used only when the server bounces this request with 401
+        // auth_required — it tells /login where to send the user back.
+        return_to: window.location.pathname + window.location.search
       })
     })
     .then(async (response) => {

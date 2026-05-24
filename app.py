@@ -2077,18 +2077,18 @@ def _set_voter_cookie(response, voter_id):
 def record_vote():
     try:
         if not auth_session.is_authenticated():
-            # Build a safe same-origin next-URL from the Referer header so
-            # the user lands back on the bill they were trying to vote on.
-            # Falls back to "/" if the header is missing or off-origin.
-            ref = request.referrer or ""
+            # The client sends its current location.pathname as `return_to`
+            # so post-login can drop the user back on the same bill. We
+            # accept only same-origin relative paths ("/foo", not "//evil"
+            # or "https://..."). Falling back to "/" keeps the user inside
+            # the app on any tampering. Don't parse the Referer header —
+            # behind ProxyFix the host comparison is brittle, and the JS
+            # already knows where it is.
+            payload = request.get_json(silent=True) or {}
+            raw = payload.get("return_to") or ""
             next_path = "/"
-            if ref:
-                try:
-                    parsed = urllib.parse.urlparse(ref)
-                    if parsed.netloc == request.host and parsed.path.startswith("/"):
-                        next_path = parsed.path + (("?" + parsed.query) if parsed.query else "")
-                except Exception:
-                    pass
+            if isinstance(raw, str) and raw.startswith("/") and not raw.startswith("//"):
+                next_path = raw
             return jsonify({
                 "error": "auth_required",
                 "login_url": url_for("login", next=next_path, reason="vote"),
