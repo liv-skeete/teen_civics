@@ -5,6 +5,7 @@
   },
   "deploy": {
     "runtime": "V2",
+    "preDeployCommand": "alembic upgrade head",
     "numReplicas": 1,
     "sleepApplication": false,
     "useLegacyStacker": false,
