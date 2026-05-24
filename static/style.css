@@ -2462,7 +2462,7 @@ h1, h2, h3, h4, h5, h6 {
    titles like "Contact Your Representatives" fit on two lines
    instead of three. */
 .resource-card h2 {
-  font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+  font-size: clamp(1rem, 1.8vw, 1.2rem);
   line-height: 1.25;
 }
 
