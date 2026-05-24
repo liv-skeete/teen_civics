@@ -83,6 +83,30 @@
   function getStored(key) { try { return localStorage.getItem(key); } catch { return null; } }
   function setStored(key, val) { try { localStorage.setItem(key, val); } catch {} }
 
+  // One-shot cookie sweep on logout: the /logout endpoint sets
+  // clear_local_vote_cache=1 (max-age 60s, non-HttpOnly) so we can
+  // detect it client-side and remove all `voted_*` localStorage
+  // entries — otherwise a signed-out user keeps seeing their old
+  // "voted yes" highlights from before they logged out, which feels
+  // like a privacy bleed even though the data is technically theirs.
+  // Anonymous voter_id cookie is left untouched so anon votes still
+  // attach to a future account on signup.
+  function maybeClearVoteCacheOnLogout() {
+    if (!document.cookie.split("; ").some(c => c.startsWith("clear_local_vote_cache="))) return;
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("voted_")) keysToRemove.push(k);
+      }
+      keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+    } catch {}
+    // Delete the marker cookie so subsequent loads don't keep clearing.
+    // Path=/ matches the cookie attribute the server set (default).
+    document.cookie = "clear_local_vote_cache=; Max-Age=0; Path=/; SameSite=Lax";
+  }
+  maybeClearVoteCacheOnLogout();
+
   // Make a fetch with an AbortController scoped to a widget to prevent overlaps
   function widgetFetch(widget, url, options = {}) {
     // Abort any in-flight request for this widget

@@ -992,7 +992,23 @@ def login():
 @app.route("/logout", methods=["POST"])
 def logout():
     auth_session.logout_user()
-    return redirect(url_for("index"))
+    response = make_response(redirect(url_for("index")))
+    # Set a one-shot cookie that the client JS detects on next page
+    # load and uses to sweep `voted_*` localStorage entries. Without
+    # this, a signed-out user keeps seeing their old "voted yes"
+    # highlights on bill cards from before they logged out — confusing
+    # because it feels like a privacy bleed even though the data is
+    # already theirs. The cookie is non-HttpOnly so JS can read it,
+    # but it's harmless to anyone else (just a marker, no data).
+    # JS deletes it after acting.
+    response.set_cookie(
+        "clear_local_vote_cache", "1",
+        max_age=60,        # one-shot — JS clears it on next load
+        secure=_is_deployed(),
+        httponly=False,    # JS must read it
+        samesite="Lax",
+    )
+    return response
 
 
 @app.route("/verify/<token>")
