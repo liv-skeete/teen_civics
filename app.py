@@ -1368,6 +1368,14 @@ def apple_callback():
     # POST also includes a `user` JSON field with name parts, but we
     # don't use the name — username comes from /welcome.
     userinfo = token.get("userinfo") or {}
+    # Log all keys returned by Apple (without values, to avoid leaking
+    # tokens). Critical for diagnosing 'no email' cases — Apple only
+    # returns email on first-ever sign-in for a given Services ID +
+    # Apple ID pairing; subsequent sign-ins return only sub.
+    logger.info(
+        "Apple token received: userinfo_keys=%s, top_level_keys=%s, id_token_present=%s",
+        list(userinfo.keys()), list(token.keys()), bool(token.get("id_token")),
+    )
     subject = userinfo.get("sub")
     email = (userinfo.get("email") or "").lower().strip()
     # Apple sets email_verified="true" as a STRING, not a bool, for
@@ -1377,6 +1385,12 @@ def apple_callback():
     email_verified = email_verified_raw in (True, "true", "True")
 
     if not subject or not email:
+        logger.warning(
+            "Apple sign-in missing email: sub_present=%s, email_value=%r, "
+            "email_verified=%r — possibly a returning user (Apple omits email "
+            "after the first sign-in) or scope not approved on consent screen.",
+            bool(subject), email, email_verified_raw,
+        )
         return render_template("login.html", error="Apple sign-in returned no email.", email=""), 400
     if not email_verified:
         return render_template("login.html", error="Your Apple email isn't verified.", email=""), 400
