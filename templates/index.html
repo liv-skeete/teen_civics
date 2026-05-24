@@ -30,68 +30,6 @@
 
 <div class="container">
     {% if bill %}
-    {# --- GIVEAWAY CARD (commented out — giveaway ended 2026-03-19, keep for future events) ---
-    <article class="bill-card featured-bill giveaway-card">
-        <div class="bill-header">
-            <h4 class="bill-title">🎁 TeenCivics Merch Giveaway!</h4>
-        </div>
-
-        <div class="bill-content giveaway-content">
-            <p>Our founder is up for a speaking slot at Grace Hopper Celebration 2026 and we're celebrating with free TeenCivics merch!</p>
-            <p><strong>🏆 Prizes:</strong> Stickers, a TeenCivics shirt, and a TeenCivics Stanley cup <span class="giveaway-desktop-pipe">|</span><br class="giveaway-mobile-break"> <strong>⏰ Deadline:</strong> March 19, 2026 (winner announced the following week)</p>
-
-            <p><strong>How to enter:</strong></p>
-            <ol class="giveaway-steps">
-                <li>1) Follow us on any platform below</li>
-                <li>2) <a href="https://gracehoppercelebration.com/flow/anitab/ghc26/GHCsessionvotingunauth/page/page/session/1771732469049001Tvlq?search=congress&search=congress%2C+congress" target="_blank" rel="noopener noreferrer">Vote for the session here</a></li>
-                <li>3) Share with friends for a bonus entry!</li>
-            </ol>
-
-            <p class="giveaway-social-links" aria-label="TeenCivics social links">
-                <a href="https://bsky.app/profile/teencivics.bsky.social" target="_blank" rel="noopener noreferrer">🦋 Bluesky: @teencivics.bsky.social</a>
-                <span class="giveaway-social-separator" aria-hidden="true">·</span>
-                <a href="https://www.threads.com/@teen.civics" target="_blank" rel="noopener noreferrer">🧵 Threads: @teen.civics</a>
-                <span class="giveaway-social-separator" aria-hidden="true">·</span>
-                <a href="https://x.com/TeenCivics" target="_blank" rel="noopener noreferrer">🐦 X: @TeenCivics</a>
-                <span class="giveaway-social-separator" aria-hidden="true">·</span>
-                <a href="https://www.facebook.com/profile.php?id=61587587706254" target="_blank" rel="noopener noreferrer">📘 Facebook: TeenCivics</a>
-            </p>
-
-            <div class="giveaway-share-wrapper">
-                <div class="share-dropdown">
-                    <button type="button" class="btn btn-share" aria-expanded="false" aria-haspopup="true">
-                        Share Giveaway
-                    </button>
-                    <div class="share-options" role="menu" aria-label="Share giveaway options">
-                        <a href="https://twitter.com/intent/tweet?text=Vote%20for%20TeenCivics%20at%20Grace%20Hopper%202026%20and%20enter%20to%20win%20free%20merch!&url=https://teencivics.org"
-                           target="_blank" rel="noopener" class="share-option share-x" role="menuitem">
-                            <span class="share-icon" aria-hidden="true">𝕏</span> Share on X
-                        </a>
-                        <a href="https://bsky.app/intent/compose?text=Vote%20for%20TeenCivics%20at%20Grace%20Hopper%202026%20and%20enter%20to%20win%20free%20merch!%20https://teencivics.org"
-                           target="_blank" rel="noopener" class="share-option share-bluesky" role="menuitem">
-                            <svg viewBox="0 0 568 501" fill="currentColor" aria-hidden="true" class="share-icon">
-                                <path d="M123.121 33.664C188.241 82.553 258.281 181.68 284 234.873c25.719-53.192 95.759-152.32 160.879-201.21C491.866-1.611 568-28.906 568 57.947c0 17.346-9.945 145.713-15.778 166.555-20.275 72.453-94.155 90.933-159.875 79.748C507.222 323.8 536.444 388.56 473.333 453.32c-119.86 122.992-172.272-30.859-185.702-70.281-2.462-7.227-3.614-10.608-3.631-7.733-.017-2.875-1.169.506-3.631 7.733-13.43 39.422-65.842 193.273-185.702 70.281-63.111-64.76-33.89-129.52 80.986-149.071-65.72 11.185-139.6-7.295-159.875-79.748C10.945 203.66 1 75.293 1 57.947 1-28.906 76.134-1.611 123.121 33.664z"/>
-                            </svg>
-                            Share on Bluesky
-                        </a>
-                        <a href="https://www.threads.net/intent/post?text=Vote%20for%20TeenCivics%20at%20Grace%20Hopper%202026%20and%20enter%20to%20win%20free%20merch!%20https://teencivics.org"
-                           target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
-                            <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
-                        </a>
-                        <a href="https://www.facebook.com/sharer/sharer.php?u=https://teencivics.org"
-                           target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">
-                            <span class="share-icon" aria-hidden="true">📘</span> Share on Facebook
-                        </a>
-                        <button type="button" class="share-option share-copy" role="menuitem" data-copy-text="Vote for TeenCivics at Grace Hopper 2026 and enter to win free merch! https://teencivics.org">
-                            <span class="share-icon" aria-hidden="true">🔗</span> Copy Link
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </article>
-    --- END GIVEAWAY CARD #}
-
     <article class="bill-card featured-bill">
         <div class="bill-header">
             <h4 class="bill-title">{{ bill.title }}</h4>
@@ -107,18 +45,19 @@
                     <div class="term-resources">
                         <p><em>If you come across any unfamiliar words while reading, these resources can help make everything clearer. Pick whichever one works best for you!</em></p>
                         <ul>
-                            <li><a href="https://www.congress.gov/help/legislative-glossary" target="_blank" rel="noopener">📚 Congress.gov Legislative Glossary</a> - Comprehensive congressional terms</li>
-                            <li><a href="https://www.nvfc.org/glossary-of-congressional-terms/" target="_blank" rel="noopener">📖 NVFC Congressional Terms Glossary</a> - Concise, easy-to-understand definitions</li>
+                            <li><a href="https://www.congress.gov/help/legislative-glossary" target="_blank" rel="noopener">{{ icon('book-open') }} Congress.gov Legislative Glossary</a> - Comprehensive congressional terms</li>
+                            <li><a href="https://www.nvfc.org/glossary-of-congressional-terms/" target="_blank" rel="noopener">{{ icon('book-marked') }} NVFC Congressional Terms Glossary</a> - Concise, easy-to-understand definitions</li>
                         </ul>
                     </div>
                 </div>
             </div>
 
+            {% set is_new_format = bill.summary_detailed and '⚡ The gist' in bill.summary_detailed %}
             <div class="summary-section">
-                <h3>Summary</h3>
+                {% if not is_new_format %}<h3>Summary</h3>{% endif %}
                 <div class="summary-text">
                     {% if bill.summary_overview or bill.summary_detailed %}
-                        {% if bill.summary_overview %}
+                        {% if bill.summary_overview and not is_new_format %}
                             <p>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</p>
                         {% endif %}
                         {% if bill.summary_detailed %}
@@ -157,14 +96,14 @@
                         </a>
                         <a href="https://www.threads.net/intent/post?text={{ ('Check out this bill on @teen.civics: ' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True))|urlencode }}"
                            target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
-                            <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
+                            <span class="share-icon" aria-hidden="true">{{ icon('at-sign') }}</span> Share on Threads
                         </a>
                         <a href="https://www.facebook.com/sharer/sharer.php?u={{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode }}"
                            target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">
-                            <span class="share-icon" aria-hidden="true">📘</span> Share on Facebook
+                            <span class="share-icon" aria-hidden="true">{{ icon('facebook') }}</span> Share on Facebook
                         </a>
                         <button type="button" class="share-option share-copy" role="menuitem" data-url="{{ url_for('bill_detail', slug=bill.website_slug, _external=True) }}">
-                            <span class="share-icon" aria-hidden="true">🔗</span> Copy Link
+                            <span class="share-icon" aria-hidden="true">{{ icon('link') }}</span> Copy Link
                         </button>
                     </div>
                 </div>
@@ -177,10 +116,10 @@
             <p class="poll-subtitle">Vote to see who sponsored it!</p>
             <div class="poll-options">
                 <button class="poll-option" data-vote="yes">
-                    👍 Yes, support it
+                    {{ icon('thumbs-up') }} Yes, support it
                 </button>
                 <button class="poll-option" data-vote="no">
-                    👎 No, oppose it
+                    {{ icon('thumbs-down') }} No, oppose it
                 </button>
             </div>
             <div class="poll-message"></div>
@@ -213,13 +152,13 @@
                 <div class="tell-rep-trigger" id="tell-rep-trigger-{{ bill.bill_id }}">
                     <button class="btn-tell-rep" data-bill-id="{{ bill.bill_id }}"
                             aria-expanded="false" aria-controls="tell-rep-section-{{ bill.bill_id }}">
-                        <span class="btn-icon">📣</span> Tell Your Rep How You Voted
+                        <span class="btn-icon">{{ icon('megaphone') }}</span> Tell Your Rep How You Voted
                     </button>
                 </div>
 
                 <div class="tell-rep-section" id="tell-rep-section-{{ bill.bill_id }}"
                      data-bill-id="{{ bill.bill_id }}" data-bill-title="{{ bill.title }}">
-                <h4>✉️ Contact Your Representative</h4>
+                <h4>{{ icon('mail') }} Contact Your Representative</h4>
                 <p class="tell-rep-subtitle">With TeenCivics, you don't have to wait until you're 18 to make your voice heard. Tell your representative where you stand on this bill.</p>
 
                 <div class="zip-lookup-group">
@@ -284,26 +223,46 @@
         <a href="{{ url_for('bills') }}" class="btn btn-primary">View All Bills</a>
     </div>
 
+    {% if stats and (stats.total_bills > 0 or stats.total_votes > 0) %}
+    <section class="numbers-section" aria-label="By the numbers">
+        <h2>By the Numbers</h2>
+        <dl class="numbers-grid">
+            <div class="number-card">
+                <dt class="number-label">Bills Summarized</dt>
+                <dd class="number-value">{{ "{:,}".format(stats.total_bills) }}</dd>
+            </div>
+            <div class="number-card">
+                <dt class="number-label">Community Votes</dt>
+                <dd class="number-value">{{ "{:,}".format(stats.total_votes) }}</dd>
+            </div>
+            <div class="number-card">
+                <dt class="number-label">Updates</dt>
+                <dd class="number-value">Daily</dd>
+            </div>
+        </dl>
+    </section>
+    {% endif %}
+
     <div class="features-section">
         <h2>Why TeenCivics?</h2>
         <div class="features-grid">
             <div class="feature-card">
-                <span class="feature-emoji">👑</span>
+                <span class="feature-kicker">01</span>
                 <h3>Made for Teens</h3>
                 <p>Complex bills explained in language you can actually understand.</p>
             </div>
             <div class="feature-card">
-                <span class="feature-emoji">🤖</span>
+                <span class="feature-kicker">02</span>
                 <h3>AI-Powered</h3>
                 <p>Advanced AI summarizes lengthy legislation into key points.</p>
             </div>
             <div class="feature-card">
-                <span class="feature-emoji">🗳️</span>
+                <span class="feature-kicker">03</span>
                 <h3>Your Voice Matters</h3>
                 <p>Your opinions help shape laws. Vote, join the conversation, and make your voice count.</p>
             </div>
             <div class="feature-card">
-                <span class="feature-emoji">🚀</span>
+                <span class="feature-kicker">04</span>
                 <h3>Lead the Future</h3>
                 <p>Learn how government works and gain tools to shape what comes next.</p>
             </div>

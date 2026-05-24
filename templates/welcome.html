@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Pick your username - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+  <div class="auth-card">
+    <h1>One more step</h1>
+    <p>Welcome! Pick a username for your TeenCivics account. You'll see this on the leaderboard and on any votes you cast.</p>
+
+    {% if error %}
+    <div class="auth-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('welcome') }}" class="auth-form" autocomplete="on">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {# Help password managers attach this account to the right (origin, email) pair #}
+      <input type="email" name="email" autocomplete="email" value="{{ email }}" readonly style="display:none" aria-hidden="true" tabindex="-1">
+
+      <label for="username">Username <span class="auth-hint">(3-30 characters, letters/numbers/_/-)</span></label>
+      <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username"
+             required minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+" autofocus>
+      <p class="auth-hint">Signed in as <strong>{{ email }}</strong>.</p>
+
+      <button type="submit" class="btn btn-primary">Create account</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

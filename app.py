@@ -61,6 +61,14 @@ if config.logging.file_path:
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
+# Trust the X-Forwarded-* headers from the proxies in front of Flask.
+# Cloudflare → Railway's edge → Flask = 2 hops, so x_for=2/x_proto=2.
+# Without this, request.is_secure is False (the inner Railway→Flask
+# hop is plain HTTP) and SECURE session cookies refuse to set, which
+# means no session, which means CSRF tokens never persist.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=2, x_proto=2, x_host=1)
+
 # Support sub-path deployment (e.g. /beta on staging).
 # Railway strips /beta from PATH_INFO before forwarding to Flask, so Flask
 # routes work as normal (/api/vote, /static/...).  We just need url_for() to
@@ -88,22 +96,114 @@ if _url_prefix:
 
 app.config["DEBUG"] = config.flask.debug
 
-# SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY, otherwise generate (dev)
-app.config["SECRET_KEY"] = (
-    os.getenv("FLASK_SECRET_KEY")
-    or os.getenv("SECRET_KEY")
-    or secrets.token_hex(32)
-)
-if not (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY")):
-    logger.warning("SECRET_KEY not set in environment, using generated key (not suitable for production)")
+# SECRET_KEY: prefer FLASK_SECRET_KEY then SECRET_KEY.
+# In any deployed environment (Railway, etc.), absence is fatal — a
+# per-process generated key means each gunicorn worker uses a different
+# key, which silently breaks sessions, CSRF tokens, and magic-link
+# tokens because tokens minted by one worker fail verification on
+# another.
+# In dev/local, generate a random key for convenience.
+def _is_deployed():
+    """True if we're running in a deployed environment (Railway, etc),
+    where per-worker random keys would break auth. Checks multiple env
+    var names because Railway has renamed theirs over time."""
+    named = any(
+        os.environ.get(name) for name in (
+            "RAILWAY_ENVIRONMENT",          # legacy Railway
+            "RAILWAY_ENVIRONMENT_NAME",     # current Railway (2025+)
+            "RAILWAY_PROJECT_ID",           # also Railway
+            "RAILWAY_SERVICE_ID",
+            "DYNO",                         # Heroku
+            "RENDER",                       # Render
+            "FLY_APP_NAME",                 # Fly.io
+        )
+    )
+    # Catch any future Railway renames: any RAILWAY_* var set means we're deployed
+    railway_any = any(k.startswith("RAILWAY_") for k in os.environ)
+    return named or railway_any
+
+_secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY")
+if not _secret_key:
+    if _is_deployed():
+        raise RuntimeError(
+            "FLASK_SECRET_KEY (or SECRET_KEY) is required in production. "
+            "Set it via Railway dashboard → Variables. Refusing to start "
+            "with a per-process generated key — sessions and CSRF would "
+            "break on every worker restart."
+        )
+    _secret_key = secrets.token_hex(32)
+    logger.warning("SECRET_KEY not set, using ephemeral generated key (dev only)")
+app.config["SECRET_KEY"] = _secret_key
 
 # Session security
-app.config["SESSION_COOKIE_SECURE"] = not config.flask.debug
+# SECURE=True (production HTTPS) is required for the secure flag on cookies,
+# but in local dev over http:// the browser will silently drop secure cookies
+# → no session → CSRF token mismatches on form posts. Only enable SECURE
+# when actually deployed; leave off for local dev.
+app.config["SESSION_COOKIE_SECURE"] = _is_deployed()
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# SameSite=None (with Secure=True) is required for Sign in with Apple to
+# work. Apple uses response_mode=form_post, which POSTs the callback to
+# our site from appleid.apple.com — browsers treat that as a cross-site
+# request and strip Lax cookies, breaking Authlib's state check.
+# Locally (HTTP), Secure is off and browsers downgrade None→Lax anyway,
+# so dev keeps Lax-equivalent behavior. CSRF protection on form posts
+# is unaffected because we validate csrf_token explicitly via Flask-WTF
+# on every state-changing endpoint, independent of cookie attributes.
+app.config["SESSION_COOKIE_SAMESITE"] = "None" if _is_deployed() else "Lax"
+# Sessions persist 30 days when "remember me" is set via permanent=True
+from datetime import timedelta as _timedelta
+app.config["PERMANENT_SESSION_LIFETIME"] = _timedelta(days=30)
+
+# Disable Flask-WTF's referrer/origin check — it's unreliable behind Cloudflare
+# + Railway's double proxy. The HMAC token validation still runs; this only
+# drops the extra "Referer must match host" check that fails on proxied requests.
+app.config["WTF_CSRF_SSL_STRICT"] = False
 
 # CSRF + rate limiting
 csrf = CSRFProtect(app)
+
+# Third-party sign-in (Google now, Apple reserved for staging push).
+from src.auth.oauth import (
+    oauth as _oauth_registry,
+    init_oauth,
+    is_google_enabled,
+    is_microsoft_enabled,
+    is_apple_enabled,
+)
+init_oauth(app)
+
+
+@app.errorhandler(CSRFError)
+def _handle_csrf_error(e):
+    """Log CSRF failures with full context, then return a useful response.
+    For API calls returns JSON. For form pages returns the same form page
+    with a friendly error message so the user can retry rather than seeing
+    a 500."""
+    logger.warning(
+        "CSRF failure path=%s req_id=%s reason=%s has_session=%s has_form_token=%s",
+        request.path,
+        getattr(g, "req_id", "-"),
+        getattr(e, "description", "?"),
+        bool(session.get("csrf_token")),
+        bool(request.form.get("csrf_token")),
+    )
+    if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
+        return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
+    # For auth forms, re-render the form with a clear error so user can retry
+    if request.path == "/signup":
+        return render_template(
+            "signup.html",
+            error="Your session expired. Please try again.",
+            username=request.form.get("username", ""),
+        ), 400
+    if request.path == "/login":
+        return render_template(
+            "login.html",
+            error="Your session expired. Please try again.",
+            username=request.form.get("username", ""),
+        ), 400
+    return jsonify({"error": "csrf_failed", "reason": str(e.description)}), 400
 # NOTE: With multiple Gunicorn workers, each worker has independent rate limit
 # counters. To share state, switch to Redis: storage_uri="redis://..."
 limiter = Limiter(
@@ -118,22 +218,15 @@ DEFAULT_ARCHIVE_PAGE_SIZE = 24
 
 # --- Import database functions (after app initialized) ---
 from src.database.db import (
-    get_all_bills,
     get_bill_by_id,
     get_latest_bill,
     get_latest_tweeted_bill,
-    get_all_tweeted_bills,
     get_bill_by_slug,
-    update_poll_results,
-    search_tweeted_bills,
-    count_search_tweeted_bills,
     search_and_count_bills,
-    record_individual_vote,
     record_vote_and_update_poll,
     get_voter_votes,
     update_bill_arguments,
 )
-from src.processors.summarizer import summarize_title
 from src.processors.argument_generator import generate_bill_arguments
 from src.utils.sponsor_formatter import format_sponsor_sentence
 
@@ -161,8 +254,26 @@ def add_security_headers(response):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if hasattr(g, "req_id"):
         response.headers["X-Request-ID"] = g.req_id
+    # Pages that render a per-session CSRF token or per-user state must
+    # NEVER be edge-cached. If they were, User A's CSRF token would be
+    # served to User B from cache and the form post would fail validation.
+    AUTH_PATHS = ("/signup", "/login", "/logout", "/profile", "/account")
     if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
         response.headers["Cache-Control"] = "no-store"
+    elif request.path.startswith("/admin"):
+        response.headers["Cache-Control"] = "no-store"
+    elif any(request.path == p or request.path.startswith(p + "/") for p in AUTH_PATHS):
+        response.headers["Cache-Control"] = "private, no-store"
+    elif getattr(g, "is_authenticated", False):
+        # Authenticated pages render user-specific state (tier badge,
+        # display name, vote balance). Must not be cached by Cloudflare
+        # or shared browser caches or User A's page leaks to User B.
+        response.headers["Cache-Control"] = "private, no-store"
+    else:
+        # Public, anonymous HTML pages — short edge cache for social media
+        # link-preview crawlers / SEO. private would block Cloudflare's
+        # edge cache; public is intentional since no user data is rendered.
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300"
     return response
 
 # --- Context processors ---
@@ -173,6 +284,22 @@ def inject_ga_measurement_id():
 @app.context_processor
 def inject_current_year():
     return {"current_year": datetime.now(timezone.utc).year}
+
+from src.icons import icon as _icon_fn
+app.jinja_env.globals["icon"] = _icon_fn
+
+
+@app.context_processor
+def inject_oauth_flags():
+    """Expose OAuth provider availability to templates so login/signup
+    can conditionally render each button. Apple/Google/Microsoft each
+    read from the actual Authlib registry state — set only when the
+    required env vars + (for Apple) .p8 key are configured."""
+    return {
+        "google_oauth_enabled": is_google_enabled(),
+        "microsoft_oauth_enabled": is_microsoft_enabled(),
+        "apple_oauth_enabled": is_apple_enabled(),
+    }
 
 # --- Jinja filters ---
 @app.template_filter("format_date")
@@ -296,6 +423,25 @@ def format_detailed_html_filter(text: str) -> Markup:
     # Strip markdown bold markers (**text** -> text)
     import re as _re
     text = _re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    # Emoji prefix -> Lucide icon name. The summarizer still emits these
+    # leading glyphs in the DB; we strip them at render time and swap in
+    # an inline SVG so the section headers match the rest of the UI.
+    emoji_to_icon = {
+        '⚡': 'zap',
+        '⚖️': 'scale',
+        '🔎': 'eye',
+        '👥': 'users',
+        '🔑': 'clipboard-list',
+        '📌': 'landmark',
+        '👉': 'arrow-right',
+        '💡': 'lightbulb',
+        '📝': 'file-text',
+        '📜': 'scroll',
+        '🏠': 'landmark',
+        '💰': 'landmark',
+        '🛠️': 'landmark',
+        '🚀': 'landmark',
+    }
     lines = text.split("\n")
     html_parts = []
     in_list = False
@@ -303,11 +449,21 @@ def format_detailed_html_filter(text: str) -> Markup:
         line = line.strip()
         if not line:
             continue
-        if any(line.startswith(emoji) for emoji in ['🏠','💰','🛠️','⚖️','🚀','📌','👉','🔎','📝','🔑','📜','👥','💡']):
+        matched_icon = None
+        rest = line
+        for emoji, icon_name in emoji_to_icon.items():
+            if line.startswith(emoji):
+                matched_icon = icon_name
+                rest = line[len(emoji):].strip()
+                break
+        if matched_icon is not None:
             if in_list:
                 html_parts.append("</ul>")
                 in_list = False
-            html_parts.append(f"<h4>{escape(line)}</h4>")
+            svg = _icon_fn(matched_icon)
+            html_parts.append(
+                f'<h4 class="summary-header">{svg} {escape(rest)}</h4>'
+            )
         elif line.startswith('•') or line.startswith('-'):
             if not in_list:
                 html_parts.append("<ul>")
@@ -399,10 +555,37 @@ def healthz_db():
             cur.close()
             return jsonify({"status": "ok", "db": "connected"}), 200
     except Exception as e:
-        return jsonify({"status": "degraded", "db": str(e)}), 503
+        logger.error(f"healthz/db error: {e}", exc_info=True)
+        return jsonify({"status": "degraded", "db": "error", "req_id": getattr(g, "req_id", None)}), 503
 
 
 # --- Routes ---
+def _get_homepage_stats():
+    """Cheap aggregate stats for the homepage 'By the Numbers' section.
+    Returns dict with total_bills, total_votes. Returns zeros on any failure."""
+    try:
+        import psycopg2.extras
+        from src.database.connection import postgres_connect
+        with postgres_connect() as conn:
+            if conn is None:
+                return {"total_bills": 0, "total_votes": 0, "days_active": 0}
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE published = TRUE) AS total_bills,
+                        COALESCE(SUM(poll_results_yes), 0) + COALESCE(SUM(poll_results_no), 0) AS total_votes
+                    FROM bills
+                """)
+                row = cur.fetchone() or {}
+                return {
+                    "total_bills": int(row.get("total_bills") or 0),
+                    "total_votes": int(row.get("total_votes") or 0),
+                }
+    except Exception as e:
+        logger.warning(f"Homepage stats query failed (non-fatal): {e}")
+        return {"total_bills": 0, "total_votes": 0}
+
+
 @app.route("/")
 def index():
     start_time = time.time()
@@ -410,13 +593,14 @@ def index():
     try:
         db_start = time.time()
         latest_bill = get_latest_tweeted_bill() or get_latest_bill()
+        stats = _get_homepage_stats()
         db_time = time.time() - db_start
         logger.info(f"Database query completed in {db_time:.3f}s")
         if not latest_bill:
             logger.warning("No bills found in database")
-            return render_template("index.html", bill=None)
+            return render_template("index.html", bill=None, stats=stats)
         render_start = time.time()
-        response = render_template("index.html", bill=latest_bill)
+        response = render_template("index.html", bill=latest_bill, stats=stats)
         render_time = time.time() - render_start
         total_time = time.time() - start_time
         logger.info(f"Template rendered in {render_time:.3f}s")
@@ -424,7 +608,7 @@ def index():
         return response
     except Exception as e:
         logger.error(f"Error loading homepage: {e}", exc_info=True)
-        return render_template("index.html", bill=None, error="Unable to load the latest bill. Please try again later.")
+        return render_template("index.html", bill=None, stats={"total_bills": 0, "total_votes": 0}, error="Unable to load the latest bill. Please try again later.")
 
 @app.route("/archive")
 def archive_redirect():
@@ -477,7 +661,8 @@ def bills():
             "all", "agreed_to_in_house", "agreed_to_in_senate", "became_law",
             "committee_consideration", "failed_house", "failed_senate",
             "introduced", "passed_house", "passed_senate",
-            "referred_to_committee", "reported_by_committee", "vetoed"
+            "referred_to_committee", "reported_by_committee",
+            "to_president", "vetoed"
         ]
         if status not in valid_statuses:
             logger.warning(f"Invalid status parameter: {status}")
@@ -579,33 +764,6 @@ def bills():
             sort_by_impact=False
         ), 500
 
-@app.route("/debug/env")
-def debug_env():
-    from src.database.connection import get_connection_string
-    if not app.config.get("DEBUG"):
-        abort(404)
-    try:
-        conn_string = get_connection_string()
-        masked_conn = None
-        if conn_string:
-            masked_conn = (
-                conn_string[:30] + "...[MASKED]..." + conn_string[-20:]
-                if len(conn_string) > 50
-                else conn_string[:10] + "...[MASKED]"
-            )
-        env_status = {
-            "database_configured": conn_string is not None,
-            "connection_string_preview": masked_conn,
-            "environment_variables": {
-                "DATABASE_URL": "SET" if os.environ.get("DATABASE_URL") else "NOT SET",
-            },
-            "working_directory": os.getcwd(),
-            "python_path": os.environ.get("PYTHONPATH", "NOT SET"),
-        }
-        return jsonify(env_status)
-    except Exception as e:
-        return jsonify({"error": str(e), "error_type": type(e).__name__}), 500
-
 @app.route("/bill/<string:slug>")
 def bill_detail(slug: str):
     from werkzeug.exceptions import HTTPException
@@ -640,6 +798,830 @@ def contact():
 def resources():
     return render_template("resources.html")
 
+
+# --- Auth + gamification (v1 MVP) ---
+from src.auth import passwords as auth_passwords
+from src.auth import session as auth_session
+from src.auth import db as auth_db
+from src.auth.gamification import (
+    get_tier as gam_get_tier,
+    progress_to_next as gam_progress,
+    reward_for_nth_vote_of_day,
+    DAILY_VOTE_CAP,
+)
+
+
+def _user_stats(user_id):
+    """Build the dict the navbar / rail / profile pages need. Single
+    round-trip to the DB (see get_user_stats_bundle). Returns None if
+    user_id resolves to nothing (deleted account)."""
+    bundle = auth_db.get_user_stats_bundle(user_id)
+    if not bundle:
+        return None
+    return _user_stats_from_bundle(bundle, user_id)
+
+
+def _user_stats_from_bundle(bundle, user_id=None):
+    """Shape a get_user_stats_bundle()-style dict into the response
+    payload. Pulled out of _user_stats so vote_award_bundle (which
+    returns the same shape from inside its own transaction) can reuse
+    it without doing a second DB round-trip."""
+    if not bundle:
+        return None
+    uid = user_id or bundle.get("id")
+    balance = float(bundle.get("balance") or 0)
+    tier = gam_get_tier(balance)
+    return {
+        "user_id": uid,
+        "username": bundle["username"],
+        "email": bundle.get("email"),
+        "email_verified_at": bundle.get("email_verified_at"),
+        "balance": balance,
+        "tier": tier.title,
+        "tier_rank": tier.rank,
+        "progress": gam_progress(balance),
+        "lifetime_votes_cast": int(bundle.get("total_votes_cast") or 0),
+        "lifetime_stances_sent": int(bundle.get("lifetime_tell_rep") or 0),
+        "daily_used": int(bundle.get("today_vote_awards") or 0),
+        "daily_cap": DAILY_VOTE_CAP,
+        "daily_tell_rep_used": int(bundle.get("today_tell_rep_paid") or 0),
+        "daily_tell_rep_cap": 1,
+    }
+
+
+@app.context_processor
+def inject_current_user():
+    """Make current_user available in every template."""
+    uid = auth_session.current_user_id()
+    if not uid:
+        return {"current_user": None}
+    stats = _user_stats(uid)
+    flash_verify = session.pop("flash_verify", None)
+    return {
+        "current_user": stats,
+        "verify_banner_needed": bool(stats and not stats.get("email_verified_at")),
+        "flash_verify": flash_verify,
+    }
+
+
+@app.before_request
+def _set_is_authenticated():
+    """Flag the request as authenticated so Cache-Control short-circuits
+    to private/no-store (see add_security_headers, S4 fix)."""
+    g.is_authenticated = auth_session.is_authenticated()
+
+
+@app.route("/signup", methods=["GET", "POST"])
+@limiter.limit("10 per hour")
+def signup():
+    def _safe_next(raw):
+        if not raw or not raw.startswith("/") or raw.startswith("//"):
+            return None
+        return raw
+
+    next_url = _safe_next(request.values.get("next"))
+    reason = request.values.get("reason") if request.method == "GET" else request.form.get("reason")
+    if reason not in {"vote"}:
+        reason = None
+
+    if auth_session.is_authenticated():
+        return redirect(next_url or url_for("profile"))
+    google_enabled = bool(os.environ.get("GOOGLE_CLIENT_ID"))
+    if request.method == "GET":
+        return render_template(
+            "signup.html",
+            error=None, username="", email="",
+            google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
+        )
+
+    username_raw = (request.form.get("username") or "").strip()
+    email_raw = (request.form.get("email") or "").strip()
+    password = request.form.get("password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+
+    def _err(msg, code=400):
+        return render_template(
+            "signup.html",
+            error=msg, username=username_raw, email=email_raw,
+            google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
+        ), code
+
+    try:
+        username = auth_passwords.validate_username(username_raw)
+        email = auth_passwords.validate_email(email_raw)
+        auth_passwords.validate_password(password)
+    except ValueError as e:
+        return _err(str(e))
+
+    if password != password_confirm:
+        return _err("Passwords don't match.")
+
+    if auth_db.get_user_by_email(email):
+        return _err("An account with that email already exists.")
+
+    voter_id, _ = _get_or_create_voter_id()
+    password_hash = auth_passwords.hash_password(password)
+    result = auth_db.create_user(username, password_hash, voter_id=voter_id, email=email)
+    if not result:
+        return _err("That username or email is already taken.")
+    new_id, voter_id = result
+
+    from src.email_sender import send_verification_email
+    try:
+        send_verification_email(new_id, email)
+    except Exception as e:
+        logger.error("verification email send failed for new user %s: %s", new_id, e)
+        session["flash_verify"] = (
+            "Account created, but we couldn't send the verification email. "
+            "Try the 'Resend link' button in the banner above."
+        )
+
+    auth_session.login_user(new_id)
+    auth_db.update_last_login(new_id)
+    response = make_response(redirect(next_url or url_for("profile")))
+    _set_voter_cookie(response, voter_id)
+    return response
+
+
+@app.route("/login", methods=["GET", "POST"])
+@limiter.limit("20 per hour")
+def login():
+    # Safe same-origin redirect target. Anything with a netloc or starting
+    # with "//" is rejected — open-redirect prevention.
+    def _safe_next(raw: Optional[str]) -> Optional[str]:
+        if not raw or not raw.startswith("/") or raw.startswith("//"):
+            return None
+        return raw
+
+    next_url = _safe_next(request.values.get("next"))
+    reason = request.values.get("reason") if request.method == "GET" else request.form.get("reason")
+    if reason not in {"vote"}:
+        reason = None
+
+    if auth_session.is_authenticated():
+        return redirect(next_url or url_for("profile"))
+    google_enabled = is_google_enabled()
+    if request.method == "GET":
+        return render_template(
+            "login.html", error=None, email="",
+            google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
+        )
+
+    email_raw = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+
+    # Email is now the login credential (username is a freely-editable
+    # display name). Accounts that pre-date this change may have no
+    # email — they can use password reset / OAuth to get back in.
+    user = auth_db.get_user_by_email(email_raw) if email_raw else None
+    if not user or not user.get("password_hash") or not auth_passwords.verify_password(password, user["password_hash"]):
+        return render_template(
+            "login.html", error="Invalid email or password.",
+            email=email_raw, google_oauth_enabled=google_enabled,
+            next_url=next_url, reason=reason,
+        ), 401
+
+    auth_session.login_user(user["id"])
+    auth_db.update_last_login(user["id"])
+    return redirect(next_url or url_for("profile"))
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    auth_session.logout_user()
+    response = make_response(redirect(url_for("index")))
+
+    # Clear the voter_id cookie so the next user on this browser
+    # (different account on a shared machine, e.g. school computer,
+    # family laptop) starts fresh and doesn't inherit the previous
+    # user's vote history via /api/my-votes (which is keyed by
+    # voter_id, not user_id — see TODO below).
+    #
+    # Tradeoff: we lose the "anonymous votes carry into signup"
+    # behavior for that browser. Acceptable because (a) once you're
+    # signed up, you don't need the cookie's attribution anyway, and
+    # (b) shared-browser correctness is way more important than the
+    # one-shot anon→signup flow. The next page load mints a fresh
+    # voter_id for the next visitor.
+    #
+    # TODO (v1.5.1): add user_id column to votes table so
+    # authenticated users' votes follow their account regardless of
+    # browser. Then /api/my-votes can key by user_id when signed in,
+    # voter_id when anonymous, and clearing the cookie here becomes
+    # purely cosmetic instead of load-bearing.
+    response.delete_cookie("voter_id", path="/", samesite="Lax")
+
+    # Set a one-shot marker the client JS uses to sweep `voted_*`
+    # localStorage entries on next page load. The marker is
+    # non-HttpOnly so JS can read it, harmless to anyone else.
+    response.set_cookie(
+        "clear_local_vote_cache", "1",
+        max_age=60,
+        secure=_is_deployed(),
+        httponly=False,
+        samesite="Lax",
+    )
+    return response
+
+
+@app.route("/verify/<token>")
+@limiter.limit("30 per hour")
+def verify_email(token):
+    from src.auth.tokens import read_verify_email_token
+    uid, err = read_verify_email_token(token)
+    if err == "expired":
+        return render_template(
+            "verify_result.html",
+            ok=False,
+            heading="Link expired",
+            message="That verification link has expired. Sign in and request a new one.",
+        ), 400
+    if err or not uid:
+        return render_template(
+            "verify_result.html",
+            ok=False,
+            heading="Invalid link",
+            message="We couldn't verify that link. It may be malformed or already used.",
+        ), 400
+
+    user = auth_db.get_user_by_id(uid)
+    if not user:
+        return render_template(
+            "verify_result.html",
+            ok=False,
+            heading="Account not found",
+            message="That account no longer exists.",
+        ), 404
+
+    auth_db.mark_email_verified(uid)
+    return render_template(
+        "verify_result.html",
+        ok=True,
+        heading="Email verified",
+        message="Thanks — your account is now active. You can vote on bills and earn Votes.",
+    )
+
+
+@app.route("/resend-verification", methods=["POST"])
+@limiter.limit("3 per hour")
+def resend_verification():
+    uid = auth_session.current_user_id()
+    if not uid:
+        return redirect(url_for("login"))
+    user = auth_db.get_user_by_id(uid)
+    if not user or not user.get("email"):
+        return redirect(url_for("profile"))
+    if user.get("email_verified_at"):
+        return redirect(url_for("profile"))
+    try:
+        from src.email_sender import send_verification_email
+        send_verification_email(uid, user["email"])
+        flash_msg = "Verification email sent. Check your inbox."
+    except Exception as e:
+        logger.error("resend_verification failed for uid=%s: %s", uid, e)
+        flash_msg = "We couldn't send the email right now. Try again in a minute."
+    session["flash_verify"] = flash_msg
+    return redirect(request.referrer or url_for("profile"))
+
+
+@app.route("/threads-uninstall", methods=["GET", "POST"])
+@app.route("/threads-delete", methods=["GET", "POST"])
+@csrf.exempt
+@limiter.exempt
+def threads_meta_callback():
+    """Webhook target Meta calls when a user uninstalls the TeenCivics
+    Threads app or requests data deletion. Required by Meta's platform
+    terms even though we're a single-user (founder-only) publisher and
+    will never legitimately receive one. Log the ping, return 200 so
+    Meta doesn't retry."""
+    logger.info(
+        "Threads platform webhook hit: path=%s method=%s ip=%s ua=%s body=%s",
+        request.path, request.method, request.remote_addr,
+        request.headers.get("User-Agent", "-"),
+        (request.get_data(as_text=True) or "")[:500],
+    )
+    return jsonify({"received": True}), 200
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("5 per hour")
+def forgot_password():
+    """Request a password-reset link. Always returns the same generic
+    confirmation regardless of whether the email exists, so attackers
+    can't enumerate accounts by trying emails here."""
+    if request.method == "GET":
+        return render_template("forgot_password.html", sent=False)
+
+    email_raw = (request.form.get("email") or "").strip()
+    try:
+        email = auth_passwords.validate_email(email_raw)
+    except ValueError:
+        # Even invalid emails get the generic success page — same enumeration argument.
+        return render_template("forgot_password.html", sent=True)
+
+    user = auth_db.get_user_by_email(email)
+    if user and user.get("password_hash"):
+        try:
+            from src.email_sender import send_password_reset_email
+            send_password_reset_email(user["id"], email, user["password_hash"])
+        except Exception as e:
+            logger.error("password reset send failed for %s: %s", email, e)
+            # Don't leak the failure to the form — generic response stands.
+
+    return render_template("forgot_password.html", sent=True)
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+@limiter.limit("10 per hour")
+def reset_password(token):
+    from src.auth.tokens import read_password_reset_token
+
+    # Resolve token. Need user's current hash to detect "already consumed."
+    uid_only, _ = read_password_reset_token(token, current_hash=None)
+    user = auth_db.get_user_by_id(uid_only) if uid_only else None
+    uid, err = read_password_reset_token(token, current_hash=user.get("password_hash") if user else None)
+
+    if err == "expired":
+        return render_template(
+            "verify_result.html", ok=False,
+            heading="Link expired",
+            message="That reset link has expired. Request a new one.",
+        ), 400
+    if err == "consumed":
+        return render_template(
+            "verify_result.html", ok=False,
+            heading="Link already used",
+            message="That reset link has already been used. Request a new one if you need to.",
+        ), 400
+    if err or not uid or not user:
+        return render_template(
+            "verify_result.html", ok=False,
+            heading="Invalid link",
+            message="We couldn't verify that reset link.",
+        ), 400
+
+    if request.method == "GET":
+        return render_template("reset_password.html", token=token, error=None, username=user.get("username") or "")
+
+    password = request.form.get("password") or ""
+    password_confirm = request.form.get("password_confirm") or ""
+
+    try:
+        auth_passwords.validate_password(password)
+    except ValueError as e:
+        return render_template("reset_password.html", token=token, error=str(e), username=user.get("username") or ""), 400
+
+    if password != password_confirm:
+        return render_template("reset_password.html", token=token, error="Passwords don't match."), 400
+
+    new_hash = auth_passwords.hash_password(password)
+    if not auth_db.update_password_hash(uid, new_hash):
+        return render_template("reset_password.html", token=token, error="Could not update password. Try again."), 500
+
+    # Auto-login the user so they don't have to type the new password again.
+    auth_session.login_user(uid)
+    auth_db.update_last_login(uid)
+    session["flash_verify"] = "Password updated. You're signed in."
+    return redirect(url_for("profile"))
+
+
+def _stash_post_login_next() -> None:
+    """Save a safe same-origin ?next= into the session so OAuth callbacks
+    can land the user back where they started after sign-in. Used by the
+    soft-wall flow (e.g. /api/vote 401 -> /login?next=/bill/foo)."""
+    raw = request.args.get("next") or ""
+    if raw and raw.startswith("/") and not raw.startswith("//"):
+        session["post_login_next"] = raw
+    else:
+        session.pop("post_login_next", None)
+
+
+def _pop_post_login_next() -> Optional[str]:
+    nxt = session.pop("post_login_next", None)
+    if isinstance(nxt, str) and nxt.startswith("/") and not nxt.startswith("//"):
+        return nxt
+    return None
+
+
+@app.route("/auth/google/login")
+@limiter.limit("20 per hour")
+def google_login():
+    if not is_google_enabled():
+        abort(404)
+    _stash_post_login_next()
+    # Build the callback URL from APP_BASE_URL rather than url_for(_external=True)
+    # so it doesn't leak Railway's internal hostname (web-production-*.up.railway.app)
+    # when Cloudflare's Host header isn't preserved through Railway's edge. Single
+    # source of truth = whatever's registered in Google Cloud Console.
+    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
+    if base:
+        redirect_uri = f"{base}{url_for('google_callback')}"
+    else:
+        redirect_uri = url_for("google_callback", _external=True)
+    return _oauth_registry.google.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/google/callback")
+@limiter.limit("20 per hour")
+@csrf.exempt  # OAuth callback isn't a form submit; state param protects against CSRF
+def google_callback():
+    if not is_google_enabled():
+        abort(404)
+    try:
+        token = _oauth_registry.google.authorize_access_token()
+    except Exception as e:
+        logger.warning("Google OAuth callback failed: %s", e)
+        return render_template("login.html", error="Google sign-in failed. Try again.", username=""), 400
+
+    userinfo = token.get("userinfo") or {}
+    subject = userinfo.get("sub")
+    email = (userinfo.get("email") or "").lower().strip()
+    email_verified = userinfo.get("email_verified", False)
+    if not subject or not email:
+        return render_template("login.html", error="Google sign-in returned no email.", username=""), 400
+    if not email_verified:
+        return render_template("login.html", error="Your Google email isn't verified.", username=""), 400
+
+    next_url = _pop_post_login_next()
+
+    # 1) Existing OAuth-linked user
+    user = auth_db.get_user_by_oauth("google", subject)
+    if user:
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # 2) Existing user by email — link this Google account to it
+    user = auth_db.get_user_by_email(email)
+    if user:
+        auth_db.link_oauth_subject(user["id"], "google", subject)
+        # Trust Google's verified flag — mark the email verified if not already.
+        if not user.get("email_verified_at"):
+            auth_db.mark_email_verified(user["id"])
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # 3) Brand-new user — stash the OAuth identity in the session and bounce
+    # them to /welcome to pick their own username, rather than silently
+    # auto-generating one from the email prefix (which users hate).
+    from src.auth.oauth import derive_username_from_email
+    session["pending_oauth"] = {
+        "provider": "google",
+        "subject": subject,
+        "email": email,
+        "suggested_username": derive_username_from_email(email),
+    }
+    return redirect(url_for("welcome"))
+
+
+@app.route("/auth/microsoft/login")
+@limiter.limit("20 per hour")
+def microsoft_login():
+    if not is_microsoft_enabled():
+        abort(404)
+    _stash_post_login_next()
+    # Mirror google_login: build redirect_uri from APP_BASE_URL to avoid
+    # leaking Railway's internal hostname when Cloudflare's Host header
+    # isn't preserved.
+    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
+    if base:
+        redirect_uri = f"{base}{url_for('microsoft_callback')}"
+    else:
+        redirect_uri = url_for("microsoft_callback", _external=True)
+    return _oauth_registry.microsoft.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/microsoft/callback")
+@limiter.limit("20 per hour")
+@csrf.exempt  # OAuth callback isn't a form submit; state param protects against CSRF
+def microsoft_callback():
+    if not is_microsoft_enabled():
+        abort(404)
+    try:
+        # Override default iss validation: Microsoft's /common discovery doc
+        # advertises a templated issuer (with literal "{tenantid}"), but the
+        # id_token's iss carries the signer's actual tenant GUID. We accept
+        # any login.microsoftonline.com/<guid>/v2.0 issuer — signature +
+        # audience + nonce remain enforced by Authlib's default chain.
+        from src.auth.oauth import microsoft_claims_options
+        token = _oauth_registry.microsoft.authorize_access_token(
+            claims_options=microsoft_claims_options()
+        )
+    except Exception as e:
+        logger.warning("Microsoft OAuth callback failed: %s", e)
+        return render_template("login.html", error="Microsoft sign-in failed. Try again.", email=""), 400
+
+    userinfo = token.get("userinfo") or {}
+    subject = userinfo.get("sub")
+    # Microsoft's id_token surfaces email in `email`, with `preferred_username`
+    # as a fallback for accounts where email isn't released. Personal MSAs
+    # usually fill email; work/school may not.
+    email = (userinfo.get("email") or userinfo.get("preferred_username") or "").lower().strip()
+    if not subject or not email:
+        return render_template("login.html", error="Microsoft sign-in returned no email.", email=""), 400
+
+    # Microsoft doesn't expose an email_verified claim the way Google does;
+    # multi-tenant /common can't guarantee verification. We accept the
+    # email but only link-by-email when the local user record already
+    # had it verified through our own flow — otherwise we route the
+    # signup through /welcome where they confirm their identity by
+    # picking a username (consistent with the Google path).
+
+    next_url = _pop_post_login_next()
+
+    # 1) Existing OAuth-linked user
+    user = auth_db.get_user_by_oauth("microsoft", subject)
+    if user:
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # 2) Existing user by email — link this Microsoft account to it
+    user = auth_db.get_user_by_email(email)
+    if user:
+        auth_db.link_oauth_subject(user["id"], "microsoft", subject)
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # 3) Brand-new user — stash and bounce to /welcome
+    from src.auth.oauth import derive_username_from_email
+    session["pending_oauth"] = {
+        "provider": "microsoft",
+        "subject": subject,
+        "email": email,
+        "suggested_username": derive_username_from_email(email),
+    }
+    return redirect(url_for("welcome"))
+
+
+@app.route("/auth/apple/login")
+@limiter.limit("20 per hour")
+def apple_login():
+    if not is_apple_enabled():
+        abort(404)
+    _stash_post_login_next()
+    # Mirror google/microsoft: build redirect_uri from APP_BASE_URL.
+    # Apple is especially strict about exact-match redirect URIs —
+    # whatever's in the Services ID Return URLs list is what we must
+    # use here, character for character.
+    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
+    if base:
+        redirect_uri = f"{base}{url_for('apple_callback')}"
+    else:
+        redirect_uri = url_for("apple_callback", _external=True)
+    return _oauth_registry.apple.authorize_redirect(redirect_uri)
+
+
+# Apple uses response_mode=form_post when scopes include name/email,
+# so the callback arrives as a POST. Accept both for symmetry — Apple
+# falls back to GET if no name/email scope is requested.
+@app.route("/auth/apple/callback", methods=["GET", "POST"])
+@limiter.limit("20 per hour")
+@csrf.exempt  # OAuth callback — state param protects against CSRF
+def apple_callback():
+    if not is_apple_enabled():
+        abort(404)
+    # Log everything Apple sent us so we can see exactly what's coming in
+    # when something fails. Apple POSTs form-encoded — form params (state,
+    # code, id_token, user) or error params (error, error_description) end
+    # up in request.form on POST and request.args on GET. We sanitize the
+    # values to keep them log-safe (no full id_tokens).
+    incoming = {**request.args.to_dict(), **request.form.to_dict()}
+    log_safe = {
+        k: (v[:30] + "...[trunc]" if k in ("code", "id_token", "user") and len(v) > 30 else v)
+        for k, v in incoming.items()
+    }
+    logger.info("Apple callback received: method=%s params=%s", request.method, log_safe)
+
+    try:
+        token = _oauth_registry.apple.authorize_access_token()
+    except Exception as e:
+        logger.error(
+            "Apple OAuth callback failed: %s (exception_type=%s)",
+            e, type(e).__name__, exc_info=True,
+        )
+        return render_template("login.html", error="Apple sign-in failed. Try again.", email=""), 400
+
+    # Apple is fussy: Authlib's automatic id_token parsing sometimes
+    # leaves token['userinfo'] empty when client_secret_post is the
+    # auth method. Decode the id_token ourselves to be safe — we
+    # already have the signature-verified value from the token endpoint
+    # response, so a no-verify decode is fine (Apple just signed it).
+    userinfo = token.get("userinfo") or {}
+    if not userinfo and token.get("id_token"):
+        try:
+            import jwt as _jwt
+            userinfo = _jwt.decode(
+                token["id_token"],
+                options={"verify_signature": False},  # Apple just gave it to us; trust
+            )
+        except Exception as e:
+            logger.warning("Failed to decode Apple id_token manually: %s", e)
+            userinfo = {}
+
+    # On the FIRST sign-in for a given Apple ID, Apple POSTs an
+    # additional `user` form param with {"email":"...","name":{...}}.
+    # Subsequent sign-ins omit it. The id_token also has email on first
+    # sign-in but not always after. So check both: id_token wins, then
+    # fall back to the user form param.
+    first_signup_user_json = request.form.get("user") or request.args.get("user")
+    if first_signup_user_json and not userinfo.get("email"):
+        try:
+            import json as _json
+            user_payload = _json.loads(first_signup_user_json)
+            if isinstance(user_payload, dict) and user_payload.get("email"):
+                userinfo["email"] = user_payload["email"]
+                # First-signup `user` payload only fires when the user
+                # has just authorized the Services ID — implicitly verified.
+                userinfo.setdefault("email_verified", "true")
+        except Exception as e:
+            logger.warning("Failed to parse Apple first-signup user param: %s", e)
+
+    logger.info(
+        "Apple token received: userinfo_keys=%s, top_level_keys=%s, "
+        "id_token_present=%s, first_signup_user_present=%s",
+        list(userinfo.keys()), list(token.keys()),
+        bool(token.get("id_token")), bool(first_signup_user_json),
+    )
+    subject = userinfo.get("sub")
+    email = (userinfo.get("email") or "").lower().strip()
+    # Apple sets email_verified="true" as a STRING, not a bool, for
+    # Apple-issued addresses. Privately-relayed addresses
+    # (...@privaterelay.appleid.com) are trusted by definition.
+    email_verified_raw = userinfo.get("email_verified")
+    email_verified = email_verified_raw in (True, "true", "True")
+    if email.endswith("@privaterelay.appleid.com"):
+        email_verified = True  # Apple-relayed addresses are trusted
+
+    # `sub` is the immutable per-Services-ID Apple identifier. Without
+    # it we have nothing to look up by — bail. Email comes second:
+    # Apple deliberately omits it after the first sign-in, so we MUST
+    # be able to log in returning users using only `sub`.
+    if not subject:
+        logger.warning(
+            "Apple sign-in missing sub: email_value=%r, "
+            "userinfo_keys=%s — unusual; likely malformed id_token.",
+            email, list(userinfo.keys()),
+        )
+        return render_template("login.html", error="Apple sign-in failed. Try again.", email=""), 400
+
+    next_url = _pop_post_login_next()
+
+    # 1) Existing Apple-linked user. CRITICAL: this lookup happens
+    # BEFORE the email check because Apple omits email on every
+    # sign-in after the first. A returning user must be able to log
+    # in with just `sub`.
+    user = auth_db.get_user_by_oauth("apple", subject)
+    if user:
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # Past this point we're creating a new link or new user. Both
+    # require email, which Apple gave us on this first sign-in.
+    if not email:
+        logger.warning(
+            "Apple first-time sign-in but no email returned: sub=%s, "
+            "first_signup_user_present=%s, userinfo_keys=%s — Apple "
+            "should have included email on first sign-in. Possible "
+            "scope rejection on consent screen.",
+            subject, bool(first_signup_user_json), list(userinfo.keys()),
+        )
+        return render_template(
+            "login.html",
+            error="Apple sign-in didn't return your email. Try Sign In with Apple again, "
+                  "and tap 'Share My Email' on Apple's confirmation screen.",
+            email="",
+        ), 400
+    if not email_verified:
+        return render_template("login.html", error="Your Apple email isn't verified.", email=""), 400
+
+    # 2) Existing user by email — link this Apple account to it
+    user = auth_db.get_user_by_email(email)
+    if user:
+        auth_db.link_oauth_subject(user["id"], "apple", subject)
+        if not user.get("email_verified_at"):
+            auth_db.mark_email_verified(user["id"])
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(next_url or url_for("profile"))
+
+    # 3) Brand-new user — stash and bounce to /welcome
+    from src.auth.oauth import derive_username_from_email
+    session["pending_oauth"] = {
+        "provider": "apple",
+        "subject": subject,
+        "email": email,
+        "suggested_username": derive_username_from_email(email),
+    }
+    return redirect(url_for("welcome"))
+
+
+@app.route("/welcome", methods=["GET", "POST"])
+@limiter.limit("20 per hour")
+def welcome():
+    """First-time OAuth signup — choose your username before the account
+    is created. Reachable only with a pending_oauth stash in the session
+    (set by google_callback, microsoft_callback, or apple_callback).
+    Refusing this page is a no-op; the user can re-initiate OAuth sign-in
+    to get a fresh stash."""
+    pending = session.get("pending_oauth")
+    if not pending or pending.get("provider") not in ("google", "microsoft", "apple"):
+        return redirect(url_for("login"))
+
+    suggested = pending.get("suggested_username", "")
+    email = pending.get("email", "")
+
+    if request.method == "GET":
+        return render_template("welcome.html", error=None, username=suggested, email=email)
+
+    chosen_raw = (request.form.get("username") or "").strip()
+    try:
+        username = auth_passwords.validate_username(chosen_raw)
+    except ValueError as e:
+        return render_template("welcome.html", error=str(e), username=chosen_raw, email=email), 400
+
+    if auth_db.get_user_by_username(username) is not None:
+        return render_template("welcome.html", error="That username is already taken.", username=chosen_raw, email=email), 400
+
+    voter_id, _ = _get_or_create_voter_id()
+    result = auth_db.create_oauth_user(
+        username, email, pending["provider"], pending["subject"], voter_id=voter_id,
+    )
+    if not result:
+        return render_template(
+            "welcome.html", error="Could not create account. Try a different username.",
+            username=chosen_raw, email=email,
+        ), 400
+    new_id, voter_id = result
+
+    session.pop("pending_oauth", None)
+    auth_session.login_user(new_id)
+    auth_db.update_last_login(new_id)
+    response = make_response(redirect(url_for("profile")))
+    _set_voter_cookie(response, voter_id)
+    return response
+
+
+@app.route("/profile")
+def profile():
+    uid = auth_session.current_user_id()
+    if not uid:
+        return redirect(url_for("login"))
+    stats = _user_stats(uid)
+    if not stats:
+        auth_session.logout_user()
+        return redirect(url_for("login"))
+    from src.auth.gamification import TIERS
+    return render_template("profile.html", stats=stats, tiers=TIERS)
+
+
+@app.route("/api/me/username", methods=["POST"])
+@limiter.limit("5 per hour")
+def api_update_username():
+    """Let a logged-in user change their display username. Email is the
+    real login credential — username is a free handle."""
+    uid = auth_session.current_user_id()
+    if not uid:
+        return jsonify({"error": "not_authenticated"}), 401
+    data = request.get_json(silent=True) or {}
+    new_raw = (data.get("username") or "").strip()
+    try:
+        new_username = auth_passwords.validate_username(new_raw)
+    except ValueError as e:
+        return jsonify({"error": "invalid", "message": str(e)}), 400
+
+    user = auth_db.get_user_by_username(new_username)
+    if user and user.get("id") != uid:
+        return jsonify({"error": "taken", "message": "That username is already taken."}), 409
+    if user and user.get("id") == uid:
+        # No-op rename to the same name (or case variant). Return current stats.
+        return jsonify({"success": True, "user": _user_stats(uid)})
+
+    if not auth_db.update_username(uid, new_username):
+        return jsonify({"error": "conflict", "message": "Could not update username. Try a different one."}), 409
+
+    return jsonify({"success": True, "user": _user_stats(uid)})
+
+
+@app.route("/api/me")
+@limiter.limit("60 per minute")
+def api_me():
+    """Used by the right-side rail to refresh after a vote."""
+    uid = auth_session.current_user_id()
+    if not uid:
+        return jsonify({"authenticated": False})
+    stats = _user_stats(uid)
+    if not stats:
+        return jsonify({"authenticated": False})
+    return jsonify({"authenticated": True, **stats})
+
+
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
@@ -656,6 +1638,17 @@ def robots_txt():
 @app.route('/sitemap.xml')
 def sitemap_xml():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'sitemap.xml')
+
+@app.route('/.well-known/apple-developer-domain-association.txt')
+@csrf.exempt
+def apple_domain_association():
+    """Domain verification file for Sign In with Apple. Apple fetches this
+    over HTTPS to confirm we own the domain bound to the Services ID."""
+    return send_from_directory(
+        os.path.join(app.root_path, 'static', '.well-known'),
+        'apple-developer-domain-association.txt',
+        mimetype='text/plain',
+    )
 
 # --- Admin Constants ---
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
@@ -1013,7 +2006,7 @@ def admin_sync_contact_forms():
         return jsonify({"success": True, "results": result})
     except Exception as e:
         logger.error(f"Contact form sync error: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 
 @app.route("/admin/api/tables")
@@ -1033,7 +2026,7 @@ def admin_api_tables():
         return jsonify({"tables": tables})
     except Exception as e:
         logger.error(f"Admin API tables error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/tables/<table_name>/schema")
 @admin_required
@@ -1059,7 +2052,7 @@ def admin_api_table_schema(table_name):
         return jsonify({"table": table_name, "columns": schema})
     except Exception as e:
         logger.error(f"Admin API schema error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/tables/<table_name>/rows")
 @admin_required
@@ -1113,7 +2106,7 @@ def admin_api_table_rows(table_name):
         })
     except Exception as e:
         logger.error(f"Admin API rows error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/rows/<table_name>/<int:row_id>", methods=["GET"])
 @admin_required
@@ -1150,7 +2143,7 @@ def admin_api_get_row(table_name, row_id):
         return jsonify({"table": table_name, "row": row})
     except Exception as e:
         logger.error(f"Admin API get row error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/rows/<table_name>/<int:row_id>", methods=["PUT"])
 @admin_required
@@ -1231,7 +2224,7 @@ def admin_api_update_row(table_name, row_id):
         })
     except Exception as e:
         logger.error(f"Admin API update row error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.route("/admin/api/bills/<int:bill_id>/hide", methods=["POST"])
 @admin_required
@@ -1266,7 +2259,7 @@ def admin_api_hide_bill(bill_id):
         return jsonify({"success": True, "bill_id": row["bill_id"], "hidden": hidden})
     except Exception as e:
         logger.error(f"Admin hide bill error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error", "req_id": getattr(g, "req_id", None)}), 500
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -1276,27 +2269,50 @@ def page_not_found(e):
 def internal_server_error(e):
     return render_template("500.html"), 500
 
-@app.errorhandler(CSRFError)
-def handle_csrf_error(e):
-    logger.warning(f"CSRF error on {request.path}: {e.description}")
-    if request.path.startswith("/api/") or request.path.startswith("/admin/api/"):
-        return jsonify({"error": "CSRF validation failed", "details": e.description}), 400
-    return render_template("500.html"), 400
+# Old CSRFError handler removed — superseded by the one near
+# CSRFProtect(app) initialization which logs full diagnostic info
+# and returns clear JSON.
+
+from itsdangerous import URLSafeSerializer, BadSignature
+
+# Voter-ID cookies are signed with SECRET_KEY to prevent forgery/swap.
+# Once a voter_id is joined to a users row, the cookie value becomes a
+# session-equivalent bearer token; an unsigned UUID is trivially
+# guessable / replayable. Signed values reject tampered cookies as if
+# absent (returning user looks new — they lose their "you voted on X"
+# UI highlight until they vote again, but votes themselves are preserved
+# in the DB keyed by voter_id).
+_voter_id_serializer = URLSafeSerializer(app.config["SECRET_KEY"], salt="voter-id")
+
+
+def _read_signed_voter_id():
+    """Return the verified voter_id from the request cookie, or None
+    if the cookie is missing, tampered, or in the legacy unsigned format."""
+    raw = request.cookies.get("voter_id")
+    if not raw:
+        return None
+    try:
+        return _voter_id_serializer.loads(raw)
+    except BadSignature:
+        # Legacy unsigned UUID cookies fall through here; treat as
+        # absent so a new signed cookie gets minted on the way out.
+        return None
+
 
 def _get_or_create_voter_id():
     """
-    Get the voter_id from the request cookie, or generate a new UUID4.
-    Returns (voter_id, is_new) tuple.
+    Get the voter_id from the (signed) request cookie, or generate a
+    new UUID4. Returns (voter_id, is_new) tuple.
     """
-    voter_id = request.cookies.get("voter_id")
-    if voter_id:
-        return voter_id, False
+    existing = _read_signed_voter_id()
+    if existing:
+        return existing, False
     return str(uuid.uuid4()), True
 
 
 def _set_voter_cookie(response, voter_id):
     """
-    Set the voter_id cookie on a response object.
+    Set the SIGNED voter_id cookie on a response object.
     Uses secure=True only in production environments.
     """
     is_production = (
@@ -1304,9 +2320,10 @@ def _set_voter_cookie(response, voter_id):
         or os.environ.get("FLASK_ENV") == "production"
         or request.is_secure
     )
+    signed = _voter_id_serializer.dumps(voter_id)
     response.set_cookie(
         "voter_id",
-        voter_id,
+        signed,
         max_age=63072000,  # 2 years
         httponly=True,
         samesite="Lax",
@@ -1317,9 +2334,41 @@ def _set_voter_cookie(response, voter_id):
 
 @app.route("/api/vote", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def record_vote():
     try:
+        if not auth_session.is_authenticated():
+            # The client sends its current location.pathname as `return_to`
+            # so post-login can drop the user back on the same bill. We
+            # accept only same-origin relative paths ("/foo", not "//evil"
+            # or "https://..."). Falling back to "/" keeps the user inside
+            # the app on any tampering. Don't parse the Referer header —
+            # behind ProxyFix the host comparison is brittle, and the JS
+            # already knows where it is.
+            payload = request.get_json(silent=True) or {}
+            raw = payload.get("return_to") or ""
+            next_path = "/"
+            if isinstance(raw, str) and raw.startswith("/") and not raw.startswith("//"):
+                next_path = raw
+            return jsonify({
+                "error": "auth_required",
+                "login_url": url_for("login", next=next_path, reason="vote"),
+            }), 401
+
+        # Hard email-verification gate on voting. Without this, anyone
+        # can sign up using somebody else's email and vote — pollutes
+        # poll data + opens an email-spoofing surface. OAuth signups
+        # (Google/Microsoft/Apple) are auto-verified by the provider so
+        # they sail past this check; only email/password signups need
+        # to confirm their inbox before voting.
+        uid_pre = auth_session.current_user_id()
+        user_pre = auth_db.get_user_by_id(uid_pre) if uid_pre else None
+        if user_pre and not user_pre.get("email_verified_at"):
+            return jsonify({
+                "error": "email_unverified",
+                "resend_url": url_for("resend_verification"),
+                "message": "Please verify your email before voting. Check your inbox for the verification link.",
+            }), 403
+
         data = request.get_json()
         bill_id = data.get("bill_id")
         vote_type = data.get("vote_type")
@@ -1344,7 +2393,34 @@ def record_vote():
         if not updated:
             abort(404, description="Bill not found or vote update failed")
 
-        response = make_response(jsonify({"success": True, "voter_id": voter_id}))
+        # Engagement vs reward decoupling, in a SINGLE DB round-trip:
+        #   - total_votes_cast bumps on every new vote (verified or not,
+        #     capped or not) → private "you voted on N bills" counter.
+        #   - Votes currency only accrues when (a) email verified AND
+        #     (b) under the daily cap → public rank ladder.
+        # vote_award_bundle() reads user row + today's count, decides
+        # eligibility, writes both mutations, and returns a stats bundle
+        # — replacing what used to be 4 separate connections (1 read +
+        # 3 writes/reads). Net: 6 round-trips → 2 (record_vote_and_update_poll
+        # + vote_award_bundle).
+        votes_awarded = 0.0
+        uid = auth_session.current_user_id()
+        is_new_vote = not previous_vote
+        user_stats = None
+        if uid:
+            bundle = auth_db.vote_award_bundle(
+                uid, bill_id, is_new_vote, reward_for_nth_vote_of_day,
+            )
+            if bundle is not None:
+                votes_awarded = float(bundle.pop("_votes_awarded_this_call", 0.0))
+                user_stats = _user_stats_from_bundle(bundle)
+
+        response = make_response(jsonify({
+            "success": True,
+            "voter_id": voter_id,
+            "votes_awarded": votes_awarded,
+            "user": user_stats,
+        }))
         _set_voter_cookie(response, voter_id)
         return response
     except Exception as e:
@@ -1352,12 +2428,51 @@ def record_vote():
         abort(500, description="Internal server error")
 
 
+@app.route("/api/award-tell-rep", methods=["POST"])
+@limiter.limit("10 per minute")
+def award_tell_rep():
+    """User clicked Copy Message — record a stance for this (user, bill)
+    and award +2 Votes when eligible.
+
+    Engagement/reward decoupling mirrors record_vote():
+      - "Stances sent" counter = distinct bills the user has copied a
+        message for. Incremented for anyone (verified or not, capped or
+        not), but only once per bill — re-copying is a no-op.
+      - +2 currency = gated by (a) email verified AND (b) under daily cap
+        of 1 paid award per UTC day. When not eligible, we still insert
+        the ledger row with delta=0 so the counter increments."""
+    uid = auth_session.current_user_id()
+    data = request.get_json(silent=True) or {}
+    bill_id = (data.get("bill_id") or "").strip()
+    if not bill_id:
+        abort(400, description="bill_id required")
+
+    awarded = 0
+    if uid:
+        already = auth_db.has_tell_rep_for_bill(uid, bill_id)
+        if not already:
+            user_row = auth_db.get_user_by_id(uid)
+            eligible = bool(user_row and user_row.get("email_verified_at"))
+            if eligible:
+                today_paid = auth_db.count_today_tell_rep_awards_paid(uid)
+                if today_paid < 1:
+                    awarded = 2
+            auth_db.award_tell_rep(uid, bill_id, delta=awarded)
+
+    user_stats = _user_stats(uid) if uid else None
+    return jsonify({
+        "success": True,
+        "votes_awarded": awarded,
+        "user": user_stats,
+    })
+
+
 @app.route("/api/my-votes")
 @limiter.limit("30 per minute")
 def get_my_votes():
     """Return all votes for the current voter as a bill_id -> vote_type mapping."""
     try:
-        voter_id = request.cookies.get("voter_id")
+        voter_id = _read_signed_voter_id()
         if not voter_id:
             return jsonify({"votes": {}})
 
@@ -1372,6 +2487,7 @@ def get_my_votes():
         abort(500, description="Internal server error")
 
 @app.route("/api/poll-results/<string:bill_id>")
+@limiter.limit("120 per minute")
 def get_poll_results(bill_id: str):
     try:
         bill = get_bill_by_id(bill_id)
@@ -1455,7 +2571,6 @@ def _set_cached_rep(state: str, district: int, data: Dict) -> None:
 
 @app.route("/api/zip-lookup", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def zip_lookup():
     """Look up congressional district(s) from a ZIP code using Census Geocoder."""
     try:
@@ -1606,7 +2721,6 @@ def zip_lookup():
 
 @app.route("/api/rep-lookup", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def rep_lookup():
     """Look up a House representative for a state + district using Congress.gov API."""
     try:
@@ -1767,7 +2881,6 @@ def rep_lookup():
 
 @app.route("/api/pre-generate-reasoning", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def pre_generate_reasoning():
     """Pre-warm the argument cache when a user votes, before they enter their ZIP.
 
@@ -1839,7 +2952,6 @@ def _truncate_at_sentence(text: str, max_length: int) -> str:
 
 @app.route("/api/generate-email", methods=["POST"])
 @limiter.limit("10 per minute")
-@csrf.exempt
 def generate_email():
     """Generate an email template for contacting a representative about a bill.
 

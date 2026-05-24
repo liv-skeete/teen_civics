@@ -18,9 +18,99 @@
   const randReqId = () => { try { return crypto.randomUUID(); } catch { return String(Math.random()).slice(2); } };
   const $all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+  // Apply a user-stats object (same shape as /api/me) to every
+  // data-rail-* element on the page. Both the navbar pill and the
+  // right-side rail bind to these attributes.
+  function applyUserStats(me) {
+    if (!me) return;
+    document.querySelectorAll("[data-rail-tier]").forEach((el) => { el.textContent = me.tier; });
+    document.querySelectorAll("[data-rail-balance]").forEach((el) => { el.textContent = String(Math.round(me.balance)); });
+    document.querySelectorAll("[data-rail-lifetime]").forEach((el) => { el.textContent = String(me.lifetime_votes_cast); });
+    document.querySelectorAll("[data-rail-daily]").forEach((el) => { el.textContent = `${me.daily_used}/${me.daily_cap}`; });
+    document.querySelectorAll("[data-rail-fill]").forEach((el) => {
+      if (me.progress) el.style.width = me.progress.percent + "%";
+    });
+    document.querySelectorAll("[data-rail-to-next]").forEach((el) => {
+      if (me.progress && me.progress.votes_to_next != null) {
+        el.textContent = String(Math.round(me.progress.votes_to_next));
+      }
+    });
+    document.querySelectorAll("[data-rail-next-tier]").forEach((el) => {
+      if (me.progress && me.progress.next_tier) el.textContent = me.progress.next_tier;
+    });
+    document.querySelectorAll("[data-rail-tell-rep-lifetime]").forEach((el) => {
+      if (me.lifetime_stances_sent != null) el.textContent = String(me.lifetime_stances_sent);
+    });
+    document.querySelectorAll("[data-rail-tell-rep-daily]").forEach((el) => {
+      if (me.daily_tell_rep_used != null && me.daily_tell_rep_cap != null) {
+        el.textContent = `${me.daily_tell_rep_used}/${me.daily_tell_rep_cap}`;
+      }
+    });
+  }
+
+  // Fallback path: fetch fresh stats from /api/me. Used when we don't
+  // already have updated stats from a recent action response.
+  function refreshUserRail() {
+    const hasPill = document.querySelector(".nav-user");
+    const hasRail = document.querySelector("[data-user-rail]");
+    if (!hasPill && !hasRail) return;
+
+    fetch(API_BASE + "/api/me", { headers: { "Cache-Control": "no-store" } })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((me) => {
+        if (!me || !me.authenticated) return;
+        applyUserStats(me);
+      })
+      .catch(() => {});
+  }
+
+  // Read the per-page CSRF token from the <meta name="csrf-token"> tag
+  // (set in base.html). Returns "" if missing — server will reject the
+  // request, which is the correct behavior. Sent as X-CSRFToken on all
+  // state-changing POSTs.
+  function getCsrfToken() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute("content") || "") : "";
+  }
+
+  // Expose for the tell-rep script (separate IIFE) to award bonus Votes.
+  window.TC = window.TC || {};
+  window.TC.applyUserStats = applyUserStats;
+  window.TC.getCsrfToken = getCsrfToken;
+  window.TC.API_BASE = API_BASE;
+
   // Safe localStorage helpers (handles Safari private mode)
   function getStored(key) { try { return localStorage.getItem(key); } catch { return null; } }
   function setStored(key, val) { try { localStorage.setItem(key, val); } catch {} }
+
+  // One-shot cookie sweep on logout: the /logout endpoint sets
+  // clear_local_vote_cache=1 (max-age 60s, non-HttpOnly) so we can
+  // detect it client-side and remove all `voted_*` localStorage
+  // entries — otherwise a signed-out user keeps seeing their old
+  // "voted yes" highlights from before they logged out, which feels
+  // like a privacy bleed even though the data is technically theirs.
+  //
+  // We also set a session-scoped sessionStorage flag `suppress_vote_sync`
+  // that prevents the bootstrap from immediately re-hydrating localStorage
+  // from /api/my-votes (which is keyed by the voter_id cookie that
+  // intentionally PERSISTS past logout — needed so anon votes still
+  // attach to a future account on signup). The flag clears when the
+  // browser tab closes OR when the user signs back in.
+  function maybeClearVoteCacheOnLogout() {
+    if (!document.cookie.split("; ").some(c => c.startsWith("clear_local_vote_cache="))) return;
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("voted_")) keysToRemove.push(k);
+      }
+      keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+    } catch {}
+    try { sessionStorage.setItem("suppress_vote_sync", "1"); } catch {}
+    // Delete the marker cookie so subsequent loads don't keep clearing.
+    document.cookie = "clear_local_vote_cache=; Max-Age=0; Path=/; SameSite=Lax";
+  }
+  maybeClearVoteCacheOnLogout();
 
   // Make a fetch with an AbortController scoped to a widget to prevent overlaps
   function widgetFetch(widget, url, options = {}) {
@@ -112,23 +202,58 @@
 
     fetch(API_BASE + "/api/vote", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Request-ID": randReqId() },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-ID": randReqId(),
+        "X-CSRFToken": getCsrfToken(),
+      },
       body: JSON.stringify({
         bill_id: billId,
         vote_type: voteType,
-        previous_vote: previousVote || null
+        previous_vote: previousVote || null,
+        // Used only when the server bounces this request with 401
+        // auth_required — it tells /login where to send the user back.
+        return_to: window.location.pathname + window.location.search
       })
     })
     .then(async (response) => {
       let data = {};
       try { data = await response.json(); } catch (_) {}
+      // Soft-wall: voting requires an account. Server returns 401 with a
+      // contextual login URL that bounces the user back to this bill after
+      // sign-in. Hard redirect — no inline error, the login page explains.
+      // Re-enable the widget first so the bfcache snapshot is the clean
+      // pre-click state, not the "Recording your vote..." disabled state.
+      // Without this, hitting back after the redirect restores a frozen UI.
+      if (response.status === 401 && data && data.error === "auth_required" && data.login_url) {
+        enablePollOptions(options);
+        if (messageContainer) messageContainer.style.display = "none";
+        window.location.href = data.login_url;
+        return new Promise(() => {}); // Block subsequent .then() during nav
+      }
+      // Email-verification gate: signed in but unverified. Show an
+      // inline message + verification CTA instead of recording the
+      // vote. OAuth signups (Google/Microsoft/Apple) auto-pass this
+      // check because the provider verifies the email for us; only
+      // email/password accounts that haven't clicked the link land here.
+      if (response.status === 403 && data && data.error === "email_unverified") {
+        enablePollOptions(options);
+        if (messageContainer) {
+          // Use API_BASE so the link respects the /beta prefix on staging.
+          messageContainer.innerHTML =
+            'Please <a href="' + API_BASE + '/profile" style="text-decoration:underline">verify your email</a> before voting. Check your inbox for the verification link.';
+          messageContainer.className = "poll-message";
+          messageContainer.style.display = "block";
+        }
+        return new Promise(() => {});
+      }
       if (!response.ok || !data.success) {
         const msg = (data && data.error) ? data.error : `Failed to record vote (HTTP ${response.status})`;
         throw new Error(msg);
       }
       return data;
     })
-    .then(() => {
+    .then((data) => {
       const isChange = !!previousVote && previousVote !== voteType;
       if (isChange) {
         showSuccessMessage(messageContainer, "Vote changed successfully!");
@@ -139,10 +264,28 @@
       setStored(`voted_${billId}`, voteType);
       highlightCurrentVote(options, voteType);
 
+      // Optimistic local poll update — apply the delta from this vote to
+      // the displayed bars immediately, before the /api/poll-results
+      // round-trip returns. The server is already consistent (S1 fix),
+      // and the followup fetch corrects any drift.
+      applyOptimisticVoteDelta(widget, voteType, previousVote);
+
+      // Update pill/rail directly from the vote response — saves a
+      // round-trip to /api/me. Fall back to refetching if the response
+      // didn't include user stats (anonymous voter).
+      if (data && data.user) {
+        applyUserStats(data.user);
+      } else {
+        refreshUserRail();
+      }
+
       // Pre-warm reasoning cache in background (don't await, don't block UI)
       fetch(API_BASE + '/api/pre-generate-reasoning', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
         body: JSON.stringify({ bill_id: billId, vote: voteType })
       }).catch(() => {}); // Silently ignore failures
 
@@ -159,9 +302,23 @@
         window.TeenCivics.onVoteChanged(billId, voteType);
       }
 
-      // After vote, refresh results exactly once
-      fetchedOnce.delete(widget); // allow a fresh fetch
+      // Record the vote in sessionStorage so that if the user navigates
+      // to another page (e.g. /bills archive) within this tab, the archive
+      // can apply the same optimistic delta to its mini-results — no need
+      // to wait for the next SSR snapshot.
+      try {
+        const stash = JSON.parse(sessionStorage.getItem("pendingVoteDeltas") || "{}");
+        stash[billId] = { voteType: voteType, previousVote: previousVote || null, ts: Date.now() };
+        sessionStorage.setItem("pendingVoteDeltas", JSON.stringify(stash));
+      } catch (_) {}
+
+      // Confirm/correct against server (this also catches any concurrent votes
+      // from other users that landed between optimistic-update and now)
+      fetchedOnce.delete(widget);
       fetchOnceResults(billId, widget);
+
+      // Restart live polling so other voters' votes appear in real time
+      restartLivePollRefresh();
     })
     .catch((error) => {
       console.error("Vote error:", error);
@@ -251,6 +408,37 @@
     // Force reflow to ensure the changes are rendered properly
     if (yesFill) yesFill.offsetHeight;
     if (noFill) noFill.offsetHeight;
+  }
+
+  // Apply the just-voted delta to the on-screen poll bars immediately,
+  // before the /api/poll-results round-trip returns. Reads current
+  // displayed counts (from the .result-count spans we render to) and
+  // increments/decrements based on what changed.
+  function applyOptimisticVoteDelta(widget, voteType, previousVote) {
+    if (!widget) return;
+    const resultsContainer = widget.querySelector(".poll-results");
+    if (!resultsContainer) return;
+
+    // Read current displayed counts. If nothing's rendered yet (first
+    // vote on a fresh bill), default to 0 and let the followup fetch
+    // populate.
+    const yesEl = resultsContainer.querySelector(".yes-fill .result-count");
+    const noEl  = resultsContainer.querySelector(".no-fill .result-count");
+    let yes = parseInt(yesEl ? yesEl.textContent : "0", 10) || 0;
+    let no  = parseInt(noEl  ? noEl.textContent  : "0", 10) || 0;
+
+    // Subtract previous vote (if any) first, then add new vote
+    if (previousVote === "yes") yes = Math.max(0, yes - 1);
+    if (previousVote === "no")  no  = Math.max(0, no - 1);
+    if (voteType === "yes") yes += 1;
+    if (voteType === "no")  no  += 1;
+
+    updateResultsDisplay({ yes_votes: yes, no_votes: no, total: yes + no }, resultsContainer);
+
+    // Ensure the results section is visible — on first vote it may be hidden
+    if (resultsContainer.style.display === "none") {
+      resultsContainer.style.display = "block";
+    }
   }
 
   // Highlight the user's current vote selection
@@ -349,6 +537,44 @@
     });
   }
 
+  // Apply a pending vote delta to an archive .poll-preview that was SSR'd
+  // with stale counts (because the vote happened after the page was
+  // rendered). Updates the data-* attrs, the --yes-width/--no-width CSS
+  // vars, the percentage spans, and the total-votes caption.
+  function applyArchivePollDelta(preview, voteType, previousVote) {
+    if (!preview) return;
+    let yes = parseInt(preview.dataset.yesCount || "0", 10) || 0;
+    let no  = parseInt(preview.dataset.noCount  || "0", 10) || 0;
+
+    if (previousVote === "yes") yes = Math.max(0, yes - 1);
+    if (previousVote === "no")  no  = Math.max(0, no - 1);
+    if (voteType === "yes") yes += 1;
+    if (voteType === "no")  no  += 1;
+
+    preview.dataset.yesCount = String(yes);
+    preview.dataset.noCount  = String(no);
+
+    const total = yes + no;
+    const yesPct = total > 0 ? Math.round((yes / total) * 1000) / 10 : 0;
+    const noPct  = total > 0 ? Math.round((no  / total) * 1000) / 10 : 0;
+
+    const content = preview.querySelector(".poll-results-content");
+    if (content) {
+      content.style.setProperty("--yes-width", `${yesPct}%`);
+      content.style.setProperty("--no-width",  `${noPct}%`);
+    }
+
+    const yesPctEl = preview.querySelector('.poll-option[data-vote="yes"] .poll-percentage');
+    const noPctEl  = preview.querySelector('.poll-option[data-vote="no"]  .poll-percentage');
+    if (yesPctEl) yesPctEl.textContent = `${yesPct}%`;
+    if (noPctEl)  noPctEl.textContent  = `${noPct}%`;
+
+    const totalEl = preview.querySelector(".poll-total");
+    if (totalEl) {
+      totalEl.textContent = `${total} total vote${total !== 1 ? "s" : ""}`;
+    }
+  }
+
   // --- Archive mini-results bars ---
   function initArchiveMiniResults() {
     const containers = $all(".mini-results");
@@ -363,8 +589,19 @@
   }
 
   // --- Archive poll preview vote-to-unlock ---
-  // Shows/hides poll results based on whether user has voted on each bill
+  // Shows/hides poll results based on whether user has voted on each bill.
+  // Also applies any pending vote deltas from sessionStorage so a vote
+  // cast on one page reflects on the archive without waiting for the
+  // next SSR snapshot.
   function initArchiveVoteToUnlock() {
+    // Pull pending vote deltas the user cast on another page in this tab.
+    // We don't have the SSR yes/no counts for those bills here, but the
+    // server-side rendered .mini-results dataset has them. Use that.
+    let pendingDeltas = {};
+    try {
+      pendingDeltas = JSON.parse(sessionStorage.getItem("pendingVoteDeltas") || "{}");
+    } catch (_) {}
+
     const pollPreviews = $all(".poll-preview[data-bill-id]");
     pollPreviews.forEach((preview) => {
       const billId = preview.dataset.billId;
@@ -375,15 +612,38 @@
 
       if (!overlay || !resultsContent) return;
 
+      // Apply pending delta to the SSR-rendered widths + percentages
+      // so the bars reflect the freshly-cast vote.
+      const pending = pendingDeltas[billId];
+      if (pending) {
+        applyArchivePollDelta(preview, pending.voteType, pending.previousVote);
+      }
+
       const hasVoted = getStored(`voted_${billId}`);
+      const badge = preview.querySelector(".your-vote-badge");
       if (hasVoted) {
         // User has voted - show results, hide overlay
         overlay.style.display = "none";
         resultsContent.style.display = "block";
+        // Populate the heading-level "you voted X" badge — sits in the
+        // poll header, color-coded yes/no, instead of floating between bars.
+        if (badge) {
+          const label = hasVoted === "yes" ? "Voted Yes"
+                       : hasVoted === "no" ? "Voted No"
+                       : "Voted Unsure";
+          badge.textContent = "✓ " + label;
+          badge.dataset.vote = hasVoted;
+          badge.hidden = false;
+        }
       } else {
         // User has not voted - show overlay, hide results
         overlay.style.display = "flex";
         resultsContent.style.display = "none";
+        if (badge) {
+          badge.hidden = true;
+          badge.textContent = "";
+          delete badge.dataset.vote;
+        }
       }
     });
   }
@@ -458,8 +718,40 @@
   // Restores votes from the server (via voter_id cookie) into localStorage.
   // This ensures that if localStorage was cleared, previously recorded votes
   // are restored before poll widgets initialize.
+  //
+  // EXCEPTION: if the user just logged out, sessionStorage carries a
+  // `suppress_vote_sync` flag. We honor it for the current tab/session so
+  // a logged-out user doesn't see their previously-voted highlights
+  // re-hydrate from the persistent voter_id cookie. The flag is cleared
+  // by /api/me when the response indicates an authenticated session
+  // (re-login) OR naturally when the tab closes.
   async function syncVotesFromServer() {
     try {
+      const suppressed = sessionStorage.getItem("suppress_vote_sync") === "1";
+      // If suppressed, check whether the user has signed back in (in which
+      // case we clear the flag and proceed — they're not logged out anymore).
+      if (suppressed) {
+        try {
+          const meResp = await fetch(API_BASE + "/api/me", {
+            credentials: "same-origin",
+            headers: { "Cache-Control": "no-store" }
+          });
+          if (meResp.ok) {
+            const me = await meResp.json();
+            if (me && me.authenticated) {
+              sessionStorage.removeItem("suppress_vote_sync");
+            } else {
+              log("syncVotesFromServer: suppressed (post-logout)");
+              return;
+            }
+          } else {
+            return;
+          }
+        } catch {
+          return;
+        }
+      }
+
       const response = await fetch(API_BASE + "/api/my-votes", {
         credentials: "same-origin",           // send voter_id cookie
         headers: { "Cache-Control": "no-store" }
@@ -547,6 +839,20 @@
     bootstrap();
   }
 
+  // bfcache restore: when the user hits Back after being redirected to /login,
+  // Safari/Chrome restore the DOM exactly as it was — buttons disabled, "Recording
+  // your vote..." still shown. Reset every poll widget so the page is interactive
+  // again. event.persisted === true means the page came from bfcache.
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    $all(".poll-widget").forEach((widget) => {
+      const options = $all(".poll-option", widget);
+      const messageContainer = widget.querySelector(".poll-message");
+      enablePollOptions(options);
+      if (messageContainer) messageContainer.style.display = "none";
+    });
+  });
+
   // --- Share Dropdown ---
   function initializeShareDropdowns() {
     const shareDropdowns = $all(".share-dropdown");
@@ -613,7 +919,8 @@
                 button.setAttribute("aria-expanded", "false");
               }, 1500);
             } catch (e2) {
-              copyBtn.textContent = "❌ Failed";
+              // Lucide x-circle inline — matches the Python icon('x-circle')
+              copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> Failed';
               setTimeout(() => {
                 copyBtn.textContent = originalText;
                 button.setAttribute("aria-expanded", "false");
@@ -649,6 +956,99 @@
   // Add share dropdown init to bootstrap
   initializeShareDropdowns();
 
+  // --- Live poll refresh (real-time updates from other voters) ---
+  const LIVE_POLL_INTERVAL_MS = 15000; // 15 seconds — balances "feels live" with API cost
+  let livePollTimer = null;
+
+  function startLivePollRefresh() {
+    if (livePollTimer) return; // already running
+
+    // Works on both bill detail and archive pages
+    const widgets = $all(".poll-widget");
+    if (widgets.length === 0) return;
+
+    livePollTimer = setInterval(() => {
+      // Pause when tab is hidden to save bandwidth
+      if (document.visibilityState === "hidden") return;
+
+      widgets.forEach((widget) => {
+        const billId = widget.dataset.billId;
+        if (!billId) return;
+        // Only refresh if user has voted (results are visible)
+        if (!getStored(`voted_${billId}`)) return;
+
+        const resultsContainer = widget.querySelector(".poll-results");
+        if (!resultsContainer || resultsContainer.style.display === "none") return;
+
+        // Silently fetch fresh results and update the bars
+        fetch(API_BASE + `/api/poll-results/${billId}`, {
+          headers: { "Cache-Control": "no-store" }
+        })
+        .then((r) => r.ok ? r.json() : Promise.reject())
+        .then((results) => updateResultsDisplay(results, resultsContainer))
+        .catch(() => {}); // silently ignore errors
+      });
+    }, LIVE_POLL_INTERVAL_MS);
+  }
+
+  function stopLivePollRefresh() {
+    if (livePollTimer) {
+      clearInterval(livePollTimer);
+      livePollTimer = null;
+    }
+  }
+
+  // Restart the live poll timer so the next tick happens in LIVE_POLL_INTERVAL_MS
+  // from NOW (called after a vote so the user's results are immediately fresh).
+  function restartLivePollRefresh() {
+    stopLivePollRefresh();
+    startLivePollRefresh();
+  }
+
+  // Start/stop live refresh based on tab visibility
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !livePollTimer) {
+      startLivePollRefresh();
+    }
+  }, { passive: true });
+
+  // Start live polling after bootstrap completes
+  setTimeout(startLivePollRefresh, 2000);
+
+  // --- Split pill → toggle user-rail ---
+  (function initPillRailToggle() {
+    const btn = document.getElementById("user-pill-btn");
+    const rail = document.getElementById("user-rail");
+    if (!btn || !rail) return;
+
+    function open() {
+      rail.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+    }
+
+    function close() {
+      rail.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      rail.hidden ? open() : close();
+    });
+
+    // Close when clicking outside the pill or rail
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".nav-user") && !e.target.closest("#user-rail")) {
+        close();
+      }
+    }, { passive: true });
+
+    // Close on Escape
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close();
+    }, { passive: true });
+  })();
+
   // Optionally expose a tiny API for testing
   window.TeenCivics = Object.assign(window.TeenCivics || {}, {
     _debug: { fetchedOnce, resultsControllers },
@@ -659,6 +1059,9 @@
         fetchedOnce.delete(w);
         fetchOnceResults(billId, w);
       });
-    }
+    },
+    stopLivePollRefresh,
+    startLivePollRefresh,
+    restartLivePollRefresh,
   });
 })();

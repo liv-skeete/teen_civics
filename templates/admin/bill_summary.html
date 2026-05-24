@@ -10,7 +10,7 @@
 {% block content %}
 <div class="admin-container">
   <div class="admin-header">
-    <h2>📝 Summary Editor — {{ bill.bill_id }}</h2>
+    <h2>{{ icon('edit') }} Summary Editor — {{ bill.bill_id }}</h2>
     <div class="admin-header-actions">
       <a href="{{ url_for('admin_bills') }}" class="btn btn-secondary">← Bills</a>
       <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Dashboard</a>
@@ -127,7 +127,7 @@
     </div>
 
     <div class="admin-form-actions">
-      <button type="button" class="btn btn-primary" onclick="AdminApp.handleBillSummarySave()">💾 Save Changes</button>
+      <button type="button" class="btn btn-primary" onclick="AdminApp.handleBillSummarySave()">{{ icon('save') }} Save Changes</button>
       <a href="{{ url_for('admin_bills') }}" class="btn btn-secondary">Cancel</a>
     </div>
   </form>

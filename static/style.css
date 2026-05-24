@@ -1,15 +1,7 @@
 /* TeenCivics Design System */
 
-/* TODO: Future improvements (SAVE FOR LATER):
- * - Increase touch target sizes to 44x44px minimum for mobile (WCAG 2.5.5)
- * - Add loading spinners for async operations
- * - Add aria-current="page" to active navigation items
- * - Implement keyboard navigation handlers for interactive elements
- * - Add meta theme-color for mobile browsers
- */
-
 :root {
-    /* Color Palette - Light Theme (Default) */
+    /* Color palette */
     --color-beige: #FAF7F2;
     --color-white: #FFFFFF;
     --color-brown-black: #3E2723;
@@ -21,40 +13,49 @@
     --color-warning: #FF9800;
     --color-error: #F44336;
     --color-info: #2196F3;
-    
-    /* Light Theme Variables */
-    --color-background: var(--color-beige);
-    --color-text: var(--color-brown-black);
-    --color-cards: var(--color-white);
-    --color-accent: var(--color-navy);
-    --color-borders: var(--color-gray);
-    
-    /* Dark Theme Colors */
+
+    /* Dark theme palette */
     --color-background-dark: #1e1e1e;
     --color-cards-dark: #2a2a2a;
     --color-text-dark: #e8e8e8;
-    --color-accent-dark: #6ba3e8;
+    --color-accent-dark: #A4ABE4;        /* Material Indigo 200 — same ramp as primary indigo 500, pairs cleanly */
+    --color-primary-dark: #4F5BB8;       /* Material Indigo 500 — same family as light navy, lighter for dark bg */
+    --color-primary-dark-hover: #5C6BC0; /* Material Indigo 400 */
     --color-borders-dark: #444444;
-    
-    /* Theme Variables */
+    --color-text-muted-dark: #A8A8A8;
+
+    /* --- Unified brand palette (2026-05-23) ---
+       Brand is navy (logo) + terracotta accent. No red anywhere in UI;
+       red stays only inside the logo. Light/dark mirror each other through
+       the theme-aware vars at the bottom of this block. */
+    --color-terracotta: #C75D4F;            /* light accent: Teen Impact, focus rings */
+    --color-terracotta-hover: #A9483C;
+    --color-terracotta-dark: #E8917F;       /* dark accent: dusty coral */
+    --color-terracotta-dark-hover: #D67865;
+    --color-status-bg: #F1E4DE;             /* warm terracotta wash for status pills (light) */
+    --color-status-text: #7A3F35;           /* deep terracotta text for status pills (light) */
+    --color-status-bg-dark: #44322D;        /* warm surface for status pills (dark, slightly lifted) */
+    --color-status-text-dark: #F3B5A6;       /* lighter dusty coral for readability against the wash */
+
+    /* Theme tokens (light defaults; overridden in [data-theme="dark"]) */
     --color-background: var(--color-beige);
     --color-text: var(--color-brown-black);
     --color-cards: var(--color-white);
     --color-accent: var(--color-navy);
     --color-borders: var(--color-gray);
-}
 
-/* Dark Theme */
-[data-theme="dark"],
-.dark-theme {
-    --color-background: var(--color-background-dark);
-    --color-text: var(--color-text-dark);
-    --color-cards: var(--color-cards-dark);
-    --color-accent: var(--color-accent-dark);
-    --color-borders: var(--color-borders-dark);
-}
+    /* Unified semantic tokens (theme-aware) */
+    --color-primary: var(--color-navy);
+    --color-primary-hover: #283593;
+    --color-on-primary: #FFFFFF;
+    --color-brand-accent: var(--color-terracotta);
+    --color-brand-accent-hover: var(--color-terracotta-hover);
+    --color-on-brand-accent: #FFFFFF;
+    --color-link: var(--color-navy);
+    --color-text-muted: var(--color-dark-gray);
+    --color-status-pill-bg: var(--color-status-bg);
+    --color-status-pill-text: var(--color-status-text);
 
-:root {
     /* Spacing */
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
@@ -62,9 +63,9 @@
     --spacing-lg: 1.5rem;
     --spacing-xl: 2rem;
     --spacing-xxl: 3rem;
-    
+
     /* Typography */
-    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-size-xs: 0.75rem;
     --font-size-sm: 0.875rem;
     --font-size-md: 1rem;
@@ -72,39 +73,58 @@
     --font-size-xl: 1.5rem;
     --font-size-xxl: 2rem;
     --font-size-xxxl: 2.5rem;
-    
+
     /* Borders */
     --border-radius: 8px;
     --border-radius-lg: 12px;
     --border-width: 1px;
     --border-color: var(--color-gray);
-    
+
     /* Shadows */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-    
-    /* Standardized Button Sizing
-     * Desktop: sized by padding (no min-height forced on .btn)
-     * Mobile/touch: min-height used as floor for accessibility (44px WCAG target)
-     * Form controls (search, select): always min-height for consistency */
+
+    /* Buttons */
     --btn-touch-target: 44px;
     --btn-padding-y: var(--spacing-sm);
     --btn-padding-x: var(--spacing-lg);
     --btn-padding-y-sm: var(--spacing-xs);
     --btn-padding-x-sm: var(--spacing-md);
-    
-    /* Standardized Card Styling */
+
+    /* Cards */
     --card-border-width: 2px;
-    --card-border-color: var(--color-navy);
+    --card-border-color: var(--color-primary);
     --card-border-radius: var(--border-radius-lg);
     --card-shadow: var(--shadow-md);
     --card-padding: var(--spacing-lg);
-    
+
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
     --transition-theme: 0.3s ease;
+}
+
+/* Dark theme overrides */
+[data-theme="dark"],
+.dark-theme {
+    --color-background: var(--color-background-dark);
+    --color-text: var(--color-text-dark);
+    --color-cards: var(--color-cards-dark);
+    --color-accent: var(--color-accent-dark);
+    --color-borders: var(--color-borders-dark);
+
+    /* Unified semantic tokens — dark variants */
+    --color-primary: var(--color-primary-dark);
+    --color-primary-hover: var(--color-primary-dark-hover);
+    --color-on-primary: #FFFFFF;
+    --color-brand-accent: var(--color-terracotta-dark);
+    --color-brand-accent-hover: var(--color-terracotta-dark-hover);
+    --color-on-brand-accent: #1e1e1e;
+    --color-link: var(--color-accent-dark);
+    --color-text-muted: var(--color-text-muted-dark);
+    --color-status-pill-bg: var(--color-status-bg-dark);
+    --color-status-pill-text: var(--color-status-text-dark);
 }
 
 /* Reset and Base Styles */
@@ -119,7 +139,7 @@
     position: absolute;
     top: -9999px;
     left: 0;
-    background: var(--color-navy);
+    background: var(--color-primary);
     color: var(--color-white);
     padding: var(--spacing-sm) var(--spacing-md);
     text-decoration: none;
@@ -145,7 +165,10 @@
 }
 
 /* Stabilize viewport height on mobile browsers */
-html { height: -webkit-fill-available; }
+html {
+    height: -webkit-fill-available;
+    background-color: var(--color-background);  /* prevent overscroll showing wrong color above nav */
+}
 
 body {
     font-family: var(--font-family);
@@ -231,7 +254,7 @@ p {
 }
 
 a {
-    color: var(--color-navy);
+    color: var(--color-primary);
     text-decoration: none;
     transition: color 0.15s ease;
 }
@@ -283,7 +306,7 @@ button:focus,
 input:focus,
 select:focus,
 textarea:focus {
-    outline: 3px solid var(--color-navy);
+    outline: 3px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -305,7 +328,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-    outline: 3px solid var(--color-navy);
+    outline: 3px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -339,6 +362,7 @@ textarea:focus-visible {
     background-color: var(--color-cards-dark);
     box-shadow: none;
     position: sticky;
+    margin-bottom: 0;
 }
 
 /* Seam-masking fix for 1px line artifact under sticky navbar in dark mode */
@@ -352,42 +376,6 @@ textarea:focus-visible {
     height: 1px;
     background-color: var(--color-cards-dark);
     z-index: 1001;
-}
-
-
-
-/* Remove gap between navbar and hero section in dark mode */
-[data-theme="dark"] .hero-section,
-.dark-theme .hero-section {
-    margin-top: 0;
-    padding-top: var(--spacing-xxl);
-}
-
-/* Ensure navbar has no margin-bottom */
-[data-theme="dark"] .navbar,
-.dark-theme .navbar {
-    margin-bottom: 0;
-}
-
-/* Remove any top borders/margins that create a line after navbar */
-[data-theme="dark"] .navbar + *,
-.dark-theme .navbar + * {
-    margin-top: 0 !important;
-    border-top: none !important;
-}
-
-/* Specifically target hero section */
-[data-theme="dark"] .hero-section,
-.dark-theme .hero-section {
-    margin-top: 0;
-    border-top: none;
-}
-
-/* Also target main-content */
-[data-theme="dark"] .main-content,
-.dark-theme .main-content {
-    margin-top: 0;
-    border-top: none;
 }
 
 .nav-container {
@@ -413,16 +401,14 @@ textarea:focus-visible {
     width: auto;
     margin-right: var(--spacing-sm);
     object-fit: contain;
-    transition: height 0.2s ease;
 }
 
 .nav-logo h1 {
     font-size: clamp(1.25rem, 2.2vw, 1.625rem);
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin: 0;
     font-weight: 600;
     padding-left: 0;
-    transition: font-size 0.2s ease;
 }
 
 .logo-img {
@@ -470,19 +456,19 @@ textarea:focus-visible {
 /* Hover state - light mode */
 .nav-link:hover {
   background-color: var(--color-light-gray);
-  color: var(--color-navy);
+  color: var(--color-primary);
 }
 
 /* Hover state - dark mode */
 [data-theme="dark"] .nav-link:hover,
 .dark-theme .nav-link:hover {
-  background-color: rgba(107, 163, 232, 0.1);
-  color: var(--color-accent-dark);
+  background-color: rgba(164, 171, 228, 0.10);  /* accent-dark (Indigo 200) @ 10% */
+  color: var(--color-link);
 }
 
 /* Active/current page - light mode */
 .nav-link[aria-current="page"] {
-  color: var(--color-navy);
+  color: var(--color-primary);
   font-weight: 600;
   background-color: var(--color-light-gray);
 }
@@ -490,9 +476,9 @@ textarea:focus-visible {
 /* Active/current page - dark mode */
 [data-theme="dark"] .nav-link[aria-current="page"],
 .dark-theme .nav-link[aria-current="page"] {
-  color: var(--color-accent-dark);
+  color: var(--color-link);
   font-weight: 600;
-  background-color: rgba(107, 163, 232, 0.15);
+  background-color: rgba(164, 171, 228, 0.15);
 }
 
 .nav-toggle {
@@ -550,24 +536,24 @@ textarea:focus-visible {
 }
 
 .btn-primary {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
 }
 
 .btn-primary:hover {
-    background-color: #283593;
-    color: var(--color-white);
+    background-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
 }
 
 .btn-secondary {
-    background-color: var(--color-white);
-    color: var(--color-navy);
-    border: var(--border-width) solid var(--color-navy);
+    background-color: transparent;
+    color: var(--color-primary);
+    border: var(--border-width) solid var(--color-primary);
 }
 
 .btn-secondary:hover {
-    background-color: var(--color-navy);
-    color: var(--color-white);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
 }
 
 .btn-twitter {
@@ -588,7 +574,7 @@ textarea:focus-visible {
 }
 
 .btn-twitter:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
     color: #ffffff !important;
     text-decoration: none;
@@ -596,7 +582,7 @@ textarea:focus-visible {
 
 [data-theme="dark"] .btn-twitter:focus,
 .dark-theme .btn-twitter:focus {
-    outline-color: #4a9eff;
+    outline-color: var(--color-link);
 }
 
 /* Dark theme btn-twitter */
@@ -613,27 +599,28 @@ textarea:focus-visible {
 }
 
 .btn-share {
-    background-color: #1081cf;
-    color: #ffffff !important;
+    background-color: var(--color-primary);
+    color: var(--color-on-primary) !important;
     border: none;
     text-decoration: none;
 }
 
 .btn-share:hover {
-    background-color: #0c69a8;
-    color: #ffffff;
+    background-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
 }
 
-/* Dark theme btn-share */
+/* Dark theme btn-share — folded into the primary indigo family so all
+   filled CTAs share one swatch (Stripe / Linear / Discord pattern). */
 [data-theme="dark"] .btn-share,
 .dark-theme .btn-share {
-    background-color: #40a9ff;
+    background-color: var(--color-primary-dark);
     color: #ffffff;
 }
 
 [data-theme="dark"] .btn-share:hover,
 .dark-theme .btn-share:hover {
-    background-color: #1890ff;
+    background-color: var(--color-primary-dark-hover);
     color: #ffffff;
 }
 
@@ -694,6 +681,66 @@ textarea:focus-visible {
     cursor: pointer;
     transition: background-color var(--transition-fast);
     text-align: left;
+}
+
+/* Lucide SVG icons inherit currentColor (color matches surrounding
+   text) and sit on the baseline. Used everywhere we replaced OS emoji
+   for cross-platform visual consistency. Size defaults to 18px from
+   the Python helper; override with width/height in component CSS.
+   stroke-width override: Lucide's default 2 is tuned for icon-button
+   chrome where the glyph stands alone. Inline next to bold heading
+   text it reads thin, so we bump to 2.25 here — `stroke-width` is an
+   SVG presentation attribute and is overridable via CSS. */
+.lucide-icon {
+    display: inline-block;
+    vertical-align: -0.18em;
+    flex-shrink: 0;
+    stroke-width: 2.25;
+}
+
+/* Icons that sit next to bold section headings (the most common case
+   in the resources / grants / contact / admin pages) need a touch
+   more presence to balance the type weight. */
+.h3-style .lucide-icon,
+.stat-headline .lucide-icon,
+.admin-header h2 .lucide-icon,
+.admin-nav-card h3 .lucide-icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* Summary section headings (rendered by the format_detailed_html
+   Jinja filter on AI-generated bill summaries). Emoji used to mark
+   these breaks for younger readers; we keep the visual rhythm but
+   render Lucide icons in the indigo link color so they match the
+   rest of the icon system instead of relying on OS emoji. */
+.summary-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--color-link);
+    font-size: 1.25rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 0.6rem;
+}
+
+/* Re-assert the indigo color in dark mode. The generic
+   [data-theme="dark"] h1-h6 rule above forces all headings to
+   --color-text (white) and beats .summary-header on specificity;
+   this selector wins it back so the section headers stay indigo
+   in both themes. */
+[data-theme="dark"] .summary-header,
+.dark-theme .summary-header {
+    color: var(--color-link);
+}
+
+.summary-header .lucide-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
 }
 
 /* Fixed-width icon area so all text labels start at the same position */
@@ -767,7 +814,7 @@ a.share-option:link {
 
 /* Hero Section */
 .hero-section {
-    background: linear-gradient(135deg, var(--color-navy) 0%, #283593 100%);
+    background: linear-gradient(180deg, var(--color-primary) 0%, #303F9F 100%);  /* navy → Indigo 700 */
     color: var(--color-white);
     padding: var(--spacing-xxl) 0;
     text-align: center;
@@ -802,13 +849,36 @@ a.share-option:link {
 
 /* Bill Cards */
 .bill-card {
-    background-color: var(--color-white);
+    background-color: var(--color-cards);
+    color: var(--color-text);
     border-radius: var(--card-border-radius);
     box-shadow: var(--card-shadow);
     padding: var(--card-padding);
     margin-bottom: var(--spacing-lg);
     transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
     border: var(--card-border-width) solid var(--card-border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.bills-grid .bill-card .bill-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: var(--spacing-md);
+}
+
+/* In archive cards, flex gap handles spacing — strip the implicit p-margin so
+   summary text doesn't double-space against the action buttons below it. */
+.bills-grid .bill-card .summary-preview,
+.bills-grid .bill-card .summary-preview p:last-child {
+    margin-bottom: 0;
+}
+
+/* When card has no poll-preview, push actions to the bottom so cards align */
+.bills-grid .bill-card:not(:has(.poll-preview)) .bill-actions {
+    margin-top: auto;
 }
 
 /* Dark theme bill card */
@@ -832,82 +902,22 @@ a.share-option:link {
     box-shadow: var(--card-shadow);
 }
 
-/* --- GIVEAWAY STYLES (commented out — giveaway ended 2026-03-19, keep for future events)
-.giveaway-steps {
-    list-style: none;
-    margin: 0 0 var(--spacing-md) 0;
-    padding-left: 0;
-}
-
-.giveaway-steps li {
-    margin-bottom: var(--spacing-xs);
-}
-
-.giveaway-social-links {
-    margin-top: var(--spacing-md);
-    margin-bottom: 0;
-    line-height: 1.8;
-}
-
-.giveaway-share-wrapper {
-    margin-top: var(--spacing-md);
-    text-align: center;
-}
-
-.giveaway-social-links a {
-    text-decoration: none;
-    white-space: nowrap;
-}
-
-.giveaway-social-links a:hover {
-    text-decoration: underline;
-}
-
-.giveaway-social-separator {
-    margin: 0 var(--spacing-xs);
-    color: var(--color-dark-gray);
-}
-
-[data-theme="dark"] .giveaway-social-separator,
-.dark-theme .giveaway-social-separator {
-    color: var(--color-text);
-}
-
-.giveaway-mobile-break {
-    display: none;
-}
-
-.giveaway-desktop-pipe {
-    margin: 0 0.25em;
-}
-
-@media (max-width: 768px) {
-    .giveaway-mobile-break {
-        display: block;
-    }
-
-    .giveaway-desktop-pipe {
-        display: none;
-    }
-
-    .giveaway-social-links a {
-        display: block;
-        margin-bottom: var(--spacing-xs);
-    }
-
-    .giveaway-social-separator {
-        display: none;
-    }
-}
---- END GIVEAWAY STYLES */
-
 .bill-header {
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.featured-bill .bill-header {
+    margin-bottom: var(--spacing-sm);
+}
+
+.featured-bill .bill-title {
+    margin-bottom: 0;
 }
 
 .bill-meta {
     display: flex;
     gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-sm);
     flex-wrap: wrap;
 }
@@ -930,76 +940,19 @@ a.share-option:link {
     background-color: var(--color-borders-dark);
 }
 
+/* Bill status pills — each status defined once. Default is neutral gray. */
+/* Bill status pills — unified warm-neutral chip in both themes.
+   The legislative stage isn't actionable info for a teen; collapsing the
+   rainbow into one calm chip lets the eye go to the title and the Teen
+   Impact pill instead. Stage label still renders so the data is there. */
 .bill-status {
     font-size: var(--font-size-sm);
     font-weight: 500;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    color: var(--color-white) !important;
-    background-color: #666666 !important;
+    color: var(--color-status-pill-text);
+    background-color: var(--color-status-pill-bg);
     transition: background-color 0.3s ease;
-}
-
-.bill-status.introduced,
-.bill-status.referred-to-committee {
-    background-color: var(--color-info) !important;
-    color: var(--color-white) !important;
-}
-
-/* Dark theme bill status */
-[data-theme="dark"] .bill-status,
-.dark-theme .bill-status {
-    background-color: #555555 !important;
-}
-
-[data-theme="dark"] .bill-status.introduced,
-[data-theme="dark"] .bill-status.referred-to-committee,
-.dark-theme .bill-status.introduced,
-.dark-theme .bill-status.referred-to-committee {
-    background-color: var(--color-info) !important;
-}
-
-.bill-status.committee-consideration,
-.bill-status.reported-by-committee {
-    background-color: var(--color-warning) !important;
-    color: var(--color-white) !important;
-}
-
-.bill-status.passed-house,
-.bill-status.passed-senate,
-.bill-status.agreed-to-in-house,
-.bill-status.agreed-to-in-senate {
-    background-color: var(--color-success) !important;
-    color: var(--color-white) !important;
-}
-
-.bill-status.agreed-to-in-house,
-.bill-status.agreed-to-in-senate {
-    background-color: #4CAF50 !important;
-    color: #FFFFFF !important;
-}
-
-.bill-status.became-law,
-.bill-status.vetoed {
-    background-color: #666666 !important;
-    color: var(--color-white) !important;
-}
-
-.bill-status.failed-house,
-.bill-status.failed-senate {
-    background-color: var(--color-error) !important;
-    color: var(--color-white) !important;
-}
-
-.bill-status.became-law,
-.bill-status.enacted {
-    background-color: var(--color-success) !important;
-    color: var(--color-white) !important;
-}
-
-.bill-status.vetoed {
-    background-color: var(--color-error);
-    color: var(--color-white);
 }
 
 .teen-impact-badge {
@@ -1007,8 +960,8 @@ a.share-option:link {
     font-weight: 500;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius);
-    background-color: #9C27B0;
-    color: var(--color-white);
+    background-color: var(--color-brand-accent);
+    color: var(--color-on-brand-accent);
 }
 
 .bill-title {
@@ -1065,7 +1018,6 @@ a.share-option:link {
 .bill-actions {
     display: flex;
     gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
     flex-wrap: wrap;
     align-items: center;
 }
@@ -1107,11 +1059,23 @@ a.share-option:link {
     cursor: pointer;
     transition: all var(--transition-fast);
     font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+/* The default Lucide size (18px) looks thin next to the chunky button
+   label — bump it so the thumbs read as the dominant signal. */
+.poll-option .lucide-icon {
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
 }
 
 .poll-option:hover {
     background-color: var(--color-beige);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
 }
 
 .poll-option:disabled {
@@ -1120,15 +1084,65 @@ a.share-option:link {
 }
 
 .poll-option.selected {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
     cursor: default;
 }
 
-.poll-option.selected:hover {
-    background-color: var(--color-navy);
-    color: var(--color-white);
+/* "Your vote" badge — archive previews only.
+   Lives in the poll-header next to the "Community Poll" h4 so the user
+   sees their vote as a status on the whole card, not as a tag floating
+   between bars. Color-coded yes/no for at-a-glance scannability. */
+.poll-preview .poll-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-xs);
+}
+
+.poll-preview .poll-preview-header h4 {
+    margin-bottom: 0;
+}
+
+.your-vote-badge {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* Vote badges — warmed semantic colors (sage + coral) that sit nicely
+   on cream alongside terracotta accent, instead of raw Material green/red. */
+.your-vote-badge[data-vote="yes"] {
+    background-color: #E6EFE2;
+    color: #2D5C3F;
+    border: 1px solid #4F7A5A;
+}
+
+.your-vote-badge[data-vote="no"] {
+    background-color: #F8E4DD;
+    color: #8B3A2A;
+    border: 1px solid #C75D4F;
+}
+
+[data-theme="dark"] .your-vote-badge[data-vote="yes"],
+.dark-theme .your-vote-badge[data-vote="yes"] {
+    background-color: rgba(127, 161, 137, 0.18);
+    color: #B5D4BD;
+    border-color: #7FA189;
+}
+
+[data-theme="dark"] .your-vote-badge[data-vote="no"],
+.dark-theme .your-vote-badge[data-vote="no"] {
+    background-color: rgba(232, 145, 127, 0.18);
+    color: #F3B5A6;
+    border-color: #E8917F;
 }
 
 .poll-results {
@@ -1163,16 +1177,13 @@ a.share-option:link {
 }
 
 .yes-fill {
-    background-color: var(--color-success);
+    background-color: #4F7A5A;  /* sage green — warmed to pair with terracotta */
 }
 
 .no-fill {
-    background-color: var(--color-error);
+    background-color: #8B3A2A;  /* deep terracotta — distinct from the brand-accent terracotta */
 }
 
-.unsure-fill {
-    background-color: var(--color-warning);
-}
 
 .result-label {
     color: var(--color-white);
@@ -1207,13 +1218,13 @@ a.share-option:link {
 }
 
 .poll-message.success {
-    background-color: #E8F5E8;
-    color: var(--color-success);
+    background-color: #E6EFE2;
+    color: #2D5C3F;
 }
 
 .poll-message.error {
-    background-color: #FFEBEE;
-    color: var(--color-error);
+    background-color: #F8E4DD;
+    color: #8B3A2A;
 }
 
 /* Sponsor Reveal Section - shown after voting */
@@ -1227,34 +1238,12 @@ a.share-option:link {
     font-size: var(--font-size-base);
 }
 
-.sponsor-name {
-    font-weight: 500;
-}
-
-.sponsor-party {
-    margin-left: var(--spacing-xs);
-}
-
-/* Party colors */
-.party-d {
-    color: #2563eb; /* Democrat blue */
-}
-
-.party-r {
-    color: #dc2626; /* Republican red */
-}
-
-.party-i {
-    color: #7c3aed; /* Independent purple */
-}
-
 /* Poll Preview (Archive Page) */
 .poll-preview {
-    margin-top: var(--spacing-lg);
     padding: var(--spacing-md);
-    background-color: var(--color-white);
+    background-color: var(--color-cards);
     border-radius: var(--border-radius);
-    border: var(--border-width) solid var(--color-gray);
+    border: var(--border-width) solid var(--color-borders);
 }
 
 .poll-preview h4 {
@@ -1305,12 +1294,12 @@ a.share-option:link {
 }
 
 .poll-preview .yes-fill {
-    background: linear-gradient(90deg, #4CAF50, #66BB6A);
+    background: linear-gradient(90deg, #4F7A5A, #6B9477);  /* sage palette */
     width: var(--yes-width, 0%);
 }
 
 .poll-preview .no-fill {
-    background: linear-gradient(90deg, #f44336, #ef5350);
+    background: linear-gradient(90deg, #8B3A2A, #B05744);  /* deep terracotta palette */
     width: var(--no-width, 0%);
 }
 
@@ -1451,8 +1440,8 @@ a.share-option:link {
 }
 
 .search-input:focus {
-    border-color: var(--color-navy);
-    outline: 2px solid var(--color-navy);
+    border-color: var(--color-primary);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -1505,8 +1494,8 @@ a.share-option:link {
 }
 
 .filter-form select:focus {
-    border-color: var(--color-navy);
-    outline: 2px solid var(--color-navy);
+    border-color: var(--color-primary);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -1538,7 +1527,7 @@ a.share-option:link {
     -webkit-appearance: checkbox;
     -moz-appearance: checkbox;
     appearance: auto;
-    accent-color: var(--color-navy);
+    accent-color: var(--color-primary);
 }
 
 .sort-control input[type="checkbox"] {
@@ -1563,13 +1552,13 @@ a.share-option:link {
 
 .btn-search:hover,
 .btn-clear:hover {
-    background-color: var(--color-dark-gray) !important;
-    color: var(--color-white) !important;
+    background-color: var(--color-primary-hover) !important;
+    color: var(--color-on-primary) !important;
 }
 
 .btn-search:focus,
 .btn-clear:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -1589,7 +1578,7 @@ a.share-option:link {
     width: 40px;
     height: 40px;
     border: 3px solid var(--color-gray);
-    border-top-color: var(--color-navy);
+    border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -1640,7 +1629,7 @@ a.share-option:link {
 }
 
 .no-bills-message h2 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-md);
 }
 
@@ -1674,7 +1663,7 @@ a.share-option:link {
     padding: var(--spacing-sm) var(--spacing-md);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
-    color: var(--color-navy);
+    color: var(--color-primary);
     text-decoration: none;
     transition: all var(--transition-fast);
     white-space: nowrap;
@@ -1685,20 +1674,20 @@ a.share-option:link {
 }
 
 .page-link:hover {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
 }
 
 .page-link:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
 .page-link.current {
-    background-color: var(--color-navy);
+    background-color: var(--color-primary);
     color: var(--color-white);
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
     cursor: default;
 }
 
@@ -1725,7 +1714,7 @@ a.share-option:link {
 }
 
 .resource-card h2 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-md);
     word-break: normal;
     overflow-wrap: normal;
@@ -1743,7 +1732,7 @@ a.share-option:link {
     padding: var(--spacing-sm);
     background-color: var(--color-light-gray);
     border-radius: var(--border-radius);
-    color: var(--color-navy);
+    color: var(--color-primary);
     text-decoration: none;
     transition: background-color var(--transition-fast);
 }
@@ -1771,7 +1760,7 @@ a.share-option:link {
     padding: 8px;
     border-radius: 8px;
     background-color: var(--color-light-gray);
-    color: var(--color-navy);
+    color: var(--color-primary);
     border: 1px solid var(--color-borders);
     text-decoration: none;
     transition: transform 0.2s ease, background-color 0.2s ease;
@@ -1793,7 +1782,7 @@ a.share-option:link {
 .social-icon-link:hover {
     transform: scale(1.05);
     background-color: var(--color-gray);
-    color: var(--color-navy);
+    color: var(--color-primary);
 }
 
 [data-theme="dark"] .social-icon-link:hover,
@@ -1852,6 +1841,71 @@ a.share-option:link {
     flex-wrap: wrap;
 }
 
+/* By the Numbers Section */
+.numbers-section {
+    margin: var(--spacing-lg) 0;
+    text-align: center;
+}
+
+.numbers-section h2 {
+    margin-bottom: var(--spacing-lg);
+}
+
+.numbers-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.number-card {
+    padding: var(--spacing-lg) var(--spacing-md);
+    border-top: 2px solid var(--color-primary);
+    background-color: transparent;
+}
+
+[data-theme="dark"] .number-card,
+.dark-theme .number-card {
+    border-top-color: var(--color-primary);
+}
+
+.number-value {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.1;
+    margin: 0;
+}
+
+[data-theme="dark"] .number-value,
+.dark-theme .number-value {
+    color: var(--color-link);
+}
+
+.number-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-dark-gray);
+    margin-bottom: var(--spacing-sm);
+}
+
+[data-theme="dark"] .number-label,
+.dark-theme .number-label {
+    color: var(--color-text);
+    opacity: 0.75;
+}
+
+@media (max-width: 600px) {
+    .numbers-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+        max-width: 320px;
+    }
+}
+
 /* Features Section */
 .features-section {
     margin: var(--spacing-xl) 0;
@@ -1879,7 +1933,7 @@ a.share-option:link {
 }
 
 .feature-card h3 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-sm);
     line-height: 1.3;
     font-size: var(--font-size-xl);
@@ -1896,10 +1950,23 @@ a.share-option:link {
     min-width: 0;
 }
 
-.feature-emoji {
-    font-size: 2.5rem;
-    line-height: 1;
-    margin-bottom: var(--spacing-md);
+.feature-kicker {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", "Liberation Mono", monospace;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--color-primary);
+    width: fit-content;
+}
+
+[data-theme="dark"] .feature-kicker,
+.dark-theme .feature-kicker {
+    color: var(--color-link);
+    border-bottom-color: var(--color-link);
 }
 
 /* Error Page */
@@ -1918,7 +1985,7 @@ a.share-option:link {
 .error-content h1 {
     font-size: clamp(2rem, 10vw, 3rem);
     line-height: 1.1;
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-sm);
 }
 
@@ -1975,7 +2042,7 @@ a.share-option:link {
 }
 
 .error-search .search-input:focus {
-    border-color: var(--color-navy);
+    border-color: var(--color-primary);
     outline: none;
 }
 
@@ -2008,19 +2075,19 @@ a.share-option:link {
     color: var(--color-text-dark);
 }
 
-/* Dark theme error buttons alignment */
+/* Dark theme error buttons — inherit global .btn-primary dark override */
 [data-theme="dark"] .error-actions .btn-primary,
 .dark-theme .error-actions .btn-primary {
-    background-color: var(--color-accent-dark);
-    color: var(--color-background-dark);
-    border-color: var(--color-accent-dark);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    border-color: var(--color-primary);
 }
 
 [data-theme="dark"] .error-actions .btn-primary:hover,
 .dark-theme .error-actions .btn-primary:hover {
-    background-color: #5a8ccf;
-    border-color: #5a8ccf;
-    color: var(--color-white);
+    background-color: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-on-primary);
 }
 
 [data-theme="dark"] .error-actions .btn-secondary,
@@ -2040,13 +2107,13 @@ a.share-option:link {
 /* Specific Search Form Dark Mode Enhancements */
 [data-theme="dark"] .error-search .btn-primary,
 .dark-theme .error-search .btn-primary {
-    background-color: var(--color-accent-dark);
-    color: var(--color-background-dark);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
 }
 
 [data-theme="dark"] .error-search .btn-primary:hover,
 .dark-theme .error-search .btn-primary:hover {
-    background-color: #5a8ccf;
+    background-color: var(--color-primary-hover);
     color: var(--color-white);
 }
 
@@ -2100,22 +2167,6 @@ a.share-option:link {
     font-size: var(--font-size-xl);
 }
 
-.mb-0 {
-    margin-bottom: 0;
-}
-
-.mt-0 {
-    margin-top: 0;
-}
-
-/* New styles for UI fixes */
-.full-bill-title {
-    margin-top: var(--spacing-sm);
-    font-size: var(--font-size-sm);
-    color: var(--color-dark-gray);
-    line-height: 1.4;
-}
-
 .bill-meta-bottom {
     margin-top: var(--spacing-xl);
     padding: var(--spacing-md);
@@ -2158,7 +2209,7 @@ a.share-option:link {
 
 /* Term Dictionary */
 .term-dictionary-section {
-    margin: var(--spacing-lg) 0;
+    margin: var(--spacing-md) 0 var(--spacing-lg);
     padding-bottom: var(--spacing-lg);
     border-bottom: 1px solid var(--border-color);
 }
@@ -2196,7 +2247,7 @@ a.share-option:link {
 
 .term-dictionary-content a {
     text-decoration: none;
-    color: var(--color-navy);
+    color: var(--color-primary);
     font-weight: 500;
 }
 
@@ -2249,7 +2300,7 @@ a.share-option:link {
 
 .stat-headline {
   font-size: var(--font-size-lg);
-  color: var(--color-navy);
+  color: var(--color-primary);
   margin-bottom: var(--spacing-sm);
 }
 
@@ -2292,7 +2343,7 @@ a.share-option:link {
 }
 
 .about-card h2 {
-    color: var(--color-navy);
+    color: var(--color-primary);
     margin-bottom: var(--spacing-lg);
     font-size: var(--font-size-xxl);
     line-height: 1.2;
@@ -2350,7 +2401,7 @@ a.share-option:link {
 }
 
 .creator-card .creator-info h3 {
-  color: var(--color-navy);
+  color: var(--color-primary);
   font-size: var(--font-size-xl);
   margin-bottom: var(--spacing-sm);
   text-wrap: balance;
@@ -2390,12 +2441,43 @@ h1, h2, h3, h4, h5, h6 {
 .resource-card h2,
 .archive-header h1,
 .contact-header h1 {
+  /* Three layers of "never split words" defense — needed because
+     a global .container { overflow-wrap: anywhere } cascades into
+     these headings and was causing mid-word breaks like
+     "Understand-/ing Government" in narrow card layouts. */
   hyphens: none;
-  word-break: normal;
-  overflow-wrap: break-word;
+  word-break: keep-all;
+  overflow-wrap: normal;
   white-space: normal;
-  text-wrap: balance;
+  /* `pretty` keeps reasonable line breaks; `balance` was sometimes
+     forcing premature wraps because it tries to even out line
+     lengths even when one long line would fit fine. */
+  text-wrap: pretty;
   font-size: var(--font-size-xl);
+}
+
+/* Resource-card headings need even more breathing room — they
+   sit inside narrow 3-up grid cells with a leading icon. Bump
+   them slightly smaller than other page-level h1/h2 so multi-word
+   titles like "Contact Your Representatives" fit on two lines
+   instead of three. */
+.resource-card h2 {
+  font-size: clamp(1rem, 1.8vw, 1.2rem);
+  line-height: 1.25;
+}
+
+/* Page titles on /bills, /resources — use brand color instead of plain
+   body-text so the page has a clear focal point without needing a full
+   hero block. Auto-themes navy → indigo via the token. */
+.resources-header h1,
+.archive-header h1 {
+  color: var(--color-primary);
+}
+[data-theme="dark"] .resources-header h1,
+[data-theme="dark"] .archive-header h1,
+.dark-theme .resources-header h1,
+.dark-theme .archive-header h1 {
+  color: var(--color-link);
 }
 
 /* Tablet: Stack controls earlier for better UX */
@@ -2471,8 +2553,7 @@ h1, h2, h3, h4, h5, h6 {
     }
 
     /* Mobile nav links */
-    .nav-menu .nav-link,
-    .nav-menu .theme-toggle {
+    .nav-menu .nav-link {
         width: 100%;
         text-align: left;
         justify-content: flex-start;
@@ -2480,11 +2561,24 @@ h1, h2, h3, h4, h5, h6 {
         padding: var(--spacing-sm) var(--spacing-md);
         border-radius: var(--border-radius);
     }
+
+    /* Sign-in pill + user pill: keep their compact ellipse shape on
+       mobile too, instead of stretching to full row width like the
+       regular nav links. */
+    .nav-menu .nav-link.nav-signin,
+    .nav-menu .nav-link.nav-user {
+        width: auto;
+        align-self: flex-start;
+        margin: var(--spacing-xs) var(--spacing-md);
+        padding: 0.45rem 1rem;
+        border-radius: 999px;
+        min-height: 0;
+    }
     
     /* Light mode mobile nav link hover */
     .nav-menu .nav-link:hover {
         background-color: var(--color-light-gray);
-        color: var(--color-navy);
+        color: var(--color-primary);
     }
     
     /* Dark mode mobile nav link */
@@ -2503,7 +2597,7 @@ h1, h2, h3, h4, h5, h6 {
     /* Active page in mobile menu - light mode */
     .nav-menu .nav-link[aria-current="page"] {
         background-color: var(--color-light-gray);
-        color: var(--color-navy);
+        color: var(--color-primary);
         font-weight: 600;
     }
     
@@ -2515,16 +2609,6 @@ h1, h2, h3, h4, h5, h6 {
         font-weight: 600;
     }
     
-    /* Theme toggle in mobile menu */
-    .nav-menu .theme-toggle:hover {
-        background-color: var(--color-light-gray);
-    }
-    
-    [data-theme="dark"] .nav-menu .theme-toggle:hover,
-    .dark-theme .nav-menu .theme-toggle:hover {
-        background-color: rgba(107, 163, 232, 0.1);
-    }
-
     /* Other mobile touch targets */
     .btn,
     .page-link {
@@ -2656,22 +2740,6 @@ h1, h2, h3, h4, h5, h6 {
     }
 }
 
-/* Theme Toggle Button Styles */
-.theme-toggle {
-  display: none !important; /* Hide old navbar theme toggle */
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: calc(var(--spacing-sm) + 2px) clamp(var(--spacing-sm), 1.2vw, var(--spacing-md));
-  border-radius: var(--border-radius);
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease, padding 0.2s ease;
-  margin: 0;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
 /* Floating Theme Toggle - Bottom Right */
 .floating-theme-toggle {
   position: fixed;
@@ -2681,17 +2749,16 @@ h1, h2, h3, h4, h5, h6 {
   height: 56px;
   border-radius: 50%;
   background: var(--color-white);
-  border: 2px solid var(--color-navy);
+  border: 2px solid var(--color-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   cursor: pointer;
-  /* Remove flex to avoid conflict with absolute children */
-  display: block; 
+  display: block;
   font-size: 1.75rem;
   transition: all 0.3s ease;
   z-index: 1000;
   padding: 0;
   outline: none;
-  color: var(--color-navy);
+  color: var(--color-primary);
 }
 
 .floating-theme-toggle:hover {
@@ -2704,7 +2771,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .floating-theme-toggle:focus {
-  outline: 3px solid var(--color-accent);
+  outline: 3px solid var(--color-brand-accent);
   outline-offset: 3px;
 }
 
@@ -2754,20 +2821,22 @@ h1, h2, h3, h4, h5, h6 {
   color: #FFFFFF; /* white stroke on dark background */
 }
 
-/* Dark mode button styling */
+/* Dark mode toggle — inverted: dark fill, light-indigo outline (matches
+   the "small UI accent" role of --color-link rather than the bigger
+   button-CTA primary). Pops more against the charcoal bg. */
 [data-theme="dark"] .floating-theme-toggle {
   background: var(--color-background-dark);
-  border-color: var(--color-accent-dark);
-  box-shadow: 0 4px 12px rgba(107, 163, 232, 0.2);
-  color: var(--color-white);
+  border-color: var(--color-link);
+  box-shadow: 0 4px 12px rgba(164, 171, 228, 0.22);  /* Indigo 200 @ 22% */
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .floating-theme-toggle:hover {
-  box-shadow: 0 6px 20px rgba(107, 163, 232, 0.3);
+  box-shadow: 0 6px 20px rgba(164, 171, 228, 0.32);
 }
 
 [data-theme="dark"] .floating-theme-toggle:focus {
-  outline-color: var(--color-accent-dark);
+  outline-color: var(--color-brand-accent);
 }
 
 /* Mobile adjustments */
@@ -2787,51 +2856,6 @@ h1, h2, h3, h4, h5, h6 {
     bottom: 1rem;
     right: 1rem;
   }
-}
-
-.theme-toggle:hover {
-  background-color: var(--color-light-gray);
-  color: var(--color-navy);
-}
-
-.theme-toggle:focus {
-  outline: 2px solid var(--color-navy);
-  outline-offset: 2px;
-  background-color: var(--color-light-gray);
-  color: var(--color-navy);
-}
-
-[data-theme="dark"] .theme-toggle:hover,
-[data-theme="dark"] .theme-toggle:focus {
-    background-color: rgba(107, 163, 232, 0.1);
-    color: var(--color-accent-dark);
-    outline-color: var(--color-accent-dark);
-}
-
-.icon {
-  font-size: clamp(1rem, 1.2vw, 1.125rem);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  transition: font-size 0.2s ease;
-}
-
-.theme-toggle .sun-icon {
-  display: none;
-}
-
-[data-theme="dark"] .theme-toggle .sun-icon {
-  display: flex;
-}
-
-.theme-toggle .moon-icon {
-  display: flex;
-}
-
-[data-theme="dark"] .theme-toggle .moon-icon {
-  display: none;
 }
 
 /* ===== COMPLETE DARK MODE CONTAINER FIXES ===== */
@@ -2875,17 +2899,10 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-white) !important;
 }
 
-/* Bill Card - CRITICAL */
+/* Bill card: dark mode keeps the brighter accent border */
 [data-theme="dark"] .bill-card,
 .dark-theme .bill-card {
-  background-color: var(--color-cards);
-  color: var(--color-text);
-  border-color: #4a9eff; /* Brighter border for dark mode */
-}
-
-[data-theme="dark"] .bill-title,
-.dark-theme .bill-title {
-  color: var(--color-text);
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .bill-short-title,
@@ -2893,22 +2910,11 @@ h1, h2, h3, h4, h5, h6 {
   color: rgba(232, 232, 232, 0.8);
 }
 
-[data-theme="dark"] .summary-text,
-.dark-theme .summary-text {
-  color: var(--color-text);
-}
-
-/* Poll Widget & Poll Preview */
+/* Poll Widget & Poll Preview — dark mode card surface */
 [data-theme="dark"] .poll-widget,
 .dark-theme .poll-widget {
   background-color: var(--color-cards);
   border: 1px solid var(--color-borders-dark);
-}
-
-[data-theme="dark"] .poll-preview,
-.dark-theme .poll-preview {
-  background-color: var(--color-cards);
-  border-color: var(--color-borders-dark);
 }
 
 [data-theme="dark"] .poll-preview h4,
@@ -2933,19 +2939,19 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .poll-option:hover,
 .dark-theme .poll-option:hover {
   background-color: #454545;
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .poll-option.selected,
 .dark-theme .poll-option.selected {
-  background-color: var(--color-navy);
+  background-color: var(--color-primary);
   color: var(--color-white);
-  border-color: var(--color-navy);
+  border-color: var(--color-primary);
 }
 
 [data-theme="dark"] .poll-option.selected:hover,
 .dark-theme .poll-option.selected:hover {
-  background-color: var(--color-navy);
+  background-color: var(--color-primary);
   color: var(--color-white);
 }
 
@@ -2970,25 +2976,25 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .resource-card,
 .dark-theme .resource-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .resource-card h2,
 .dark-theme .resource-card h2 {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .resource-link,
 .dark-theme .resource-link {
   background-color: #383838;
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .social-icon-link,
 .dark-theme .social-icon-link {
   background-color: #383838;
-  color: #4a9eff;
-  border-color: #4a9eff;
+  color: var(--color-link);
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .social-icon-link:hover,
@@ -3000,12 +3006,12 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .feature-card,
 .dark-theme .feature-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .feature-card h3,
 .dark-theme .feature-card h3 {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .feature-card p,
@@ -3017,19 +3023,19 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .about-card,
 .dark-theme .about-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .about-card h2,
 .dark-theme .about-card h2 {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 /* Dark theme mission card */
 [data-theme="dark"] .mission-card,
 .dark-theme .mission-card {
   background: linear-gradient(135deg, var(--color-cards-dark) 0%, #2d2d2d 100%);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .about-text p,
@@ -3047,12 +3053,12 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .stat-card,
 .dark-theme .stat-card {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .stat-headline,
 .dark-theme .stat-headline {
-  color: #4a9eff;
+  color: var(--color-link);
 }
 
 [data-theme="dark"] .stat-text,
@@ -3067,10 +3073,12 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ===== HERO SECTION DARK MODE ===== */
 
-/* Change hero to a more subtle deep purple/navy gradient in dark mode */
+/* Hero in dark mode: noticeable indigo wash, not just near-black. Pulls
+   from the brand primary so the hero feels like an extension of the
+   palette instead of a dim void. */
 [data-theme="dark"] .hero-section:not(.hero-with-image),
 .dark-theme .hero-section:not(.hero-with-image) {
-  background: linear-gradient(135deg, #1a1f35 0%, #2d1b4e 50%, #1e293b 100%);
+  background: linear-gradient(180deg, #2D3470 0%, #1F2547 100%);
 }
 
 /* Dark mode homepage hero: darken overlay more for readability */
@@ -3086,7 +3094,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Make logo/heading bright in dark mode */
 [data-theme="dark"] .nav-logo h1,
 .dark-theme .nav-logo h1 {
-  color: #4a9eff; /* Bright cyan - visible on dark background */
+  color: var(--color-link); /* Bright cyan - visible on dark background */
 }
 
 [data-theme="dark"] h1,
@@ -3104,27 +3112,11 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-text);
 }
 
-/* ===== THEME TOGGLE FIX ===== */
-
-[data-theme="dark"] .theme-toggle,
-.dark-theme .theme-toggle {
-  color: var(--color-text);
-  background: none;
-  border: none;
-}
-
-/* Dark hover merged into unified rule above near theme-toggle hover/focus */
-
-[data-theme="dark"] .icon,
-.dark-theme .icon {
-  color: #4a9eff;
-}
-
 /* Additional/info sections */
 [data-theme="dark"] .additional-info,
 .dark-theme .additional-info {
   background-color: var(--color-cards);
-  border-color: #4a9eff;
+  border-color: var(--color-link);
 }
 
 [data-theme="dark"] .term-dictionary-section,
@@ -3157,6 +3149,13 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .meta-value,
 .dark-theme .meta-value {
   color: var(--color-text);
+}
+
+/* Ensure the status pill keeps its dedicated foreground in dark mode
+   when an element also carries .meta-value (homepage featured bill). */
+[data-theme="dark"] .meta-value.bill-status,
+.dark-theme .meta-value.bill-status {
+  color: var(--color-status-pill-text);
 }
 
 [data-theme="dark"] .stats-section,
@@ -3216,7 +3215,7 @@ h1, h2, h3, h4, h5, h6 {
 .search-form input:focus,
 .search-form select:focus,
 .search-form button:focus {
-    outline: 2px solid var(--color-navy);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
 }
 
@@ -3330,10 +3329,13 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: var(--spacing-md);
 }
 
+/* Achievement gold — muted warm-honey gold (Congress.gov-coded
+   "official seal" mustard) that pairs with terracotta rather than
+   the bright pure yellow it replaced. */
 .achievement-badge {
   display: inline-block;
-  background-color: #ffd700;
-  color: #3e2723;
+  background-color: #C99B2D;
+  color: #FFFFFF;
   font-weight: 600;
   font-size: var(--font-size-sm);
   padding: 4px 12px;
@@ -3342,8 +3344,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 [data-theme="dark"] .achievement-badge {
-  background-color: #ffca28;
-  color: #000;
+  background-color: #E5BF6B;
+  color: #1e1e1e;
 }
 
 /* ========================================
@@ -3365,12 +3367,6 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: var(--spacing-lg);
 }
 
-/* Threads icon inline link styling (replaces style on contact.html) */
-.social-icon-emoji {
-    font-size: 24px;
-    text-decoration: none;
-}
-
 /* ========================================
    JS-GENERATED ELEMENT CLASSES
    (Replace inline styles in tell-rep.js)
@@ -3389,8 +3385,8 @@ h1, h2, h3, h4, h5, h6 {
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: var(--color-accent);
-    color: var(--color-white);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3431,6 +3427,1084 @@ h1, h2, h3, h4, h5, h6 {
    ======================================== */
 [data-theme="dark"],
 .dark-theme {
-    --card-border-color: #4a9eff;
+    --card-border-color: var(--color-link);
     --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
+
+/* =========================================================================
+   Auth + gamification (v1 MVP)
+   ========================================================================= */
+
+/* --- Navbar user pill (split: left=profile link, right=stats modal) --- */
+.nav-user {
+    display: inline-flex;
+    align-items: stretch;
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    border-radius: 999px;
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+    position: relative;
+}
+
+.nav-user-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    color: var(--color-white);
+    background: transparent;
+    border: none;
+    font: inherit;
+    font-weight: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    text-decoration: none;
+    border-radius: 999px 0 0 999px;
+}
+
+.nav-user-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    color: var(--color-white);
+    background: transparent;
+    border: none;
+    font: inherit;
+    font-weight: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    text-decoration: none;
+    border-radius: 0 999px 999px 0;
+}
+
+.nav-user-left:hover {
+    background-color: rgba(255,255,255,0.15);
+    color: var(--color-white);
+}
+
+.nav-user-right:hover {
+    background-color: rgba(255,255,255,0.15);
+    color: var(--color-white);
+}
+
+.nav-user-right[aria-expanded="true"] {
+    background-color: rgba(255,255,255,0.22);
+}
+
+.nav-user-divider {
+    width: 1px;
+    background-color: rgba(255,255,255,0.3);
+    align-self: stretch;
+    flex-shrink: 0;
+}
+
+.nav-user-tier {
+    font-weight: 700;
+}
+
+/* In the 769-1280px band the widest tier labels ("Coffee Runner",
+   "Congressional Page") push the pill wide enough to collide with the
+   nav links. Shrink the pill instead of hiding half of it — preserve
+   both halves (the tier-side acts as the link to /profile, the
+   kudos-side as the trigger for the side rail / sign-out menu, so
+   neither can disappear). Drop the "Kudos" suffix and ellipsis-trim
+   the tier label to a reasonable width. */
+/* Nav-only mobile breakpoint: kick the full nav out for hamburger
+   earlier than the global 768px breakpoint, since 6 links + logo +
+   user pill won't fit between ~769-824px no matter how we shrink
+   the pill. Other 768px-based layout rules (bills grid, share
+   dropdown, etc.) stay where they are so the rest of the page
+   doesn't lurch. */
+@media (max-width: 825px) {
+    .nav-menu {
+        display: none;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: var(--color-white);
+        box-shadow: var(--shadow-md);
+        padding: var(--spacing-md);
+        gap: var(--spacing-xs);
+    }
+    [data-theme="dark"] .nav-menu,
+    .dark-theme .nav-menu {
+        background-color: var(--color-cards-dark) !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        border-top: 1px solid var(--color-borders-dark);
+    }
+    .nav-menu.active {
+        display: flex;
+    }
+    .nav-toggle {
+        display: flex;
+    }
+}
+
+@media (min-width: 826px) and (max-width: 950px) {
+    .nav-user-tier {
+        display: inline-block;
+        max-width: 9ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
+    }
+    .nav-user-suffix {
+        display: none;
+    }
+    .nav-user-left,
+    .nav-user-right {
+        padding-left: 0.55rem;
+        padding-right: 0.55rem;
+    }
+}
+
+.nav-user-balance {
+    background-color: rgba(255, 255, 255, 0.18);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+}
+
+.nav-user-suffix {
+    opacity: 0.85;
+    font-size: var(--font-size-xs);
+}
+
+/* --- Quick-stats modal --- */
+/* Hide user-rail when toggled off via [hidden] attribute */
+.user-rail[hidden] { display: none; }
+
+/* Dark mode overrides */
+[data-theme="dark"] .nav-user,
+.dark-theme .nav-user {
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .nav-user-left,
+[data-theme="dark"] .nav-user-right,
+.dark-theme .nav-user-left,
+.dark-theme .nav-user-right {
+    color: #ffffff;
+}
+
+[data-theme="dark"] .nav-user-divider,
+.dark-theme .nav-user-divider {
+    background-color: rgba(0,0,0,0.2);
+}
+
+.nav-signin {
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    border-radius: 999px;
+    padding: 0.35rem 1rem;
+}
+
+[data-theme="dark"] .nav-signin,
+.dark-theme .nav-signin {
+    border-color: var(--color-primary);
+    color: var(--color-link);
+}
+
+/* --- Right-side rail (desktop only) --- */
+.user-rail {
+    position: fixed;
+    top: 100px;
+    right: 24px;
+    width: 220px;
+    padding: 1rem 1.1rem;
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    font-size: var(--font-size-sm);
+    z-index: 50;
+}
+
+.rail-tier {
+    font-weight: 700;
+    font-size: var(--font-size-md);
+    color: var(--color-primary);
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+}
+
+[data-theme="dark"] .rail-tier,
+.dark-theme .rail-tier {
+    color: var(--color-link);
+}
+
+.rail-progress-wrap {
+    margin-bottom: 0.75rem;
+}
+
+.rail-progress-bar {
+    height: 6px;
+    background-color: var(--color-light-gray);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.3rem;
+}
+
+[data-theme="dark"] .rail-progress-bar,
+.dark-theme .rail-progress-bar {
+    background-color: var(--color-borders-dark);
+}
+
+.rail-progress-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .rail-progress-fill,
+.dark-theme .rail-progress-fill {
+    background-color: var(--color-primary);
+}
+
+.rail-progress-text {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .rail-progress-text,
+.dark-theme .rail-progress-text {
+    color: var(--color-text);
+    opacity: 0.7;
+}
+
+.rail-divider {
+    border: none;
+    border-top: 1px solid var(--color-borders);
+    margin: 0.75rem 0;
+}
+
+.rail-stat {
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+.rail-stat-num {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-text);
+    margin-right: 0.3rem;
+}
+
+.rail-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+[data-theme="dark"] .rail-stat-label,
+.dark-theme .rail-stat-label {
+    color: var(--color-text);
+    opacity: 0.65;
+}
+
+.rail-stat-small {
+    font-size: var(--font-size-xs);
+}
+
+.rail-reset-hint {
+    margin-top: var(--spacing-sm);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--color-borders);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* On narrow viewports, reposition the rail when toggled open so it
+   doesn't crowd the main content. */
+@media (max-width: 1100px) {
+    .user-rail {
+        top: 70px;
+        right: 12px;
+        width: 200px;
+    }
+}
+
+/* --- Auth pages (login + signup) --- */
+.auth-container {
+    max-width: 480px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+.auth-card {
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--card-border-radius);
+    padding: 2rem 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.auth-card h1 {
+    margin-bottom: 0.5rem;
+}
+
+.auth-error {
+    background-color: #F8E4DD;  /* terracotta wash — matches no-vote badge */
+    color: #8B3A2A;
+    border: 1px solid #C75D4F;
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 1rem;
+    font-size: var(--font-size-sm);
+}
+
+[data-theme="dark"] .auth-error,
+.dark-theme .auth-error {
+    background-color: rgba(232, 145, 127, 0.18);
+    color: #F3B5A6;
+    border-color: #E8917F;
+}
+
+/* Friendly status banner (e.g. "Sign in to vote on bills and earn Kudos.")
+   rendered when the user lands on /login or /signup from a soft-wall. Uses
+   the primary-color family so it reads as informational, not as an error. */
+.auth-notice {
+    background-color: rgba(79, 91, 184, 0.10);
+    color: var(--color-primary);
+    border: 1px solid rgba(79, 91, 184, 0.30);
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 1rem;
+    font-size: var(--font-size-sm);
+}
+
+[data-theme="dark"] .auth-notice,
+.dark-theme .auth-notice {
+    background-color: rgba(164, 171, 228, 0.12);
+    color: #C9CFEF;
+    border-color: rgba(164, 171, 228, 0.35);
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.auth-form label {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+}
+
+.auth-hint {
+    font-weight: 400;
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-xs);
+}
+
+.auth-form input[type="text"],
+.auth-form input[type="email"],
+.auth-form input[type="password"] {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-md);
+    font-family: var(--font-family);
+    background-color: var(--color-cards);
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+}
+
+.auth-form input:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.auth-form button[type="submit"] {
+    margin-top: 0.5rem;
+}
+
+.auth-foot {
+    margin-top: 1.25rem;
+    font-size: var(--font-size-sm);
+    color: var(--color-dark-gray);
+}
+
+.auth-note {
+    font-style: italic;
+    opacity: 0.85;
+}
+
+/* --- Profile page --- */
+.profile-container {
+    max-width: 720px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.profile-header h1 {
+    margin: 0;
+}
+
+.profile-tier-pill {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .profile-stats { grid-template-columns: 1fr; }
+}
+
+.profile-stat {
+    text-align: center;
+    padding: 1rem;
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+}
+
+.profile-stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.1;
+}
+
+[data-theme="dark"] .profile-stat-number,
+.dark-theme .profile-stat-number {
+    color: var(--color-link);
+}
+
+.profile-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.3rem;
+}
+
+.profile-progress {
+    margin-bottom: 2rem;
+}
+
+.profile-progress-label {
+    font-size: var(--font-size-sm);
+    margin-bottom: 0.4rem;
+}
+
+.profile-progress-bar {
+    height: 10px;
+    background-color: var(--color-light-gray);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+[data-theme="dark"] .profile-progress-bar,
+.dark-theme .profile-progress-bar {
+    background-color: var(--color-borders-dark);
+}
+
+.profile-progress-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .profile-progress-fill,
+.dark-theme .profile-progress-fill {
+    background-color: var(--color-primary);
+}
+
+.profile-ladder {
+    margin-top: 2rem;
+}
+
+.tier-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tier-list-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.9rem;
+    border-radius: var(--border-radius);
+    border: 1px solid transparent;
+    margin-bottom: 0.3rem;
+    font-size: var(--font-size-sm);
+}
+
+.tier-num {
+    font-weight: 700;
+    color: var(--color-dark-gray);
+    font-family: ui-monospace, monospace;
+}
+
+.tier-name {
+    font-weight: 500;
+}
+
+.tier-threshold {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+}
+
+.tier-current {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    border-color: var(--color-primary);
+}
+
+.tier-current .tier-num,
+.tier-current .tier-threshold {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .tier-current,
+.dark-theme .tier-current {
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    color: #ffffff;
+}
+
+[data-theme="dark"] .tier-current .tier-num,
+[data-theme="dark"] .tier-current .tier-threshold,
+.dark-theme .tier-current .tier-num,
+.dark-theme .tier-current .tier-threshold {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.tier-done {
+    opacity: 0.6;
+}
+
+.tier-done .tier-name::before {
+    content: "✓ ";
+    color: var(--color-success);
+}
+
+.tier-locked {
+    opacity: 0.55;
+}
+
+.profile-account {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-borders);
+}
+
+/* --- Navbar user dropdown (replaces the persistent right rail) --- */
+.nav-user-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.nav-user-caret {
+    margin-left: 0.25rem;
+    font-size: 0.7em;
+    opacity: 0.8;
+}
+
+.nav-user-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 260px;
+    background-color: var(--color-cards);
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 1rem;
+    z-index: 1100;
+}
+
+.nav-user-panel[hidden] { display: none; }
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+}
+
+.panel-tier {
+    font-size: var(--font-size-xs);
+    color: var(--color-primary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+[data-theme="dark"] .panel-tier,
+.dark-theme .panel-tier {
+    color: var(--color-link);
+}
+
+.panel-progress {
+    margin-bottom: 0.85rem;
+}
+
+.panel-progress-bar {
+    height: 6px;
+    background-color: var(--color-light-gray);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 0.3rem;
+}
+
+[data-theme="dark"] .panel-progress-bar,
+.dark-theme .panel-progress-bar {
+    background-color: var(--color-borders-dark);
+}
+
+.panel-progress-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .panel-progress-fill,
+.dark-theme .panel-progress-fill {
+    background-color: var(--color-primary);
+}
+
+.panel-progress-text {
+    font-size: var(--font-size-xs);
+    color: var(--color-dark-gray);
+}
+
+[data-theme="dark"] .panel-progress-text,
+.dark-theme .panel-progress-text {
+    color: var(--color-text);
+    opacity: 0.7;
+}
+
+.panel-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin: 0 0 0.85rem 0;
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--color-borders);
+    border-bottom: 1px solid var(--color-borders);
+}
+
+.panel-stats > div { font-size: var(--font-size-xs); }
+.panel-stats dt {
+    color: var(--color-dark-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.15rem;
+}
+.panel-stats dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.panel-link {
+    display: block;
+    padding: 0.5rem 0;
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+[data-theme="dark"] .panel-link,
+.dark-theme .panel-link {
+    color: var(--color-accent);
+}
+
+.panel-link:hover { text-decoration: underline; }
+
+.panel-logout {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-borders);
+}
+
+.panel-logout-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-dark-gray);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    padding: 0.25rem 0;
+}
+
+.panel-logout-btn:hover { color: #8B3A2A; }  /* terracotta-family destructive hint */
+
+@media (max-width: 768px) {
+    .nav-user-panel {
+        position: fixed;
+        top: auto;
+        bottom: 1rem;
+        right: 1rem;
+        left: 1rem;
+        width: auto;
+    }
+}
+
+/* --- Email verification banner --- */
+/* Verify banner — palette-aligned: needs-action uses muted honey-gold
+   (matches achievement badge family). Success uses sage. */
+.verify-banner {
+  background: #F4E6C5;
+  color: #6B4D1F;
+  border-bottom: 1px solid #D9BC73;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+.verify-banner-success {
+  background: #E6EFE2;
+  color: #2D5C3F;
+  border-bottom: 1px solid #7FA189;
+}
+.verify-banner-btn {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.verify-banner-btn:hover { background: rgba(0,0,0,0.05); }
+[data-theme="dark"] .verify-banner { background: #3A2F1A; color: #E5BF6B; border-bottom-color: #5A4A2C; }
+[data-theme="dark"] .verify-banner-success { background: #1F3424; color: #B5D4BD; border-bottom-color: #2D5C3F; }
+
+/* --- Signup OAuth divider + Google button --- */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: #888;
+  font-size: 13px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #ddd;
+}
+.auth-divider span { padding: 0 12px; }
+[data-theme="dark"] .auth-divider { color: #aaa; }
+[data-theme="dark"] .auth-divider::before,
+[data-theme="dark"] .auth-divider::after { border-bottom-color: #444; }
+
+.btn-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  text-align: center;
+  padding: 10px 16px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #3c4043;
+  margin-bottom: 10px;
+  font-size: 15px;
+  line-height: 20px;
+  min-height: 42px;
+  box-sizing: border-box;
+}
+.btn-oauth:last-child { margin-bottom: 0; }
+.btn-oauth img,
+.btn-oauth svg { flex: 0 0 auto; }
+.btn-oauth:hover { background: #f8f9fa; }
+
+/* Brand-spec overrides — keep the per-provider chrome distinct so the
+   sign-in row reads as three buttons, not one repeated style. Both
+   short-form (.btn-google) and BEM (.btn-oauth--google) selectors are
+   accepted; the template uses the BEM form, older callers may use the
+   short form. */
+.btn-google,
+.btn-oauth--google { background: #fff; color: #1f1f1f; border-color: #dadce0; }
+.btn-google:hover,
+.btn-oauth--google:hover { background: #f8f9fa; }
+
+/* Match Google's lighter chrome — Microsoft's brand spec calls for a
+   darker grey but the row looks more cohesive with both buttons sharing
+   the same border + text treatment. The 4-square logo still reads as
+   Microsoft. */
+.btn-microsoft,
+.btn-oauth--microsoft { background: #fff; color: #1f1f1f; border-color: #dadce0; }
+.btn-microsoft:hover,
+.btn-oauth--microsoft:hover { background: #f8f9fa; }
+
+.btn-apple,
+.btn-oauth--apple { background: #000; color: #fff; border-color: #000; }
+.btn-apple:hover,
+.btn-oauth--apple:hover { background: #1d1d1f; color: #fff; }
+
+/* Dark-mode treatment: keep brand colors on Apple (it IS the brand
+   color), lighten the white-faced ones just enough to sit on the card. */
+[data-theme="dark"] .btn-oauth { background: #2a2a2a; color: #eee; border-color: #555; }
+[data-theme="dark"] .btn-oauth:hover { background: #333; }
+[data-theme="dark"] .btn-google,
+[data-theme="dark"] .btn-oauth--google,
+[data-theme="dark"] .btn-microsoft,
+[data-theme="dark"] .btn-oauth--microsoft { background: #2a2a2a; color: #eee; border-color: #555; }
+[data-theme="dark"] .btn-google:hover,
+[data-theme="dark"] .btn-oauth--google:hover,
+[data-theme="dark"] .btn-microsoft:hover,
+[data-theme="dark"] .btn-oauth--microsoft:hover { background: #333; }
+[data-theme="dark"] .btn-apple,
+[data-theme="dark"] .btn-oauth--apple { background: #000; color: #fff; border-color: #1d1d1f; }
+[data-theme="dark"] .btn-apple:hover,
+[data-theme="dark"] .btn-oauth--apple:hover { background: #1d1d1f; }
+
+/* OAuth-first layout: providers are primary, email form is secondary
+   and revealed via <details>. */
+.auth-oauth-stack { margin-bottom: 4px; }
+.auth-email-reveal {
+  margin: 0;
+}
+.auth-email-reveal > summary {
+  list-style: none;
+  cursor: pointer;
+  text-align: center;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--color-link);
+  text-decoration: underline;
+  border-radius: 4px;
+}
+.auth-email-reveal > summary::-webkit-details-marker { display: none; }
+.auth-email-reveal > summary:hover { opacity: 0.85; }
+.auth-email-reveal > summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.auth-email-reveal[open] > summary {
+  margin-bottom: 8px;
+  color: #888;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+/* --- Dark mode audit (2026-05-22): swap hardcoded navy to accent on
+   elements that are visible in dark mode but lack a dark override. --- */
+
+/* Poll vote pills */
+[data-theme="dark"] .poll-option.selected,
+.dark-theme .poll-option.selected {
+    background-color: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    color: #ffffff;
+}
+
+/* Search + filter focus rings (navy outline against dark bg is invisible) */
+[data-theme="dark"] .search-input:focus,
+[data-theme="dark"] .filter-form select:focus,
+.dark-theme .search-input:focus,
+.dark-theme .filter-form select:focus {
+    border-color: var(--color-accent);
+    outline-color: var(--color-accent);
+}
+[data-theme="dark"] .search-form input:focus,
+[data-theme="dark"] .search-form select:focus,
+[data-theme="dark"] .search-form button:focus,
+.dark-theme .search-form input:focus,
+.dark-theme .search-form select:focus,
+.dark-theme .search-form button:focus {
+    outline-color: var(--color-accent);
+}
+
+/* Checkbox tick in sort controls */
+[data-theme="dark"] .sort-control input[type="checkbox"],
+.dark-theme .sort-control input[type="checkbox"] {
+    accent-color: var(--color-accent);
+}
+
+/* Loading spinner stripe */
+[data-theme="dark"] .search-form.loading::after,
+.dark-theme .search-form.loading::after {
+    border-top-color: var(--color-accent);
+}
+
+/* Pagination links — invisible in dark without this */
+[data-theme="dark"] .page-link,
+.dark-theme .page-link {
+    color: var(--color-accent);
+    border-color: var(--color-borders);
+}
+[data-theme="dark"] .page-link:hover,
+.dark-theme .page-link:hover {
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+}
+[data-theme="dark"] .page-link.current,
+.dark-theme .page-link.current {
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+    border-color: var(--color-primary-dark);
+}
+
+/* Profile page: tier pill next to username */
+[data-theme="dark"] .profile-tier-pill,
+.dark-theme .profile-tier-pill {
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+}
+
+/* Bill card title text in dark — was dark-brown on near-black */
+[data-theme="dark"] .bill-title,
+.dark-theme .bill-title {
+    color: var(--color-text);
+}
+
+/* Tags section header on bill page */
+[data-theme="dark"] .tags-section h4,
+.dark-theme .tags-section h4 {
+    color: var(--color-text);
+}
+
+/* Auth form inputs (login + signup) — focus ring and border */
+[data-theme="dark"] .auth-form input,
+.dark-theme .auth-form input {
+    background-color: var(--color-cards);
+    color: var(--color-text);
+    border-color: var(--color-borders);
+}
+[data-theme="dark"] .auth-form input:focus,
+.dark-theme .auth-form input:focus {
+    border-color: var(--color-accent);
+    outline-color: var(--color-accent);
+}
+
+/* Primary buttons in dark mode (Sign in / Create account / etc.)
+   Use --color-primary-dark (Material Indigo 500) — same indigo family
+   as light-mode --color-navy, just lighter for contrast. White text
+   on indigo passes WCAG AA at 5.42:1. */
+[data-theme="dark"] .btn-primary,
+.dark-theme .btn-primary {
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+}
+[data-theme="dark"] .btn-primary:hover,
+.dark-theme .btn-primary:hover {
+    background-color: var(--color-primary-dark-hover);
+    color: #ffffff;
+}
+
+/* Secondary buttons in dark mode (Sign out / cancel-style actions).
+   Base uses --color-navy border+text against white; in dark mode the
+   navy border on dark background is invisible. */
+[data-theme="dark"] .btn-secondary,
+.dark-theme .btn-secondary {
+    background-color: transparent;
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+[data-theme="dark"] .btn-secondary:hover,
+.dark-theme .btn-secondary:hover {
+    background-color: var(--color-primary-dark);
+    color: #ffffff;
+    border-color: var(--color-primary-dark);
+}
+
+/* --- Profile: editable username with inline pencil --- */
+.username-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-xs);
+}
+.username-display-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.username-display-row[hidden] { display: none; }
+.username-display {
+    margin: 0;
+}
+.username-edit-btn {
+    background: transparent;
+    border: 1px solid var(--color-borders);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: var(--border-radius);
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.username-edit-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: rgba(0, 0, 0, 0.03);
+}
+.username-edit-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.username-edit-form[hidden] { display: none; }
+.username-edit-form input[type="text"] {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--color-borders);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-lg);
+    font-family: var(--font-family);
+    background-color: var(--color-cards);
+    color: var(--color-text);
+    min-width: 200px;
+}
+.username-edit-form input[type="text"]:focus {
+    border-color: var(--color-primary);
+    outline: 2px solid var(--color-brand-accent);
+    outline-offset: 1px;
+}
+.username-edit-form .btn-small {
+    padding: 0.4rem 0.9rem;
+    font-size: var(--font-size-sm);
+}
+.username-edit-error {
+    color: #8B3A2A;
+    font-size: var(--font-size-sm);
+    margin-top: 0.25rem;
+    flex-basis: 100%;
+}
+[data-theme="dark"] .username-edit-error { color: #F3B5A6; }

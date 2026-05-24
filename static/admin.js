@@ -4,6 +4,21 @@
 const AdminApp = (() => {
   "use strict";
 
+  // Inline Lucide SVG markup — keep in sync with src/icons.py.
+  const ICON_CHECK = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon" aria-hidden="true" focusable="false"><polyline points="20 6 9 17 4 12"/></svg>';
+  const ICON_XCIRCLE = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>';
+
+  // We use innerHTML to inject the SVG + text together — sanitize any
+  // server-supplied string portions to avoid HTML injection.
+  function escapeText(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   // --- Toast notifications ---
   function showToast(message, type = "success") {
     const container = document.getElementById("toast-container");
@@ -103,7 +118,7 @@ const AdminApp = (() => {
 
         showToast(summary, "success");
         if (statusEl) {
-          statusEl.textContent = `✅ ${summary}`;
+          statusEl.innerHTML = `${ICON_CHECK} ${escapeText(summary)}`;
           statusEl.classList.add("sync-status-success");
           statusEl.style.display = "block";
         }
@@ -111,7 +126,7 @@ const AdminApp = (() => {
         const errorMessage = data.error || "Unknown error";
         showToast(`Sync failed: ${errorMessage}`, "error");
         if (statusEl) {
-          statusEl.textContent = `❌ Sync failed: ${errorMessage}`;
+          statusEl.innerHTML = `${ICON_XCIRCLE} Sync failed: ${escapeText(errorMessage)}`;
           statusEl.classList.add("sync-status-error");
           statusEl.style.display = "block";
         }
@@ -120,7 +135,7 @@ const AdminApp = (() => {
       const errorMessage = err?.message || "Network error";
       showToast(`Sync failed: ${errorMessage}`, "error");
       if (statusEl) {
-        statusEl.textContent = `❌ Sync failed: ${errorMessage}`;
+        statusEl.innerHTML = `${ICON_XCIRCLE} Sync failed: ${escapeText(errorMessage)}`;
         statusEl.classList.add("sync-status-error");
         statusEl.style.display = "block";
       }

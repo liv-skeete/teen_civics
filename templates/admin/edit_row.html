@@ -10,7 +10,7 @@
 {% block content %}
 <div class="admin-container">
   <div class="admin-header">
-    <h2>✏️ Edit Row #{{ row_id }} in {{ table_name }}</h2>
+    <h2>{{ icon('edit') }} Edit Row #{{ row_id }} in {{ table_name }}</h2>
     <div class="admin-header-actions">
       <a href="{{ url_for('admin_table_rows', table_name=table_name) }}" class="btn btn-secondary">← Back to {{ table_name }}</a>
       <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
@@ -77,7 +77,7 @@
     {% endfor %}
 
     <div class="admin-form-actions">
-      <button type="button" class="btn btn-primary" onclick="AdminApp.handleSave()">💾 Save Changes</button>
+      <button type="button" class="btn btn-primary" onclick="AdminApp.handleSave()">{{ icon('save') }} Save Changes</button>
       <a href="{{ url_for('admin_table_rows', table_name=table_name) }}" class="btn btn-secondary">Cancel</a>
     </div>
   </form>

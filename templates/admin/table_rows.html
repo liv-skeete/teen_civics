@@ -10,7 +10,7 @@
 {% block content %}
 <div class="admin-container">
   <div class="admin-header">
-    <h2>📄 {{ table_name }}</h2>
+    <h2>{{ icon('file-text') }} {{ table_name }}</h2>
     <div class="admin-header-actions">
       <a href="{{ url_for('admin_tables') }}" class="btn btn-secondary">← Tables</a>
       <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Dashboard</a>

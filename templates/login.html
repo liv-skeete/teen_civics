@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+  <div class="auth-card">
+    <h1>Sign in</h1>
+    <p>Welcome back. Sign in to vote and earn Kudos.</p>
+
+    {% if error %}
+    <div class="auth-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    {# --- OAuth-first: primary path is provider buttons. Email form lives
+       behind a <details> reveal so users who do have a password can find it,
+       but it isn't the visual default any more. --- #}
+    {% set oauth_query = ('?next=' ~ (next_url | urlencode)) if next_url else '' %}
+    <div class="auth-oauth-stack">
+      {% if google_oauth_enabled %}
+      <a href="{{ url_for('google_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--google" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/google.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Google</span>
+      </a>
+      {% endif %}
+
+      {% if microsoft_oauth_enabled %}
+      <a href="{{ url_for('microsoft_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--microsoft" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/microsoft.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Microsoft</span>
+      </a>
+      {% endif %}
+
+      {% if apple_oauth_enabled %}
+      <a href="{{ url_for('apple_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--apple" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/apple.svg') }}" alt="" class="btn-oauth-mark" width="16" height="18">
+        <span>Continue with Apple</span>
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="auth-divider"><span>or</span></div>
+
+    {# <details> keeps the email form one click away without requiring JS.
+       Pre-open it when an error came back from a POST so the user lands
+       on the form they were just using. #}
+    <details class="auth-email-reveal" {% if error %}open{% endif %}>
+      <summary>Sign in with email</summary>
+      <form method="post" action="{{ url_for('login') }}" class="auth-form" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        {% if reason %}<input type="hidden" name="reason" value="{{ reason }}">{% endif %}
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" value="{{ email }}" autocomplete="email" required maxlength="254">
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8" maxlength="128">
+
+        <button type="submit" class="btn btn-primary">Sign in</button>
+        <p class="auth-foot auth-foot-link"><a href="{{ url_for('forgot_password') }}">Forgot password?</a></p>
+      </form>
+    </details>
+
+    <p class="auth-foot">New here? <a href="{{ url_for('signup', next=next_url, reason=reason) if next_url else url_for('signup') }}">Create an account</a>.</p>
+  </div>
+</div>
+{% endblock %}

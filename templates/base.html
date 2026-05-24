@@ -7,6 +7,7 @@
   <meta name="description" content="{% block meta_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
   <meta name="keywords" content="congress, bills, government, politics, teens, education, civic engagement">
   <meta name="author" content="Liv Skeete - TeenCivics">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 
   <!-- Open Graph / Facebook -->
   <meta property="fb:app_id" content="1495910562545241">
@@ -18,7 +19,7 @@
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image">
-  <meta property="twitter:url" content="{% block twitter_url %}https://teencivics.org{{ request.path }}{% endblock %}">
+  <meta property="twitter:url" content="https://teencivics.org{{ request.path }}">
   <meta property="twitter:title" content="{% block twitter_title %}TeenCivics - Congressional Bills for Teens{% endblock %}">
   <meta property="twitter:description" content="{% block twitter_description %}Understand congressional bills made simple for teenagers. Read AI-summarized bills, vote in polls, and learn about how government works.{% endblock %}">
   <meta property="twitter:image" content="{% block twitter_image %}https://teencivics.org/static/img/logo.png{% endblock %}">
@@ -33,7 +34,8 @@
   <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-  <meta name="theme-color" content="#1A237E">
+  <meta name="theme-color" content="#FAF7F2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)">
 
   <!-- Preconnect to external domains for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -80,10 +82,10 @@
     })();
   </script>
   <!-- CSS with cache busting -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2026-02-05-v8') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2026-05-18-v1') }}">
   
   <!-- Google Fonts - Load only weights we actually use -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Page-specific CSS injection point -->
   {% block extra_css %}{% endblock %}
@@ -142,12 +144,83 @@
         <a href="{{ url_for('about') }}" class="nav-link" {% if request.endpoint == 'about' %}aria-current="page"{% endif %}>About</a>
         <a href="{{ url_for('grants') }}" class="nav-link" {% if request.endpoint == 'grants' %}aria-current="page"{% endif %}>Grants</a>
         <a href="{{ url_for('contact') }}" class="nav-link" {% if request.endpoint == 'contact' %}aria-current="page"{% endif %}>Contact</a>
+        {% if current_user %}
+          <div class="nav-user" role="group" aria-label="Your civic standing">
+            <a href="{{ url_for('profile') }}" class="nav-user-left" {% if request.endpoint == 'profile' %}aria-current="page"{% endif %} aria-label="Go to profile">
+              <span class="nav-user-tier" data-rail-tier>{{ current_user.tier }}</span>
+            </a>
+            <span class="nav-user-divider" aria-hidden="true"></span>
+            <button type="button" class="nav-user-right" aria-label="View your stats" aria-expanded="false" aria-controls="user-rail" id="user-pill-btn">
+              <span class="nav-user-balance" data-rail-balance>{{ current_user.balance|int }}</span>
+              <span class="nav-user-suffix">Kudos</span>
+            </button>
+          </div>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="nav-link nav-signin">Sign in</a>
+        {% endif %}
       </div>
       <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-menu">
         <span class="bar"></span><span class="bar"></span><span class="bar"></span>
       </button>
     </div>
   </nav>
+
+  {% if flash_verify %}
+    <div class="verify-banner verify-banner-success" role="status">
+      {{ flash_verify }}
+    </div>
+  {% endif %}
+
+  {% if verify_banner_needed %}
+    <div class="verify-banner" role="alert">
+      <span>Verify your email to vote on bills and earn Kudos. <small>(Check spam if you don't see it.)</small></span>
+      <form method="post" action="{{ url_for('resend_verification') }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="verify-banner-btn">Resend link</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {% if current_user %}
+  <aside id="user-rail" class="user-rail" aria-label="Your civic standing" data-user-rail hidden>
+    <div class="rail-tier" data-rail-tier>{{ current_user.tier }}</div>
+    {% if current_user.progress.next_tier %}
+      <div class="rail-progress-wrap">
+        <div class="rail-progress-bar" aria-label="Progress to next tier">
+          <div class="rail-progress-fill" data-rail-fill style="width: {{ current_user.progress.percent }}%"></div>
+        </div>
+        <div class="rail-progress-text">
+          <span data-rail-to-next>{{ current_user.progress.votes_to_next }}</span>
+          to <span data-rail-next-tier>{{ current_user.progress.next_tier }}</span>
+        </div>
+      </div>
+    {% else %}
+      <div class="rail-progress-text">Top rank reached.</div>
+    {% endif %}
+    <hr class="rail-divider">
+    <div class="rail-stat">
+      <span class="rail-stat-num" data-rail-balance>{{ current_user.balance|int }}</span>
+      <span class="rail-stat-label">Kudos</span>
+    </div>
+    <div class="rail-stat">
+      <span class="rail-stat-num" data-rail-lifetime>{{ current_user.lifetime_votes_cast }}</span>
+      <span class="rail-stat-label">Bills voted on</span>
+    </div>
+    <div class="rail-stat rail-stat-small">
+      <span data-rail-daily>{{ current_user.daily_used }}/{{ current_user.daily_cap }}</span>
+      <span class="rail-stat-label">today</span>
+    </div>
+    <div class="rail-stat">
+      <span class="rail-stat-num" data-rail-tell-rep-lifetime>{{ current_user.lifetime_stances_sent }}</span>
+      <span class="rail-stat-label">Stances sent</span>
+    </div>
+    <div class="rail-stat rail-stat-small">
+      <span data-rail-tell-rep-daily>{{ current_user.daily_tell_rep_used }}/{{ current_user.daily_tell_rep_cap }}</span>
+      <span class="rail-stat-label">today (+2 Kudos)</span>
+    </div>
+    <p class="rail-reset-hint">Daily counts reset at midnight ET.</p>
+  </aside>
+  {% endif %}
 
   <!-- Main Content -->
   <main class="main-content" id="main-content">

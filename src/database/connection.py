@@ -323,8 +323,14 @@ def postgres_connect() -> Iterator[Optional[psycopg2.extensions.connection]]:
         return
 
     # 2. Lazy pool initialization (non-blocking on failure)
+    # Pre-warm 2 connections per worker (was 1) so the first concurrent
+    # request after a fresh worker boot doesn't block on a cold TLS
+    # handshake to Postgres. The Railway DB cold handshake adds ~1.5s
+    # to the first request through each worker pool — and with 3 gunicorn
+    # workers × min=1, every 3rd-ish request was hitting cold-conn lag.
+    # max=10 stays the same; we only changed the floor.
     if _connection_pool is None:
-        init_connection_pool()
+        init_connection_pool(minconn=2, maxconn=10)
 
     if _connection_pool is None:
         _cb_record_failure()

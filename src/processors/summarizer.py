@@ -20,7 +20,7 @@ load_dotenv()
 VENICE_BASE_URL = os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1")
 
 # Model configuration — Venice AI model names use dashes.
-PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-sonnet-4-6")
+PREFERRED_MODEL = os.getenv("SUMMARIZER_MODEL", "claude-opus-4-7")
 FALLBACK_MODEL = os.getenv("VENICE_MODEL_FALLBACK", "kimi-k2-5")
 
 VALID_MODELS = {
@@ -28,6 +28,8 @@ VALID_MODELS = {
     "claude-opus-4-5",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
+    "claude-sonnet-4-7",
+    "claude-opus-4-7",
     "kimi-k2-5",
     "llama-3.3-70b",
     "hermes-3-llama-3.1-405b",
@@ -75,7 +77,16 @@ def _build_enhanced_system_prompt() -> str:
         "- No hedging words ('may', 'could', 'might', 'likely', 'appears'). State facts directly.\n"
         "- No direct address ('you', 'your'). Keep it informational but engaging.\n"
         "- Strong verbs: 'requires', 'bans', 'funds', 'creates', 'expands', 'restricts'.\n"
-        "- Each bullet: 1-2 sentences maximum. Be concise.\n\n"
+        "- Each bullet: 1-2 sentences maximum. Be concise.\n"
+        "- **Expand acronyms on first mention**, then use the short form.\n"
+        "  Format: 'Affordable Care Act (ACA)', 'Federal Communications\n"
+        "  Commission (FCC)', 'Children's Health Insurance Program (CHIP)',\n"
+        "  'Health Savings Account (HSA)'. A 13-year-old must be able to\n"
+        "  read the summary without outside knowledge. Exception:\n"
+        "  universally-known abbreviations like USA, US, DC, NASA, FBI.\n"
+        "  After first use within the same summary, the bare acronym is\n"
+        "  fine. Applies to ALL sections — the gist counts as 'first use'\n"
+        "  for the rest of the summary.\n\n"
         
         "**WHEN FULL BILL TEXT IS PROVIDED:**\n"
         "- Extract SPECIFIC provisions: deadlines, dollar amounts, legal standards, requirements.\n"
@@ -90,22 +101,100 @@ def _build_enhanced_system_prompt() -> str:
         "- If it's a resolution, explain what it actually does (designate, recognize, express support for what specifically?).\n\n"
         
         "**detailed (structured summary):**\n"
-        "- Target length: 250-350 words for most bills\n"
-        "- For complex bills with full text: 350-450 words maximum\n"
-        "- For simple resolutions: 150-250 words\n"
-        "- ALWAYS include the emoji signposts - they are REQUIRED.\n"
-        "- Use bullet points for scannability.\n"
-        "- Each bullet: 1-2 sentences maximum.\n"
-        "- DO NOT use **bold** markdown formatting in your output - plain text only.\n\n"
-        
+        "- HARD CAP: 200 words total. Per-section caps below are NON-NEGOTIABLE.\n"
+        "- Count words per bullet before output. Bullet caps are MAX values —\n"
+        "  use fewer bullets if a bullet would be filler.\n"
+        "- NO REPETITION between sections. Each section must add NEW information.\n"
+        "  Do not restate what's in 'The gist' or earlier sections.\n"
+        "- ALWAYS include the emoji signposts — the UI maps them to icons.\n"
+        "  Do not omit them.\n"
+        "- Plain text only. No bold/italic markdown.\n\n"
+
         "**REQUIRED section structure (EXACT order, EXACT emojis):**\n\n"
-        
-        "🔎 Overview\n"
-        "  - Brief description using strong verbs and specific details\n"
-        "  - Bill type and current status\n"
-        "  - 2-3 bullets max, each 1-2 sentences\n\n"
-        
-        "👥 Who does this affect? (WITH TEEN IMPACT SCORING)\n"
+
+        "⚡ The gist\n"
+        "  - 1-2 sentences, ≤40 words total. The TL;DR.\n"
+        "  - State what the bill does AND who it affects in plain English.\n"
+        "  - Write this LAST, after drafting other sections, so it reflects\n"
+        "    the whole bill.\n\n"
+
+        "⚖️ Who wins, who loses\n"
+        "  - EXACTLY 2 bullets. First starts 'Wins:', second starts 'Loses:'.\n"
+        "  - ≤20 words each. Name concrete groups, not generic categories.\n"
+        "  - For resolutions or symbolic bills where no one materially loses,\n"
+        "    say so explicitly ('Loses: no one materially; symbolic only').\n"
+        "  - DO NOT repeat 'who it affects' from The gist — go deeper here.\n\n"
+
+        "🔑 What it does\n"
+        "  - 3-4 bullets, ≤20 words each. Skip entirely for symbolic resolutions\n"
+        "    with nothing substantive beyond what's in The gist.\n"
+        "  - Specific provisions ONLY: dollar amounts, deadlines, legal changes,\n"
+        "    mechanisms, enforcement.\n"
+        "  - DO NOT repeat goals/purpose from The gist. This section is the\n"
+        "    'how' — the gist is the 'what'.\n\n"
+
+        "💡 Why should I care?\n"
+        "  - 3-4 sentences, ≤80 words total. Single paragraph, no bullets.\n"
+        "  - MUST present BOTH viewpoints OR an alternative approach. This\n"
+        "    is the only section where opposing perspectives belong.\n"
+        "  - Use 'Supporters say... Critics argue...' or 'An alternative being\n"
+        "    debated...' constructions.\n"
+        "  - End with one concrete site-feature CTA, phrased exactly like:\n"
+        "    'Where do you land? Vote below and use \"Tell Your Rep\" to make\n"
+        "    sure your voice reaches Congress.'\n"
+        "  - DO NOT editorialize. Stay neutral. Both sides get fair framing.\n\n"
+
+        "**SELF-CHECK before output:**\n"
+        "- Did every section add NEW information not in The gist?\n"
+        "- Did 'Why should I care?' include both viewpoints (or an alternative)?\n"
+        "- Did 'Why should I care?' end with the Tell Your Rep CTA?\n"
+        "- Is total word count ≤200?\n\n"
+
+        "**TWO WORKED EXAMPLES (follow this structure exactly):**\n\n"
+
+        "<example_1>\n"
+        "Bill: H.R. 7308 'Turn It Down Act' (Rep. Bice, R-OK-5). Extends the\n"
+        "2010 CALM Act commercial-loudness rules to streaming services.\n\n"
+        "⚡ The gist\n"
+        "- Forces streaming services to follow the same loudness rules as cable TV — no more commercials blasting twice as loud as the show.\n\n"
+        "⚖️ Who wins, who loses\n"
+        "- Wins: streaming viewers, accessibility advocates, anyone with sleeping siblings or roommates.\n"
+        "- Loses: advertisers losing the loudness-grabs-attention tactic; streaming platforms facing new Federal Communications Commission (FCC) compliance costs.\n\n"
+        "🔑 What it does\n"
+        "- Extends the 2010 Commercial Advertisement Loudness Mitigation (CALM) Act to internet-delivered video (YouTube, Hulu, Netflix, Disney+).\n"
+        "- Gives the FCC 18 months to write specific volume-matching rules.\n"
+        "- Applies to commercial ads only; user-generated content (TikTok, podcasts) is exempt.\n"
+        "- Enforcement falls under the FCC's existing Communications Act authority.\n\n"
+        "💡 Why should I care?\n"
+        "Supporters say streaming is now most teens' main viewing, so the 2010 cable rule needs to follow. Critics argue the FCC has bigger priorities and platforms self-regulate fine. An alternative: require platforms to give users a built-in ad-volume cap. Where do you land? Vote below and use \"Tell Your Rep\" to make sure your voice reaches Congress.\n"
+        "</example_1>\n\n"
+
+        "<example_2>\n"
+        "Bill: H.RES. 1087 (Rep. Frankel, D-FL-22). Non-binding resolution\n"
+        "recognizing community water fluoridation as a safe public-health\n"
+        "intervention. Pushes back on growing anti-fluoride movements.\n\n"
+        "⚡ The gist\n"
+        "- Non-binding House resolution declaring community water fluoridation safe and effective. Pushes back on the recent anti-fluoride movement in cities and states.\n\n"
+        "⚖️ Who wins, who loses\n"
+        "- Wins: dental health groups, the Centers for Disease Control (CDC), families relying on public water systems for cavity prevention.\n"
+        "- Loses: anti-fluoride advocates, communities that recently voted to remove fluoride from their water.\n\n"
+        "🔑 What it does\n"
+        "- Resolution only — changes no law, requires no funding.\n"
+        "- Officially recognizes water fluoridation as a 'safe, effective' public health intervention.\n"
+        "- Cites CDC data linking fluoride to a 25% reduction in childhood tooth decay.\n"
+        "- Counters a wave of 2024-2025 state and city decisions removing fluoride.\n\n"
+        "💡 Why should I care?\n"
+        "Supporters point to decades of research showing fluoride prevents cavities, especially in low-income kids who skip dentist visits. Critics say it's medicine forced on residents without consent and want individual fluoride supplements instead. The actual decision happens at your local water utility. Where do you land? Vote below and use \"Tell Your Rep\" to make sure your voice reaches Congress.\n"
+        "</example_2>\n\n"
+
+        "**INTERNAL TEEN IMPACT SCORING (JSON ONLY — DO NOT write in prose):**\n\n"
+
+        "Score the bill 0-10 using the rubric below and return it as a JSON\n"
+        "field 'teen_impact_score' (integer). DO NOT mention the score, the\n"
+        "rubric, or 'teen impact' anywhere in the visible summary. The score\n"
+        "drives a separate UI badge — the prose stays score-free.\n\n"
+
+        "(WITH TEEN IMPACT SCORING)\n"
         "  - Main groups: [Specific groups, not generic categories]\n"
         "  - Who benefits/loses: [Concrete impacts based on provisions]\n"
         "  - **MANDATORY** Teen impact score: MUST use exact format 'Teen impact score: X/10 (brief description)'\n\n"
@@ -257,63 +346,6 @@ def _build_enhanced_system_prompt() -> str:
         "   → YES → 2-4 (minimal relevance)\n"
         "   → NO → 0-1 (no connection)\n\n"
         
-        "**FORMATTING REQUIREMENTS FOR TEEN IMPACT:**\n"
-        "- Format: 'Teen impact score: X/10 (brief description)'\n"
-        "- Description must match score tier:\n"
-        "  * 8-10: 'direct impact on teen programs/services/spaces/rights'\n"
-        "  * 6-7: 'indirect impact via family economics/community resources'\n"
-        "  * 3-5: 'symbolic/awareness with limited policy impact' OR 'minimal but tangible relevance'\n"
-        "  * 0-2: 'minimal teen connection' OR 'no connection to teen experience'\n"
-        "- If score > 5: Add 'Teen-specific impact:' bullet (1-2 sentences) explaining concrete daily life connection\n"
-        "- If score ≤ 5: Do NOT add teen-specific impact bullet\n\n"
-        
-        "  - 3-4 bullets total for this section\n\n"
-        
-        "🔑 What This Bill Does\n"
-        "  - SPECIFIC TECHNICAL DETAILS extracted from full bill text (NOT high-level goals)\n"
-        "  - For the 20% of advanced teens who want depth. Other 80% get what they need from Overview and 'In short'.\n"
-        "  - Most bills: 3-5 bullets (ONLY the most crucial technical details)\n"
-        "  - Complex appropriations/omnibus: up to 7 bullets (when genuinely necessary)\n"
-        "  - Simple resolutions: 2-3 bullets or skip entirely if nothing substantive\n"
-        "  - Each bullet: 1-2 sentences, concrete and specific\n\n"
-        
-        "  What belongs here:\n"
-        "  ✅ Money: Dollar amounts, funding formulas, eligibility thresholds, distribution methods\n"
-        "  ✅ Deadlines: Implementation schedules, timeframes, phase-in periods, reporting deadlines\n"
-        "  ✅ Legal changes: Amendments to existing law (cite U.S.C. sections when available)\n"
-        "  ✅ Restrictions: What funds CAN'T be used for, limitations, prohibitions\n"
-        "  ✅ Requirements: What recipients must do, compliance obligations, mandates\n"
-        "  ✅ Enforcement: Penalties, withholding provisions, oversight mechanisms\n\n"
-        
-        "  What does NOT belong here (already covered elsewhere):\n"
-        "  ❌ Generic goals: 'Aims to improve student learning' → belongs in Overview\n"
-        "  ❌ Broad descriptions: 'Provides funding for teacher training' (too vague) → give amount/timeline\n"
-        "  ❌ Purpose statements: 'Focuses on enhancing outcomes' → belongs in Overview\n"
-        "  ❌ Repetition: Check Overview and 'In short' first—don't repeat\n\n"
-        
-        "  If full bill text NOT available:\n"
-        "  - Return an empty JSON object: {}\n\n"
-        
-        "📌 Legislative Status\n"
-        "  - Current stage: introduced/committee/passed House/Senate/sent to President/enacted\n"
-        "  - Procedural notes ONLY if relevant (House rules, voting requirements)\n"
-        "  - 2-3 bullets max, each 1 sentence\n"
-        "  - Skip entirely for simple resolutions with no procedural complexity\n\n"
-        
-        "👉 In short\n"
-        "  - 3-5 plain English bullets summarizing key takeaways\n"
-        "  - Bottom-line: what someone needs to know\n"
-        "  - Write like explaining to a friend\n"
-        "  - Each bullet: 1 sentence\n\n"
-        
-        "💡 Why should I care?\n"
-        "  - Single paragraph (4-6 sentences, 60-80 words) explaining real-world relevance\n"
-        "  - NO bullet points in this section—write as flowing paragraph\n"
-        "  - Tie to everyday stakes: family budgets, school policies, job opportunities, rights, environment\n"
-        "  - Make it relatable without being preachy or sensational\n"
-        "  - Focus on practical implications, not political spin\n"
-        "  - Conversational but factual tone\n\n"
-        
         "**tweet (engaging summary for X/Twitter):**\n"
         "- Target: Teens aged 13-19. Use language they find engaging.\n"
         "- Length: <=200 characters that grabs attention while remaining factual\n"
@@ -338,9 +370,12 @@ def _build_enhanced_system_prompt() -> str:
         "- Short, clear sentences (no run-ons)?\n"
         "- Active voice used consistently?\n"
         "- Teen-appropriate vocabulary throughout?\n"
-        "- Teen impact score matches the decision tree logic?\n"
-        "- No repetition between sections?\n"
-        "- All required emoji headers present in correct order?\n\n"
+        "- teen_impact_score JSON field matches the rubric decision tree?\n"
+        "- NO mention of 'teen impact', a score, or '/10' anywhere in the visible prose?\n"
+        "- Total word count ≤200?\n"
+        "- All 4 emoji headers present in order (⚡ ⚖️ 🔑 💡)?\n"
+        "- 'Why should I care?' presents BOTH viewpoints (or an alternative) AND ends with the Tell Your Rep CTA?\n"
+        "- No section repeats info from earlier sections?\n\n"
         
         "**SUBJECT TAGGING (for internal classification — NOT shown to users):**\n"
         "Assign 1–3 subject tags from this FIXED list of slugs:\n"
@@ -353,7 +388,7 @@ def _build_enhanced_system_prompt() -> str:
         "Example: \"economy-finance,education-youth\"\n\n"
         
         "**Output format (strict JSON):**\n"
-        '{"overview": "...", "detailed": "...", "tweet": "...", "subject_tags": "slug1,slug2"}\n'
+        '{"overview": "...", "detailed": "...", "tweet": "...", "teen_impact_score": 7, "subject_tags": "slug1,slug2"}\n'
     )
 
 def _build_user_prompt(bill: Dict[str, Any]) -> str:
@@ -857,82 +892,69 @@ def _synthesize_from_metadata_py(bill: Dict[str, Any]) -> Dict[str, Any]:
     if prefix:
         overview = f"{prefix} — {overview}"
     
-    # Build detailed summary
-    lines = ["🔎 Overview"]
-    lines.append(f"- {title}" if title else "- Resolution.")
-    if latest_action:
-        lines.append(f"- Latest action: {latest_action}")
-    lines.append("")
-    
-    lines.append("👥 Who does this affect?")
+    # Build detailed summary — matches the 4-section structure the AI prompt
+    # produces, so old + new render identically in the UI.
     ltitle = title.lower()
-    
-    # Determine affected groups and teen impact
-    affected = []
+    is_resolution = bill_type in ("SRES", "HRES")
+
+    if is_resolution:
+        gist = f"Non-binding resolution: {title}." if title else "Non-binding resolution."
+    else:
+        gist = title if title else "Bill awaiting full text."
+    gist = gist[:220]  # cap to roughly 40 words
+
     teen_score = 2
-    
     if any(kw in ltitle for kw in ["student", "education", "school", "college"]):
-        affected.append("students, educators, schools, families")
-        teen_score = 7
+        groups, teen_score = "students, educators, schools, families", 7
     elif any(kw in ltitle for kw in ["employment", "job", "wage", "worker"]):
-        affected.append("workers, employers, job seekers")
-        teen_score = 6
+        groups, teen_score = "workers, employers, job seekers", 6
     elif any(kw in ltitle for kw in ["health", "medicaid", "medicare"]):
-        affected.append("healthcare recipients, medical providers")
-        teen_score = 5
+        groups, teen_score = "healthcare recipients, medical providers", 5
     elif any(kw in ltitle for kw in ["internet", "online", "privacy", "social media"]):
-        affected.append("internet users, tech companies")
-        teen_score = 7
+        groups, teen_score = "internet users, tech companies", 7
     elif any(kw in ltitle for kw in ["environment", "climate"]):
-        affected.append("environmental groups, affected industries")
-        teen_score = 6
+        groups, teen_score = "environmental groups, affected industries", 6
     elif any(kw in ltitle for kw in ["voting", "election"]):
-        affected.append("voters, election officials")
-        teen_score = 5
+        groups, teen_score = "voters, election officials", 5
     else:
-        affected.append("groups identified in bill title")
-        teen_score = 2
-    
-    lines.append(f"- Main groups: {', '.join(affected)}")
-    lines.append("- Who benefits/loses: Full text needed for analysis")
-    lines.append(f"- Teen impact score: {teen_score}/10")
-    lines.append("")
-    
-    lines.append("🔑 What This Bill Does")
-    if any(kw in ltitle for kw in ["designating", "recognizing", "awareness"]):
-        lines.append("- Symbolic resolution expressing Congressional position")
+        groups, teen_score = "groups identified in bill title", 2
+
+    lines = ["⚡ The gist", f"- {gist}", ""]
+
+    lines.append("⚖️ Who wins, who loses")
+    if is_resolution:
+        lines.append(f"- Wins: {groups} who support the position expressed.")
+        lines.append("- Loses: no one materially; resolution is symbolic only.")
     else:
-        lines.append("- Full text needed for detailed provisions")
+        lines.append(f"- Wins: {groups} who benefit from the proposed change.")
+        lines.append("- Loses: full bill text needed for detailed analysis.")
     lines.append("")
-    
-    lines.append("📌 Legislative Status")
-    if status:
-        lines.append(f"- Status: {status}")
-    if latest_action:
-        lines.append(f"- Latest: {latest_action}")
-    lines.append("")
-    
-    lines.append("👉 In short")
-    if bill_type in ("SRES", "HRES"):
-        lines.append("- Resolution stating Congressional position")
-        lines.append("- Does not create or amend law")
-    else:
-        lines.append("- Full text needed for summary")
-    lines.append("")
-    
+
+    if not is_resolution:
+        lines.append("🔑 What it does")
+        lines.append("- Specific provisions require the full bill text — not yet available.")
+        if latest_action:
+            lines.append(f"- Latest legislative action: {latest_action[:100]}.")
+        lines.append("")
+
     lines.append("💡 Why should I care?")
-    if bill_type in ("SRES", "HRES"):
-        lines.append("This resolution expresses Congress's position but doesn't create new laws. "
-                    "It's symbolic, showing where Congress stands on this topic.")
+    if is_resolution:
+        lines.append("Supporters say resolutions like this signal where Congress stands and "
+                     "can prompt local action. Critics see them as symbolic gestures that don't "
+                     "change law or funding. Where do you land? Vote below and use "
+                     "\"Tell Your Rep\" to make sure your voice reaches Congress.")
     else:
-        lines.append(f"This bill addresses {title.lower() if title else 'policy'}. "
-                    "Legislative decisions shape government programs and funding.")
-    
+        lines.append(f"Supporters of this bill argue it addresses {ltitle or 'an important policy area'}. "
+                     "Critics may raise concerns about cost, scope, or unintended effects. Full bill "
+                     "text would clarify the tradeoffs. Where do you land? Vote below and use "
+                     "\"Tell Your Rep\" to make sure your voice reaches Congress.")
+
     detailed = "\n".join(lines)
-    
+
     return {
         "overview": overview,
         "detailed": detailed,
+        "teen_impact_score": teen_score,
     }
 
 def _deduplicate_headers_and_scores(text: str) -> str:
@@ -970,31 +992,35 @@ def _deduplicate_headers_and_scores(text: str) -> str:
     return '\n'.join(new_lines)
 
 def _validate_summary_format(detailed: str) -> bool:
-    """Validate summary structure (non-production only)."""
+    """Validate summary structure (non-production only).
+
+    Post-2026-05 prompt produces a 4-section structure:
+    'The gist', 'Who wins, who loses', 'What it does', 'Why should I care?'.
+    'What it does' is allowed to be missing for symbolic resolutions.
+    """
     if not detailed:
         return False
-    
+
     required = [
-        "overview",
-        "who does this affect?",
-        "what this bill does",
-        "in short",
-        "why should i care?"
+        "the gist",
+        "who wins, who loses",
+        "what it does",
+        "why should i care?",
     ]
-    
-    found = []
-    for line in detailed.lower().split('\n'):
+    optional = {"what it does"}
+
+    found = set()
+    for line in detailed.lower().split("\n"):
         stripped = line.strip()
         if not stripped:
             continue
-        
-        # Check for section headers
         for section in required:
-            if section in stripped and section not in found:
-                found.append(section)
-    
-    # Allow missing "Legislative Status" (it's optional)
-    return len(found) >= len(required) - 1
+            if section in stripped:
+                found.add(section)
+
+    missing = set(required) - found
+    # Allow up to one optional section to be absent.
+    return len(missing - optional) == 0 and len(missing) <= 1
 
 def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     """
@@ -1074,11 +1100,11 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     if os.getenv('FLASK_ENV') != 'production':
         if not _validate_summary_format(detailed):
             logger.warning("Summary format validation failed")
-        
-        # Check for exactly one teen impact score
-        scores = re.findall(r'Teen\s+impact\s+score:\s*\d{1,2}/10', detailed, re.IGNORECASE)
-        if len(scores) != 1:
-            logger.warning(f"Found {len(scores)} teen impact scores, expected 1")
+
+        # Score now lives in the JSON field, not the prose. Warn if it
+        # leaked back into the visible text — that's a prompt regression.
+        if re.search(r'Teen\s+impact\s+score:\s*\d{1,2}/10', detailed, re.IGNORECASE):
+            logger.warning("Teen impact score leaked into the visible summary prose")
     
     elapsed = time.monotonic() - start
     logger.info(f"Summary complete in {elapsed:.2f}s")

@@ -50,14 +50,38 @@ def snake_case(text: str) -> str:
     result = re.sub(r'[^a-zA-Z0-9]+', '_', text.lower())
     return result.strip('_')
 
-def extract_teen_impact_score(summary_detailed: str) -> Optional[int]:
+def extract_teen_impact_score(summary: Any) -> Optional[int]:
     """
-    Extract Teen Impact Score from the detailed summary text.
+    Extract Teen Impact Score.
+
+    Preferred path: read the 'teen_impact_score' JSON field from the
+    summarizer's structured output (post-2026-05 prompt — score lives
+    in JSON, not in the visible prose).
+
+    Fallback: regex-extract 'Teen impact score: X/10' from the detailed
+    prose (pre-2026-05 prompt). Kept for back-compat with older summaries
+    being regenerated.
+
+    Accepts either a dict (the summary object) or a raw string (legacy
+    callers that only have the detailed prose).
     """
-    if not summary_detailed:
+    if isinstance(summary, dict):
+        raw = summary.get("teen_impact_score")
+        if raw is not None:
+            try:
+                score = int(raw)
+                if 0 <= score <= 10:
+                    return score
+            except (ValueError, TypeError):
+                pass
+        text = summary.get("detailed") or ""
+    else:
+        text = summary or ""
+
+    if not text:
         return None
     import re
-    match = re.search(r"Teen impact score:\s*(\d+)/10", summary_detailed, re.IGNORECASE)
+    match = re.search(r"Teen impact score:\s*(\d+)/10", text, re.IGNORECASE)
     if match:
         try:
             return int(match.group(1))
@@ -747,7 +771,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     return 1
 
                 term_dict_json = ""
-                teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+                teen_impact_score = extract_teen_impact_score(summary)
                 logger.info(f"⭐️ Extracted Teen Impact Score (regen): {teen_impact_score}")
 
                 # Persist regenerated summaries
@@ -840,7 +864,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
             
             term_dict_json = ""
 
-            teen_impact_score = extract_teen_impact_score(summary.get("detailed", ""))
+            teen_impact_score = extract_teen_impact_score(summary)
             logger.info(f"⭐️ Extracted Teen Impact Score: {teen_impact_score}")
             
             # Title length validation and truncation
@@ -994,7 +1018,7 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
                     bill_data["summary_tweet"] = summary.get("tweet", "")
                     bill_data["summary_overview"] = summary.get("overview", "")
                     bill_data["summary_detailed"] = summary.get("detailed", "")
-                    bill_data["teen_impact_score"] = extract_teen_impact_score(summary.get("detailed", ""))
+                    bill_data["teen_impact_score"] = extract_teen_impact_score(summary)
                     
                     # Re-format tweet with regenerated summaries
                     formatted_tweet = format_bill_tweet(bill_data)
@@ -1030,8 +1054,19 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
         any_posted = False
         tweet_url = None
 
-        # Twitter
-        if not is_twitter_configured():
+        # Twitter — intentionally disabled 2026-05-24.
+        # X moved to a pay-per-use credit model in late 2025; our free-tier
+        # credits depleted and posts started returning 402 CreditsDepleted.
+        # Topping up is ~$200/mo for the Basic tier with no audience ROI
+        # for a teen civics site (X median user age is ~40, trending older,
+        # and organic reach for off-platform civic content has collapsed
+        # since 2023). Bluesky + Threads + Facebook cover our actual
+        # audience. To re-enable: remove TWITTER_DISABLED and ensure the
+        # account has API credits.
+        TWITTER_DISABLED = True
+        if TWITTER_DISABLED:
+            logger.info("ℹ️ Twitter posting disabled — see orchestrator comment")
+        elif not is_twitter_configured():
             logger.info("ℹ️ Twitter not configured, skipping")
         else:
             logger.info("🚀 Posting tweet...")

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}{{ heading }} - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+  <div class="auth-card">
+    <h1>{{ heading }}</h1>
+    <p>{{ message }}</p>
+    {% if ok %}
+      <a href="{{ url_for('bills') }}" class="btn btn-primary" role="button">Go vote on bills</a>
+    {% else %}
+      <a href="{{ url_for('login') }}" class="btn btn-primary" role="button">Sign in</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

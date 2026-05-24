@@ -73,6 +73,23 @@ COMMIT_MESSAGE.txt
 *_qa_report.txt
 *_QA_*.md
 
+# Dev-only scripts and debug artifacts (use `_` prefix for throwaway scripts)
+scripts/_*.py
+*-debug.png
+*-debug.html
+*-debug.json
+
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Private product vision — DO NOT COMMIT (Liv's roadmap, kept local-only
+# to prevent open-source observers from cribbing the strategy).
+plans/PRIVATE_VISION.md
+plans/SHORT_TERM_TODO.md
+
+# Apple Sign In private key — never commit. The .p8 is one-shot
+# downloadable from Apple and grants the ability to sign client_secret
+# JWTs for our Services ID.
+*.p8
+AuthKey_*.p8

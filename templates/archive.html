@@ -61,6 +61,7 @@
                         <option value="passed_senate" {% if status_filter == 'passed_senate' %}selected{% endif %}>Passed Senate</option>
                         <option value="referred_to_committee" {% if status_filter == 'referred_to_committee' %}selected{% endif %}>Referred to Committee</option>
                         <option value="reported_by_committee" {% if status_filter == 'reported_by_committee' %}selected{% endif %}>Reported by Committee</option>
+                        <option value="to_president" {% if status_filter == 'to_president' %}selected{% endif %}>To President</option>
                         <option value="vetoed" {% if status_filter == 'vetoed' %}selected{% endif %}>Vetoed</option>
                     </select>
                 </div>
@@ -121,9 +122,7 @@
                 <div class="summary-preview">
                     {{ bill.summary_tweet|truncate(200) }}
                 </div>
-                
-                <br>
-                
+
                 <div class="bill-actions">
                     <a href="{{ url_for('bill_detail', slug=bill.website_slug) }}" class="btn btn-primary btn-small">
                         Read Summary
@@ -146,22 +145,28 @@
                             </a>
                             <a href="https://www.threads.net/intent/post?text={{ ('Check out this bill on @teen.civics: ' ~ bill.title ~ '\n\n' ~ url_for('bill_detail', slug=bill.website_slug, _external=True))|urlencode }}"
                                target="_blank" rel="noopener" class="share-option share-threads" role="menuitem">
-                                <span class="share-icon" aria-hidden="true">🧵</span> Share on Threads
+                                <span class="share-icon" aria-hidden="true">{{ icon('at-sign') }}</span> Share on Threads
                             </a>
                             <a href="https://www.facebook.com/sharer/sharer.php?u={{ url_for('bill_detail', slug=bill.website_slug, _external=True)|urlencode }}"
                                target="_blank" rel="noopener" class="share-option share-facebook" role="menuitem">
-                                <span class="share-icon" aria-hidden="true">📘</span> Share on Facebook
+                                <span class="share-icon" aria-hidden="true">{{ icon('facebook') }}</span> Share on Facebook
                             </a>
                             <button type="button" class="share-option share-copy" role="menuitem" data-url="{{ url_for('bill_detail', slug=bill.website_slug, _external=True) }}">
-                                <span class="share-icon" aria-hidden="true">🔗</span> Copy Link
+                                <span class="share-icon" aria-hidden="true">{{ icon('link') }}</span> Copy Link
                             </button>
                         </div>
                     </div>
                 </div>
 
                 {% if bill.poll_results_yes is defined or bill.poll_results_no is defined %}
-                <div class="poll-preview" data-bill-id="{{ bill.bill_id }}">
-                    <h4>Community Poll</h4>
+                <div class="poll-preview"
+                     data-bill-id="{{ bill.bill_id }}"
+                     data-yes-count="{{ bill.poll_results_yes or 0 }}"
+                     data-no-count="{{ bill.poll_results_no or 0 }}">
+                    <div class="poll-preview-header">
+                        <h4>Community Poll</h4>
+                        <span class="your-vote-badge" hidden aria-live="polite"></span>
+                    </div>
                     <p class="poll-subtitle">Vote to see who sponsored this bill!</p>
                     
                     <!-- Vote to unlock overlay (shown when user hasn't voted) -->
@@ -176,14 +181,14 @@
                         {% set yes_percentage = ((bill.poll_results_yes or 0) / total_votes * 100)|round(1) %}
                         {% set no_percentage = ((bill.poll_results_no or 0) / total_votes * 100)|round(1) %}
                         <div class="poll-results-content" style="display: none; --yes-width: {{ yes_percentage }}%; --no-width: {{ no_percentage }}%;">
-                            <div class="poll-option">
+                            <div class="poll-option" data-vote="yes">
                                 <span class="poll-label">Yes</span>
                                 <div class="poll-bar">
                                     <div class="poll-fill yes-fill"></div>
                                 </div>
                                 <span class="poll-percentage">{{ yes_percentage }}%</span>
                             </div>
-                            <div class="poll-option">
+                            <div class="poll-option" data-vote="no">
                                 <span class="poll-label">No</span>
                                 <div class="poll-bar">
                                     <div class="poll-fill no-fill"></div>

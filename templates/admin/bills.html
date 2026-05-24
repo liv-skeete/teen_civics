@@ -10,7 +10,7 @@
 {% block content %}
 <div class="admin-container">
   <div class="admin-header">
-    <h2>📋 Bills Management</h2>
+    <h2>{{ icon('list') }} Bills Management</h2>
     <div class="admin-header-actions">
       <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Dashboard</a>
       <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary admin-logout-btn">Logout</a>
@@ -60,7 +60,7 @@
         <tr class="{{ 'admin-row-hidden' if bill.hidden else '' }}">
           <td class="admin-bill-id">
             {{ bill.bill_id }}
-            {% if bill.hidden %}<span class="admin-hidden-badge" title="Hidden from public">🚫</span>{% endif %}
+            {% if bill.hidden %}<span class="admin-hidden-badge" title="Hidden from public">{{ icon('ban') }}</span>{% endif %}
           </td>
           <td class="admin-cell-truncate" title="{{ bill.title }}">
             {{ bill.title|truncate(70, True) }}
@@ -89,12 +89,12 @@
             <button class="btn btn-small btn-success admin-hide-btn"
                     data-bill-id="{{ bill.id }}"
                     data-action="unhide"
-                    title="Unhide — restore to public listing">👁 Show</button>
+                    title="Unhide — restore to public listing">{{ icon('eye') }} Show</button>
             {% else %}
             <button class="btn btn-small btn-danger admin-hide-btn"
                     data-bill-id="{{ bill.id }}"
                     data-action="hide"
-                    title="Hide — soft-delete from public listing">🚫 Hide</button>
+                    title="Hide — soft-delete from public listing">{{ icon('ban') }} Hide</button>
             {% endif %}
           </td>
         </tr>

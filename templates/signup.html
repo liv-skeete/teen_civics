@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Sign up - TeenCivics{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+  <div class="auth-card">
+    <h1>Create your account</h1>
+    <p>Create an account to vote and earn Kudos.</p>
+
+    {% if error %}
+    <div class="auth-error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    {# --- OAuth-first: same provider stack as /login. Identical buttons,
+       only the email form differs (signup needs username + password
+       confirm; login just needs email + password). --- #}
+    {% set oauth_query = ('?next=' ~ (next_url | urlencode)) if next_url else '' %}
+    <div class="auth-oauth-stack">
+      {% if google_oauth_enabled %}
+      <a href="{{ url_for('google_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--google" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/google.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Google</span>
+      </a>
+      {% endif %}
+
+      {% if microsoft_oauth_enabled %}
+      <a href="{{ url_for('microsoft_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--microsoft" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/microsoft.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Microsoft</span>
+      </a>
+      {% endif %}
+
+      {% if apple_oauth_enabled %}
+      <a href="{{ url_for('apple_login') }}{{ oauth_query }}" class="btn btn-oauth btn-oauth--apple" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/apple.svg') }}" alt="" class="btn-oauth-mark" width="16" height="18">
+        <span>Continue with Apple</span>
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="auth-divider"><span>or</span></div>
+
+    <details class="auth-email-reveal" {% if error %}open{% endif %}>
+      <summary>Sign up with email</summary>
+      <form method="post" action="{{ url_for('signup') }}" class="auth-form" autocomplete="on" id="signup-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        {% if reason %}<input type="hidden" name="reason" value="{{ reason }}">{% endif %}
+
+        <label for="username">Username <span class="auth-hint">(3-30 characters, letters/numbers/_/-)</span></label>
+        <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+">
+
+        <label for="email">Email <span class="auth-hint">(we'll send a verification link)</span></label>
+        <input type="email" id="email" name="email" value="{{ email or '' }}" autocomplete="email" required maxlength="254">
+
+        <label for="password">Password <span class="auth-hint">(at least 8 characters)</span></label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required minlength="8" maxlength="128">
+
+        <label for="password_confirm">Confirm password</label>
+        <input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required minlength="8" maxlength="128">
+        <div class="auth-hint" id="pw-match-hint" aria-live="polite"></div>
+
+        <button type="submit" class="btn btn-primary">Create account</button>
+      </form>
+    </details>
+
+    <p class="auth-foot">Already have an account? <a href="{{ url_for('login', next=next_url, reason=reason) if next_url else url_for('login') }}">Sign in</a>.</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var pw = document.getElementById('password');
+    var pw2 = document.getElementById('password_confirm');
+    var hint = document.getElementById('pw-match-hint');
+    var form = document.getElementById('signup-form');
+    if (!pw || !pw2 || !hint || !form) return;
+
+    function update() {
+      if (!pw2.value) { hint.textContent = ''; pw2.setCustomValidity(''); return; }
+      if (pw.value === pw2.value) {
+        hint.textContent = 'Passwords match.';
+        hint.style.color = 'var(--success, #198754)';
+        pw2.setCustomValidity('');
+      } else {
+        hint.textContent = "Passwords don't match.";
+        hint.style.color = 'var(--danger, #b00020)';
+        pw2.setCustomValidity("Passwords don't match.");
+      }
+    }
+    pw.addEventListener('input', update);
+    pw2.addEventListener('input', update);
+  })();
+</script>
+{% endblock %}
