@@ -3418,19 +3418,29 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
 }
 
-/* The widest tier labels ("Coffee Runner", "Congressional Page", etc.)
-   push the pill wide enough to collide with the nav links in the
-   ~769-1280px band. Hide the tier name + the divider in that band;
-   the Kudos count alone still tells the user they're signed in, and
-   the full tier shows on /profile + the side rail. Above 1280px the
-   row has the breathing room to fit everything. */
+/* In the 769-1280px band the widest tier labels ("Coffee Runner",
+   "Congressional Page") push the pill wide enough to collide with the
+   nav links. Shrink the pill instead of hiding half of it — preserve
+   both halves (the tier-side acts as the link to /profile, the
+   kudos-side as the trigger for the side rail / sign-out menu, so
+   neither can disappear). Drop the "Kudos" suffix and ellipsis-trim
+   the tier label to a reasonable width. */
 @media (min-width: 769px) and (max-width: 1280px) {
-    .nav-user-left,
-    .nav-user-divider {
+    .nav-user-tier {
+        display: inline-block;
+        max-width: 9ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
+    }
+    .nav-user-suffix {
         display: none;
     }
+    .nav-user-left,
     .nav-user-right {
-        border-radius: 999px;
+        padding-left: 0.55rem;
+        padding-right: 0.55rem;
     }
 }
 
