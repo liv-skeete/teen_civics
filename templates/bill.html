@@ -39,11 +39,12 @@
                 </div>
             </div>
             
+            {% set is_new_format = bill.summary_detailed and '⚡ The gist' in bill.summary_detailed %}
             <div class="summary-section">
-                <h3>Summary</h3>
+                {% if not is_new_format %}<h3>Summary</h3>{% endif %}
                 <div class="summary-text">
                     {% if bill.summary_overview or bill.summary_detailed %}
-                        {% if bill.summary_overview %}
+                        {% if bill.summary_overview and not is_new_format %}
                             <p>{{ bill.summary_overview|e|replace('\n', '<br>')|safe }}</p>
                         {% endif %}
                         {% if bill.summary_detailed %}
