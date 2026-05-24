@@ -276,6 +276,10 @@ def inject_ga_measurement_id():
 def inject_current_year():
     return {"current_year": datetime.now(timezone.utc).year}
 
+from src.icons import icon as _icon_fn
+app.jinja_env.globals["icon"] = _icon_fn
+
+
 @app.context_processor
 def inject_oauth_flags():
     """Expose OAuth provider availability to templates so login/signup

@@ -7,6 +7,14 @@
 
   const API_BASE = (window.APP_ROOT || (window.location.pathname || "").startsWith("/beta") ? "/beta" : "");
 
+  // Inline Lucide SVG strings — keep in sync with src/icons.py. JS can't
+  // call the Jinja `icon()` helper, so we hand-inline the paths here.
+  // Both versions render identically since the Python helper produces
+  // the exact same markup.
+  const ICON_COPY = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon" aria-hidden="true" focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+  const ICON_MAIL = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon" aria-hidden="true" focusable="false"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
+  const ICON_GLOBE = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>';
+
   // --- Debug Logging ---
   const hostname = window.location.hostname;
   const port = window.location.port;
@@ -676,10 +684,10 @@
              value="${_escAttr(emailData.subject)}" aria-label="Email subject line">
       <div class="email-actions">
         <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
-          📋 Copy Message
+          ${ICON_COPY} Copy Message
         </button>
         <a href="#" class="btn-send-email" role="button" aria-label="Send email">
-          ✉️ Send Email
+          ${ICON_MAIL} Send Email
         </a>
       </div>
       <label for="email-body" class="visually-hidden">Email body</label>
@@ -704,7 +712,9 @@
       ? `Visit Representative ${name}'s contact form:`
       : `Visit Representative ${name}'s website to contact them:`;
 
-    const buttonText = hasContactFormUrl ? "🌐 Visit Contact Form" : "🌐 Visit Website";
+    const buttonText = hasContactFormUrl
+      ? `${ICON_GLOBE} Visit Contact Form`
+      : `${ICON_GLOBE} Visit Website`;
 
     return `
       <div class="contact-fallback">
@@ -712,7 +722,7 @@
         <hr class="contact-divider">
         <div class="email-actions">
           <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
-            📋 Copy Message
+            ${ICON_COPY} Copy Message
           </button>
           <a href="${safeContactUrl}" target="_blank" rel="noopener" class="btn-contact-website">
             ${buttonText}
@@ -730,7 +740,7 @@
         <p>We couldn't find a direct contact method for <strong>Representative ${_escHtml(primaryRep.name || "")}</strong>. Here's your message — you can search for their contact form online.</p>
         <div class="email-actions">
           <button class="btn-copy-email" type="button" aria-label="Copy message to clipboard">
-            📋 Copy Message
+            ${ICON_COPY} Copy Message
           </button>
         </div>
         <div class="email-readonly-box">${_escHtml(emailData.body)}</div>

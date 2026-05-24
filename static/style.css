@@ -401,7 +401,6 @@ textarea:focus-visible {
     width: auto;
     margin-right: var(--spacing-sm);
     object-fit: contain;
-    transition: height 0.2s ease;
 }
 
 .nav-logo h1 {
@@ -410,7 +409,6 @@ textarea:focus-visible {
     margin: 0;
     font-weight: 600;
     padding-left: 0;
-    transition: font-size 0.2s ease;
 }
 
 .logo-img {
@@ -683,6 +681,16 @@ textarea:focus-visible {
     cursor: pointer;
     transition: background-color var(--transition-fast);
     text-align: left;
+}
+
+/* Lucide SVG icons inherit currentColor (color matches surrounding
+   text) and sit on the baseline. Used everywhere we replaced OS emoji
+   for cross-platform visual consistency. Size defaults to 18px from
+   the Python helper; override with width/height in component CSS. */
+.lucide-icon {
+    display: inline-block;
+    vertical-align: -0.18em;
+    flex-shrink: 0;
 }
 
 /* Fixed-width icon area so all text labels start at the same position */

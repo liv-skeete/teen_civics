@@ -823,7 +823,8 @@
                 button.setAttribute("aria-expanded", "false");
               }, 1500);
             } catch (e2) {
-              copyBtn.textContent = "❌ Failed";
+              // Lucide x-circle inline — matches the Python icon('x-circle')
+              copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-icon" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> Failed';
               setTimeout(() => {
                 copyBtn.textContent = originalText;
                 button.setAttribute("aria-expanded", "false");
