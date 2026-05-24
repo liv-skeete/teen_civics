@@ -12,24 +12,55 @@
     <div class="auth-error" role="alert">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="{{ url_for('login') }}" class="auth-form" autocomplete="on">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label for="email">Email</label>
-      <input type="email" id="email" name="email" value="{{ email }}" autocomplete="email" required maxlength="254" autofocus>
+    {# --- OAuth-first: primary path is provider buttons. Email form lives
+       behind a <details> reveal so users who do have a password can find it,
+       but it isn't the visual default any more. --- #}
+    <div class="auth-oauth-stack">
+      {% if google_oauth_enabled %}
+      <a href="{{ url_for('google_login') }}" class="btn btn-oauth btn-oauth--google" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/google.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Google</span>
+      </a>
+      {% endif %}
 
-      <label for="password">Password</label>
-      <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8" maxlength="128">
+      {% if microsoft_oauth_enabled %}
+      <a href="{{ url_for('microsoft_login') }}" class="btn btn-oauth btn-oauth--microsoft" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/microsoft.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Microsoft</span>
+      </a>
+      {% endif %}
 
-      <button type="submit" class="btn btn-primary">Sign in</button>
-      <p class="auth-foot auth-foot-link"><a href="{{ url_for('forgot_password') }}">Forgot password?</a></p>
-    </form>
+      {# Apple button is rendered only when APPLE_CLIENT_ID is set. The
+         apple_login route doesn't exist yet (Apple wiring is deferred
+         pending Developer Program enrollment — see oauth.py), so we
+         use a placeholder href until the route lands. #}
+      {% if apple_oauth_enabled %}
+      <a href="#" class="btn btn-oauth btn-oauth--apple" role="button" aria-disabled="true">
+        <img src="{{ url_for('static', filename='img/oauth/apple.svg') }}" alt="" class="btn-oauth-mark" width="16" height="18">
+        <span>Continue with Apple</span>
+      </a>
+      {% endif %}
+    </div>
 
-    {% if google_oauth_enabled %}
     <div class="auth-divider"><span>or</span></div>
-    <a href="{{ url_for('google_login') }}" class="btn btn-oauth btn-google" role="button">
-      Continue with Google
-    </a>
-    {% endif %}
+
+    {# <details> keeps the email form one click away without requiring JS.
+       Pre-open it when an error came back from a POST so the user lands
+       on the form they were just using. #}
+    <details class="auth-email-reveal" {% if error %}open{% endif %}>
+      <summary>Sign in with email</summary>
+      <form method="post" action="{{ url_for('login') }}" class="auth-form" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" value="{{ email }}" autocomplete="email" required maxlength="254">
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8" maxlength="128">
+
+        <button type="submit" class="btn btn-primary">Sign in</button>
+        <p class="auth-foot auth-foot-link"><a href="{{ url_for('forgot_password') }}">Forgot password?</a></p>
+      </form>
+    </details>
 
     <p class="auth-foot">New here? <a href="{{ url_for('signup') }}">Create an account</a>.</p>
   </div>

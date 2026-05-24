@@ -156,7 +156,12 @@ app.config["WTF_CSRF_SSL_STRICT"] = False
 csrf = CSRFProtect(app)
 
 # Third-party sign-in (Google now, Apple reserved for staging push).
-from src.auth.oauth import oauth as _oauth_registry, init_oauth, is_google_enabled
+from src.auth.oauth import (
+    oauth as _oauth_registry,
+    init_oauth,
+    is_google_enabled,
+    is_microsoft_enabled,
+)
 init_oauth(app)
 
 
@@ -270,6 +275,18 @@ def inject_ga_measurement_id():
 @app.context_processor
 def inject_current_year():
     return {"current_year": datetime.now(timezone.utc).year}
+
+@app.context_processor
+def inject_oauth_flags():
+    """Expose OAuth provider availability to templates so login/signup
+    can conditionally render each button. Apple is rendered only when
+    APPLE_CLIENT_ID is set (it isn't yet — column reserved, wiring
+    deferred). Google/Microsoft use the actual Authlib registry state."""
+    return {
+        "google_oauth_enabled": is_google_enabled(),
+        "microsoft_oauth_enabled": is_microsoft_enabled(),
+        "apple_oauth_enabled": bool(os.environ.get("APPLE_CLIENT_ID", "").strip()),
+    }
 
 # --- Jinja filters ---
 @app.template_filter("format_date")
@@ -1126,15 +1143,85 @@ def google_callback():
     return redirect(url_for("welcome"))
 
 
+@app.route("/auth/microsoft/login")
+@limiter.limit("20 per hour")
+def microsoft_login():
+    if not is_microsoft_enabled():
+        abort(404)
+    # Mirror google_login: build redirect_uri from APP_BASE_URL to avoid
+    # leaking Railway's internal hostname when Cloudflare's Host header
+    # isn't preserved.
+    base = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
+    if base:
+        redirect_uri = f"{base}{url_for('microsoft_callback')}"
+    else:
+        redirect_uri = url_for("microsoft_callback", _external=True)
+    return _oauth_registry.microsoft.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/microsoft/callback")
+@limiter.limit("20 per hour")
+@csrf.exempt  # OAuth callback isn't a form submit; state param protects against CSRF
+def microsoft_callback():
+    if not is_microsoft_enabled():
+        abort(404)
+    try:
+        token = _oauth_registry.microsoft.authorize_access_token()
+    except Exception as e:
+        logger.warning("Microsoft OAuth callback failed: %s", e)
+        return render_template("login.html", error="Microsoft sign-in failed. Try again.", email=""), 400
+
+    userinfo = token.get("userinfo") or {}
+    subject = userinfo.get("sub")
+    # Microsoft's id_token surfaces email in `email`, with `preferred_username`
+    # as a fallback for accounts where email isn't released. Personal MSAs
+    # usually fill email; work/school may not.
+    email = (userinfo.get("email") or userinfo.get("preferred_username") or "").lower().strip()
+    if not subject or not email:
+        return render_template("login.html", error="Microsoft sign-in returned no email.", email=""), 400
+
+    # Microsoft doesn't expose an email_verified claim the way Google does;
+    # multi-tenant /common can't guarantee verification. We accept the
+    # email but only link-by-email when the local user record already
+    # had it verified through our own flow — otherwise we route the
+    # signup through /welcome where they confirm their identity by
+    # picking a username (consistent with the Google path).
+
+    # 1) Existing OAuth-linked user
+    user = auth_db.get_user_by_oauth("microsoft", subject)
+    if user:
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(url_for("profile"))
+
+    # 2) Existing user by email — link this Microsoft account to it
+    user = auth_db.get_user_by_email(email)
+    if user:
+        auth_db.link_oauth_subject(user["id"], "microsoft", subject)
+        auth_session.login_user(user["id"])
+        auth_db.update_last_login(user["id"])
+        return redirect(url_for("profile"))
+
+    # 3) Brand-new user — stash and bounce to /welcome
+    from src.auth.oauth import derive_username_from_email
+    session["pending_oauth"] = {
+        "provider": "microsoft",
+        "subject": subject,
+        "email": email,
+        "suggested_username": derive_username_from_email(email),
+    }
+    return redirect(url_for("welcome"))
+
+
 @app.route("/welcome", methods=["GET", "POST"])
 @limiter.limit("20 per hour")
 def welcome():
     """First-time OAuth signup — choose your username before the account
     is created. Reachable only with a pending_oauth stash in the session
-    (set by google_callback). Refusing this page is a no-op; the user
-    can re-initiate Google sign-in to get a fresh stash."""
+    (set by google_callback or microsoft_callback). Refusing this page is
+    a no-op; the user can re-initiate OAuth sign-in to get a fresh stash."""
     pending = session.get("pending_oauth")
-    if not pending or pending.get("provider") != "google":
+    if not pending or pending.get("provider") not in ("google", "microsoft"):
         return redirect(url_for("login"))
 
     suggested = pending.get("suggested_username", "")

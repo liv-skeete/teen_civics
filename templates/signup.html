@@ -6,37 +6,64 @@
 <div class="container auth-container">
   <div class="auth-card">
     <h1>Create your account</h1>
-    <p>Pick a username and password to start earning Kudos and climbing the ranks.</p>
+    <p>Pick a sign-in method to start earning Kudos and climbing the ranks.</p>
 
     {% if error %}
     <div class="auth-error" role="alert">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="{{ url_for('signup') }}" class="auth-form" autocomplete="on" id="signup-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {# --- OAuth-first: same provider stack as /login. Identical buttons,
+       only the email form differs (signup needs username + password
+       confirm; login just needs email + password). --- #}
+    <div class="auth-oauth-stack">
+      {% if google_oauth_enabled %}
+      <a href="{{ url_for('google_login') }}" class="btn btn-oauth btn-oauth--google" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/google.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Google</span>
+      </a>
+      {% endif %}
 
-      <label for="username">Username <span class="auth-hint">(3-30 characters, letters/numbers/_/-)</span></label>
-      <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+" autofocus>
+      {% if microsoft_oauth_enabled %}
+      <a href="{{ url_for('microsoft_login') }}" class="btn btn-oauth btn-oauth--microsoft" role="button">
+        <img src="{{ url_for('static', filename='img/oauth/microsoft.svg') }}" alt="" class="btn-oauth-mark" width="18" height="18">
+        <span>Continue with Microsoft</span>
+      </a>
+      {% endif %}
 
-      <label for="email">Email <span class="auth-hint">(we'll send a verification link)</span></label>
-      <input type="email" id="email" name="email" value="{{ email or '' }}" autocomplete="email" required maxlength="254">
+      {# Apple wiring is deferred (no Developer Program yet) — see
+         src/auth/oauth.py. Render the button only when APPLE_CLIENT_ID
+         is set; placeholder href until the route lands. #}
+      {% if apple_oauth_enabled %}
+      <a href="#" class="btn btn-oauth btn-oauth--apple" role="button" aria-disabled="true">
+        <img src="{{ url_for('static', filename='img/oauth/apple.svg') }}" alt="" class="btn-oauth-mark" width="16" height="18">
+        <span>Continue with Apple</span>
+      </a>
+      {% endif %}
+    </div>
 
-      <label for="password">Password <span class="auth-hint">(at least 8 characters)</span></label>
-      <input type="password" id="password" name="password" autocomplete="new-password" required minlength="8" maxlength="128">
-
-      <label for="password_confirm">Confirm password</label>
-      <input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required minlength="8" maxlength="128">
-      <div class="auth-hint" id="pw-match-hint" aria-live="polite"></div>
-
-      <button type="submit" class="btn btn-primary">Create account</button>
-    </form>
-
-    {% if google_oauth_enabled %}
     <div class="auth-divider"><span>or</span></div>
-    <a href="{{ url_for('google_login') }}" class="btn btn-oauth btn-google" role="button">
-      Continue with Google
-    </a>
-    {% endif %}
+
+    <details class="auth-email-reveal" {% if error %}open{% endif %}>
+      <summary>Sign up with email</summary>
+      <form method="post" action="{{ url_for('signup') }}" class="auth-form" autocomplete="on" id="signup-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <label for="username">Username <span class="auth-hint">(3-30 characters, letters/numbers/_/-)</span></label>
+        <input type="text" id="username" name="username" value="{{ username }}" autocomplete="username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_\-]+">
+
+        <label for="email">Email <span class="auth-hint">(we'll send a verification link)</span></label>
+        <input type="email" id="email" name="email" value="{{ email or '' }}" autocomplete="email" required maxlength="254">
+
+        <label for="password">Password <span class="auth-hint">(at least 8 characters)</span></label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required minlength="8" maxlength="128">
+
+        <label for="password_confirm">Confirm password</label>
+        <input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" required minlength="8" maxlength="128">
+        <div class="auth-hint" id="pw-match-hint" aria-live="polite"></div>
+
+        <button type="submit" class="btn btn-primary">Create account</button>
+      </form>
+    </details>
 
     <p class="auth-foot">Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.</p>
   </div>

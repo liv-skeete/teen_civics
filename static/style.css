@@ -4061,7 +4061,10 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .auth-divider::after { border-bottom-color: #444; }
 
 .btn-oauth {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
   text-align: center;
   padding: 10px 16px;
@@ -4071,10 +4074,82 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid #dadce0;
   background: #fff;
   color: #3c4043;
+  margin-bottom: 10px;
+  font-size: 15px;
+  line-height: 20px;
+  min-height: 42px;
+  box-sizing: border-box;
 }
+.btn-oauth:last-child { margin-bottom: 0; }
+.btn-oauth img,
+.btn-oauth svg { flex: 0 0 auto; }
 .btn-oauth:hover { background: #f8f9fa; }
+
+/* Brand-spec overrides — keep the per-provider chrome distinct so the
+   sign-in row reads as three buttons, not one repeated style. Both
+   short-form (.btn-google) and BEM (.btn-oauth--google) selectors are
+   accepted; the template uses the BEM form, older callers may use the
+   short form. */
+.btn-google,
+.btn-oauth--google { background: #fff; color: #1f1f1f; border-color: #dadce0; }
+.btn-google:hover,
+.btn-oauth--google:hover { background: #f8f9fa; }
+
+.btn-microsoft,
+.btn-oauth--microsoft { background: #fff; color: #5e5e5e; border-color: #8c8c8c; }
+.btn-microsoft:hover,
+.btn-oauth--microsoft:hover { background: #f3f3f3; }
+
+.btn-apple,
+.btn-oauth--apple { background: #000; color: #fff; border-color: #000; }
+.btn-apple:hover,
+.btn-oauth--apple:hover { background: #1d1d1f; color: #fff; }
+
+/* Dark-mode treatment: keep brand colors on Apple (it IS the brand
+   color), lighten the white-faced ones just enough to sit on the card. */
 [data-theme="dark"] .btn-oauth { background: #2a2a2a; color: #eee; border-color: #555; }
 [data-theme="dark"] .btn-oauth:hover { background: #333; }
+[data-theme="dark"] .btn-google,
+[data-theme="dark"] .btn-oauth--google,
+[data-theme="dark"] .btn-microsoft,
+[data-theme="dark"] .btn-oauth--microsoft { background: #2a2a2a; color: #eee; border-color: #555; }
+[data-theme="dark"] .btn-google:hover,
+[data-theme="dark"] .btn-oauth--google:hover,
+[data-theme="dark"] .btn-microsoft:hover,
+[data-theme="dark"] .btn-oauth--microsoft:hover { background: #333; }
+[data-theme="dark"] .btn-apple,
+[data-theme="dark"] .btn-oauth--apple { background: #000; color: #fff; border-color: #1d1d1f; }
+[data-theme="dark"] .btn-apple:hover,
+[data-theme="dark"] .btn-oauth--apple:hover { background: #1d1d1f; }
+
+/* OAuth-first layout: providers are primary, email form is secondary
+   and revealed via <details>. */
+.auth-oauth-stack { margin-bottom: 4px; }
+.auth-email-reveal {
+  margin: 0;
+}
+.auth-email-reveal > summary {
+  list-style: none;
+  cursor: pointer;
+  text-align: center;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--color-link);
+  text-decoration: underline;
+  border-radius: 4px;
+}
+.auth-email-reveal > summary::-webkit-details-marker { display: none; }
+.auth-email-reveal > summary:hover { opacity: 0.85; }
+.auth-email-reveal > summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.auth-email-reveal[open] > summary {
+  margin-bottom: 8px;
+  color: #888;
+  text-decoration: none;
+  font-size: 13px;
+}
 
 /* --- Dark mode audit (2026-05-22): swap hardcoded navy to accent on
    elements that are visible in dark mode but lack a dark override. --- */

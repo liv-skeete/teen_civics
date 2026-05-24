@@ -93,7 +93,11 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
 
 def get_user_by_oauth(provider: str, subject: str) -> Optional[Dict[str, Any]]:
     """Find a user by OAuth subject (provider in {'google','apple'})."""
-    column = {"google": "google_sub", "apple": "apple_sub"}.get(provider)
+    column = {
+        "google": "google_sub",
+        "apple": "apple_sub",
+        "microsoft": "microsoft_sub",
+    }.get(provider)
     if not column:
         return None
     try:
@@ -112,7 +116,11 @@ def get_user_by_oauth(provider: str, subject: str) -> Optional[Dict[str, Any]]:
 def link_oauth_subject(user_id: str, provider: str, subject: str) -> bool:
     """Attach a Google/Apple subject id to an existing user. Returns False
     if a different user already owns that subject (UNIQUE violation)."""
-    column = {"google": "google_sub", "apple": "apple_sub"}.get(provider)
+    column = {
+        "google": "google_sub",
+        "apple": "apple_sub",
+        "microsoft": "microsoft_sub",
+    }.get(provider)
     if not column:
         return False
     try:
@@ -143,7 +151,11 @@ def create_oauth_user(
     on success, or None on UNIQUE collision. Email is marked verified
     since Google/Apple already verified it. See create_user() for
     voter_id collision handling."""
-    column = {"google": "google_sub", "apple": "apple_sub"}.get(provider)
+    column = {
+        "google": "google_sub",
+        "apple": "apple_sub",
+        "microsoft": "microsoft_sub",
+    }.get(provider)
     if not column:
         return None
     final_voter_id = _resolve_voter_id_for_new_user(voter_id)
