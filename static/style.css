@@ -3431,7 +3431,7 @@ h1, h2, h3, h4, h5, h6 {
    the pill. Other 768px-based layout rules (bills grid, share
    dropdown, etc.) stay where they are so the rest of the page
    doesn't lurch. */
-@media (max-width: 824px) {
+@media (max-width: 825px) {
     .nav-menu {
         display: none;
         flex-direction: column;
@@ -3458,7 +3458,7 @@ h1, h2, h3, h4, h5, h6 {
     }
 }
 
-@media (min-width: 825px) and (max-width: 950px) {
+@media (min-width: 826px) and (max-width: 950px) {
     .nav-user-tier {
         display: inline-block;
         max-width: 9ch;
