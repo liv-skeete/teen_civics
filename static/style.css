@@ -709,6 +709,29 @@ textarea:focus-visible {
     height: 20px;
 }
 
+/* Summary section headings (rendered by the format_detailed_html
+   Jinja filter on AI-generated bill summaries). Emoji used to mark
+   these breaks for younger readers; we keep the visual rhythm but
+   render Lucide icons in the indigo link color so they match the
+   rest of the icon system instead of relying on OS emoji. */
+.summary-section {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-link);
+    font-size: 1.1rem;
+    letter-spacing: 0.01em;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.summary-section .lucide-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
 /* Fixed-width icon area so all text labels start at the same position */
 .share-option svg,
 .share-option .share-icon {

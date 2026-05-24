@@ -414,6 +414,24 @@ def format_detailed_html_filter(text: str) -> Markup:
     # Strip markdown bold markers (**text** -> text)
     import re as _re
     text = _re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    # Emoji prefix -> Lucide icon name. The summarizer still emits these
+    # leading glyphs in the DB; we strip them at render time and swap in
+    # an inline SVG so the section headers match the rest of the UI.
+    emoji_to_icon = {
+        '🔎': 'eye',
+        '👥': 'users',
+        '🔑': 'key',
+        '📌': 'landmark',
+        '👉': 'arrow-right',
+        '💡': 'lightbulb',
+        '📝': 'file-text',
+        '📜': 'scroll',
+        '🏠': 'landmark',
+        '💰': 'landmark',
+        '🛠️': 'landmark',
+        '⚖️': 'landmark',
+        '🚀': 'landmark',
+    }
     lines = text.split("\n")
     html_parts = []
     in_list = False
@@ -421,11 +439,21 @@ def format_detailed_html_filter(text: str) -> Markup:
         line = line.strip()
         if not line:
             continue
-        if any(line.startswith(emoji) for emoji in ['🏠','💰','🛠️','⚖️','🚀','📌','👉','🔎','📝','🔑','📜','👥','💡']):
+        matched_icon = None
+        rest = line
+        for emoji, icon_name in emoji_to_icon.items():
+            if line.startswith(emoji):
+                matched_icon = icon_name
+                rest = line[len(emoji):].strip()
+                break
+        if matched_icon is not None:
             if in_list:
                 html_parts.append("</ul>")
                 in_list = False
-            html_parts.append(f"<h4>{escape(line)}</h4>")
+            svg = _icon_fn(matched_icon)
+            html_parts.append(
+                f'<h4 class="summary-section">{svg} {escape(rest)}</h4>'
+            )
         elif line.startswith('•') or line.startswith('-'):
             if not in_list:
                 html_parts.append("<ul>")
