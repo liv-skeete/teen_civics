@@ -89,8 +89,13 @@
   // entries — otherwise a signed-out user keeps seeing their old
   // "voted yes" highlights from before they logged out, which feels
   // like a privacy bleed even though the data is technically theirs.
-  // Anonymous voter_id cookie is left untouched so anon votes still
-  // attach to a future account on signup.
+  //
+  // We also set a session-scoped sessionStorage flag `suppress_vote_sync`
+  // that prevents the bootstrap from immediately re-hydrating localStorage
+  // from /api/my-votes (which is keyed by the voter_id cookie that
+  // intentionally PERSISTS past logout — needed so anon votes still
+  // attach to a future account on signup). The flag clears when the
+  // browser tab closes OR when the user signs back in.
   function maybeClearVoteCacheOnLogout() {
     if (!document.cookie.split("; ").some(c => c.startsWith("clear_local_vote_cache="))) return;
     try {
@@ -101,8 +106,8 @@
       }
       keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch {} });
     } catch {}
+    try { sessionStorage.setItem("suppress_vote_sync", "1"); } catch {}
     // Delete the marker cookie so subsequent loads don't keep clearing.
-    // Path=/ matches the cookie attribute the server set (default).
     document.cookie = "clear_local_vote_cache=; Max-Age=0; Path=/; SameSite=Lax";
   }
   maybeClearVoteCacheOnLogout();
@@ -697,8 +702,40 @@
   // Restores votes from the server (via voter_id cookie) into localStorage.
   // This ensures that if localStorage was cleared, previously recorded votes
   // are restored before poll widgets initialize.
+  //
+  // EXCEPTION: if the user just logged out, sessionStorage carries a
+  // `suppress_vote_sync` flag. We honor it for the current tab/session so
+  // a logged-out user doesn't see their previously-voted highlights
+  // re-hydrate from the persistent voter_id cookie. The flag is cleared
+  // by /api/me when the response indicates an authenticated session
+  // (re-login) OR naturally when the tab closes.
   async function syncVotesFromServer() {
     try {
+      const suppressed = sessionStorage.getItem("suppress_vote_sync") === "1";
+      // If suppressed, check whether the user has signed back in (in which
+      // case we clear the flag and proceed — they're not logged out anymore).
+      if (suppressed) {
+        try {
+          const meResp = await fetch(API_BASE + "/api/me", {
+            credentials: "same-origin",
+            headers: { "Cache-Control": "no-store" }
+          });
+          if (meResp.ok) {
+            const me = await meResp.json();
+            if (me && me.authenticated) {
+              sessionStorage.removeItem("suppress_vote_sync");
+            } else {
+              log("syncVotesFromServer: suppressed (post-logout)");
+              return;
+            }
+          } else {
+            return;
+          }
+        } catch {
+          return;
+        }
+      }
+
       const response = await fetch(API_BASE + "/api/my-votes", {
         credentials: "same-origin",           // send voter_id cookie
         headers: { "Cache-Control": "no-store" }
