@@ -129,12 +129,18 @@ def register_apple(oauth) -> bool:
 
     client_id = os.environ["APPLE_CLIENT_ID"].strip()
 
+    # Authlib has no "regenerate secret per call" hook, so we sign the JWT
+    # once at registration. Apple allows up to 6 months; we use 1 hour to
+    # keep blast radius small if the .p8 ever leaks. The app restarts on
+    # every Railway deploy (~hours), so a 1-hour token is fine — the next
+    # restart re-signs. For runs longer than 1 hour without a deploy, see
+    # the token-refresh follow-up note below.
+    client_secret = _sign_client_secret()
+
     oauth.register(
         name="apple",
         client_id=client_id,
-        # client_secret is generated per-request via the factory below
-        # (Apple's JWT-based client_secret has a 6-month max lifetime).
-        client_secret=None,
+        client_secret=client_secret,
         authorize_url=APPLE_AUTHORIZE_URL,
         access_token_url=APPLE_TOKEN_URL,
         jwks_uri=APPLE_JWKS_URL,
@@ -143,13 +149,15 @@ def register_apple(oauth) -> bool:
             # Apple requires response_mode=form_post when scopes include
             # name or email — callback arrives via POST, not GET.
             "response_mode": "form_post",
-            # Authlib hook for dynamic client_secret signing.
-            "client_secret_factory": _client_secret_factory,
         },
         # Issuer claim from id_token equals https://appleid.apple.com.
         # Authlib's default OIDC validator handles this when jwks_uri is
         # set above — no custom claims_options needed.
     )
+    # TODO: if process uptime regularly exceeds 1 hour, hook a Flask
+    # before_request that re-signs and rebinds the client's client_secret
+    # when within the refresh window. Not needed yet — Railway redeploys
+    # are frequent and the cache hit rate inside an hour is high.
     return True
 
 
