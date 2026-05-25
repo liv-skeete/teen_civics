@@ -231,7 +231,10 @@ jobs:
       - name: Sync prod to staging
         run: |
           echo "Working directory: $(pwd)"
-          python scripts/sync_prod_to_staging.py
+          # --allow-non-staging: Railway names every managed Postgres 'railway',
+          # so the DB-name guard can't fire. Host-mismatch guard above is the
+          # real safety net (centerbeam = prod, crossover = staging).
+          python scripts/sync_prod_to_staging.py --apply --allow-non-staging
 
       - name: Notify on failure
         if: failure()
