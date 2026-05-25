@@ -1710,12 +1710,15 @@ a.share-option:link {
 
 .resources-grid {
     display: grid;
-    /* Was minmax(300px, 1fr) — that put 3 cols on iPad-landscape
-       (~1024px) where each card collapsed to ~267px content width
-       and titles like "Contact Your Representatives" wrapped to
-       3 lines. Raising the floor to 340px forces 2 cols below
-       ~1080px and 3 cols above, giving headings room. */
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    /* Floor at 380px so "Contact Your Representatives" (28 chars)
+       fits the heading on one line at every breakpoint where the
+       grid pops to 3 cols. With minmax(380px, 1fr):
+         viewport &lt; 1180px → 2 cols (cards ~370-540px)
+         viewport ≥ 1180px → 3 cols (cards ~360-480px wide enough)
+       Previous floor of 340px made 3 cols appear at ~1080px where
+       cards were only 345px wide and the heading still didn't fit.
+    */
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-xl);
 }
