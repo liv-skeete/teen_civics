@@ -2320,14 +2320,13 @@ a.share-option:link {
   font-size: var(--font-size-lg);
   color: var(--color-primary);
   margin-bottom: var(--spacing-sm);
-  /* The global h1-h6 rule sets text-wrap: balance, which evens out
-     line lengths and prematurely wraps short headlines like
-     "Misinformation Hits Gen Z" inside the 3-col stats grid at iPad
-     landscape (~992-1100px). `pretty` keeps natural breaks. */
-  text-wrap: pretty;
+  /* iOS Safari treats BOTH `balance` and `pretty` as "evenly
+     distribute" — both cause premature wraps. Default browser
+     wrapping is what we want. The mid-word-break defense (hyphens,
+     word-break) is enough on its own. */
   hyphens: none;
-  word-break: keep-all;
-  overflow-wrap: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .stat-text {
@@ -2430,7 +2429,6 @@ a.share-option:link {
   color: var(--color-primary);
   font-size: var(--font-size-xl);
   margin-bottom: var(--spacing-sm);
-  text-wrap: balance;
 }
 
 .creator-card .creator-bio p {
@@ -2460,25 +2458,24 @@ h1, h2, h3, h4, h5, h6 {
   hyphens: none;
   word-break: normal;
   overflow-wrap: break-word;
-  text-wrap: balance;
+  /* NO text-wrap declared — iOS Safari interprets both `balance` AND
+     `pretty` as "evenly distribute words across lines," forcing
+     premature line breaks. Olivia's iPad showed "How a Bill Becomes
+     a / Law" with massive empty horizontal space on the second line.
+     Default browser wrapping (wrap-at-overflow) is what we actually
+     want for narrow card headings. */
 }
 
 .resources-header h1,
 .resource-card h2,
 .archive-header h1,
 .contact-header h1 {
-  /* Three layers of "never split words" defense — needed because
-     a global .container { overflow-wrap: anywhere } cascades into
-     these headings and was causing mid-word breaks like
-     "Understand-/ing Government" in narrow card layouts. */
+  /* Prevent mid-word breaks ONLY — the global .container {
+     overflow-wrap: anywhere } would otherwise cascade and split words
+     like "Understand-/ing Government" in narrow card layouts. */
   hyphens: none;
-  word-break: keep-all;
-  overflow-wrap: normal;
-  white-space: normal;
-  /* `pretty` keeps reasonable line breaks; `balance` was sometimes
-     forcing premature wraps because it tries to even out line
-     lengths even when one long line would fit fine. */
-  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: break-word;
   font-size: var(--font-size-xl);
 }
 
