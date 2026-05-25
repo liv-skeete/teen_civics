@@ -1063,6 +1063,16 @@ a.share-option:link {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    /* iOS Safari was rendering button text in its default link-blue
+       because we never declared an explicit color, and iOS heuristic-
+       detects "phone-number-like" strings + applies link styling. Lock
+       the color to the theme text color so neither OS nor browser
+       default leaks through. */
+    color: var(--color-text);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    font-family: inherit;
 }
 
 /* The default Lucide size (18px) looks thin next to the chunky button
@@ -1700,7 +1710,15 @@ a.share-option:link {
 
 .resources-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    /* Floor at 380px so "Contact Your Representatives" (28 chars)
+       fits the heading on one line at every breakpoint where the
+       grid pops to 3 cols. With minmax(380px, 1fr):
+         viewport &lt; 1180px → 2 cols (cards ~370-540px)
+         viewport ≥ 1180px → 3 cols (cards ~360-480px wide enough)
+       Previous floor of 340px made 3 cols appear at ~1080px where
+       cards were only 345px wide and the heading still didn't fit.
+    */
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-xl);
 }
@@ -2302,6 +2320,13 @@ a.share-option:link {
   font-size: var(--font-size-lg);
   color: var(--color-primary);
   margin-bottom: var(--spacing-sm);
+  /* iOS Safari treats BOTH `balance` and `pretty` as "evenly
+     distribute" — both cause premature wraps. Default browser
+     wrapping is what we want. The mid-word-break defense (hyphens,
+     word-break) is enough on its own. */
+  hyphens: none;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .stat-text {
@@ -2404,7 +2429,6 @@ a.share-option:link {
   color: var(--color-primary);
   font-size: var(--font-size-xl);
   margin-bottom: var(--spacing-sm);
-  text-wrap: balance;
 }
 
 .creator-card .creator-bio p {
@@ -2434,25 +2458,24 @@ h1, h2, h3, h4, h5, h6 {
   hyphens: none;
   word-break: normal;
   overflow-wrap: break-word;
-  text-wrap: balance;
+  /* NO text-wrap declared — iOS Safari interprets both `balance` AND
+     `pretty` as "evenly distribute words across lines," forcing
+     premature line breaks. Olivia's iPad showed "How a Bill Becomes
+     a / Law" with massive empty horizontal space on the second line.
+     Default browser wrapping (wrap-at-overflow) is what we actually
+     want for narrow card headings. */
 }
 
 .resources-header h1,
 .resource-card h2,
 .archive-header h1,
 .contact-header h1 {
-  /* Three layers of "never split words" defense — needed because
-     a global .container { overflow-wrap: anywhere } cascades into
-     these headings and was causing mid-word breaks like
-     "Understand-/ing Government" in narrow card layouts. */
+  /* Prevent mid-word breaks ONLY — the global .container {
+     overflow-wrap: anywhere } would otherwise cascade and split words
+     like "Understand-/ing Government" in narrow card layouts. */
   hyphens: none;
-  word-break: keep-all;
-  overflow-wrap: normal;
-  white-space: normal;
-  /* `pretty` keeps reasonable line breaks; `balance` was sometimes
-     forcing premature wraps because it tries to even out line
-     lengths even when one long line would fit fine. */
-  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: break-word;
   font-size: var(--font-size-xl);
 }
 
@@ -2759,11 +2782,23 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
   outline: none;
   color: var(--color-primary);
+  /* iOS Safari shows a grey rectangle "tap highlight" around any
+     touchable element by default — visible as a square outline behind
+     the circular toggle on mobile. Disable it. Also clear default
+     button styles that some browsers apply. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-.floating-theme-toggle:hover {
-  transform: scale(1.1) rotate(15deg);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+/* Hover effects fire on touch devices when you tap, and STAY until the
+   next tap elsewhere — leaving the toggle stuck in its hover state.
+   Restrict hover styling to devices that genuinely hover. */
+@media (hover: hover) {
+  .floating-theme-toggle:hover {
+    transform: scale(1.1) rotate(15deg);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
 }
 
 .floating-theme-toggle:active {
