@@ -1,12 +1,19 @@
 """Regenerate the summary for one bill using the current prompt.
 
-Staging-only safety: refuses to run if DATABASE_URL points at the prod
+Staging by default: refuses to run if DATABASE_URL points at the prod
 Postgres host ('centerbeam'). Use this to A/B-test prompt changes on
 staging without any chance of touching prod data.
+
+Prod regen (rare, deliberate): pass --i-mean-prod to allow running
+against centerbeam. Intended for one-off cases like reformatting the
+current homepage bill after a prompt change. Combine with --dry-run
+first to preview the output before writing.
 
 Usage:
     python3 scripts/regen_summary_test.py hr7308-119
     python3 scripts/regen_summary_test.py hr7308-119 --dry-run
+    python3 scripts/regen_summary_test.py sres536-119 --i-mean-prod --dry-run
+    python3 scripts/regen_summary_test.py sres536-119 --i-mean-prod
 """
 
 import argparse
@@ -21,22 +28,30 @@ from src.load_env import load_env
 
 load_env()
 
+# When --i-mean-prod is passed, point DATABASE_URL at PROD_DATABASE_URL
+# AFTER load_env (which would otherwise clobber any exported override
+# with the staging URL from .env). Argparse runs after this import, so
+# defer the swap into main().
+
 from src.database.connection import postgres_connect
 from src.processors.summarizer import summarize_bill_enhanced
 
 PROD_HOST_MARKER = "centerbeam"
 
 
-def _assert_not_prod() -> None:
+def _assert_not_prod(allow_prod: bool = False) -> None:
     url = os.environ.get("DATABASE_URL", "")
-    if PROD_HOST_MARKER in url:
-        sys.exit(
-            f"REFUSING TO RUN: DATABASE_URL contains '{PROD_HOST_MARKER}' — "
-            "this is the production database. This script only runs against "
-            "staging. Point DATABASE_URL at STAGING_DATABASE_URL and retry."
-        )
     if not url:
         sys.exit("REFUSING TO RUN: DATABASE_URL not set.")
+    if PROD_HOST_MARKER in url:
+        if not allow_prod:
+            sys.exit(
+                f"REFUSING TO RUN: DATABASE_URL contains '{PROD_HOST_MARKER}' — "
+                "this is the production database. Pass --i-mean-prod to override "
+                "(intended only for deliberate one-off prod regens like reformatting "
+                "the homepage bill after a prompt change)."
+            )
+        print("⚠️  PROD MODE: writing to centerbeam (production). --i-mean-prod set.")
 
 
 def _load_bill(bill_id: str) -> dict:
@@ -101,6 +116,12 @@ def main() -> None:
         help="Print the new summary but do not write to DB.",
     )
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--i-mean-prod",
+        action="store_true",
+        dest="allow_prod",
+        help="Allow running against the production DB (centerbeam). Use deliberately.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -108,7 +129,13 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    _assert_not_prod()
+    if args.allow_prod:
+        prod_url = os.environ.get("PROD_DATABASE_URL", "")
+        if not prod_url:
+            sys.exit("REFUSING TO RUN: --i-mean-prod set but PROD_DATABASE_URL not in .env.")
+        os.environ["DATABASE_URL"] = prod_url
+
+    _assert_not_prod(allow_prod=args.allow_prod)
 
     bill = _load_bill(args.bill_id)
     print(f"Bill: {bill['bill_id']}  |  {bill['title'][:100]}")
@@ -129,7 +156,8 @@ def main() -> None:
         return
 
     _persist(args.bill_id, new_summary)
-    print(f"Wrote new summary for {args.bill_id} to staging DB.")
+    target = "PROD" if args.allow_prod else "staging"
+    print(f"Wrote new summary for {args.bill_id} to {target} DB.")
 
 
 if __name__ == "__main__":
