@@ -744,10 +744,35 @@ def process_single_bill(selected_bill: Dict, selected_bill_data: Optional[Dict],
 
             # Decide whether to regenerate summaries based on DB content
             summary_tweet_existing = (bill_data.get("summary_tweet") or "").strip()
+            summary_detailed_existing = (bill_data.get("summary_detailed") or "")
             needs_summary = (len(summary_tweet_existing) < 20) or ("no summary available" in summary_tweet_existing.lower())
 
-            # If we have fresh full text from enrichment and summaries are weak/missing, regenerate
-            if needs_summary and len((selected_bill.get("full_text") or "").strip()) >= 100:
+            # Format guard: post-2026-05 the summary prompt produces a 4-section
+            # structure ('⚡ The gist'). Anything from the old 6-section prompt
+            # ('🔎 Overview') is stale and should be regenerated before posting
+            # — otherwise stored backlog bills publish in the old format.
+            is_old_format = (
+                "⚡ The gist" not in summary_detailed_existing
+                and ("🔎 Overview" in summary_detailed_existing
+                     or "🔑 What This Bill Does" in summary_detailed_existing
+                     or "👉 In short" in summary_detailed_existing)
+            )
+            if is_old_format:
+                logger.info(f"🔄 {bill_id} has old-format summary — flagging for regeneration before posting.")
+                needs_summary = True
+
+            # full_text is in selected_bill (fresh enrichment) for daily-fetch
+            # picks, but in selected_bill_data (DB row) for backlog picks. Use
+            # whichever is present.
+            full_text_for_regen = (
+                (selected_bill.get("full_text") or "").strip()
+                or (bill_data.get("full_text") or "").strip()
+            )
+            if full_text_for_regen and not selected_bill.get("full_text"):
+                # Lift it onto selected_bill so summarize_bill_enhanced sees it.
+                selected_bill["full_text"] = full_text_for_regen
+
+            if needs_summary and len(full_text_for_regen) >= 100:
                 logger.info("🧠 Existing summaries missing/weak; regenerating from fresh full text...")
                 tracker_data = selected_bill.get("tracker") or []
                 derived_status_text, derived_normalized_status = derive_status_from_tracker(tracker_data)
