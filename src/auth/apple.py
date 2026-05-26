@@ -111,6 +111,25 @@ def _client_secret_factory(client) -> str:  # noqa: ARG001 — Authlib hook sign
     return _sign_client_secret()
 
 
+def refresh_apple_client_secret(oauth) -> None:
+    """Re-sign the Apple JWT and rebind it onto the registered Authlib client
+    if it's within the refresh window. Call this at the top of the Apple
+    callback handler. Without it, Authlib holds the boot-time JWT forever
+    and Apple returns 'invalid_client' once it expires (~1 hour).
+
+    Cheap when the cached JWT is still valid (returns the cached string).
+    The rebind onto `client.client_secret` is necessary because Authlib's
+    Flask integration reads that attribute fresh on each token exchange,
+    not the value passed at registration."""
+    if "apple" not in oauth._clients:  # noqa: SLF001
+        return
+    fresh = _sign_client_secret()
+    client = oauth._clients["apple"]  # noqa: SLF001
+    if getattr(client, "client_secret", None) != fresh:
+        client.client_secret = fresh
+        logger.info("Apple client_secret rebound on Authlib client (post-refresh).")
+
+
 def register_apple(oauth) -> bool:
     """Register the Apple OAuth client with the shared Authlib registry.
     Returns True if registration happened, False if Apple isn't configured
