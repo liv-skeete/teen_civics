@@ -916,7 +916,11 @@ a.share-option:link {
 
 .bill-meta {
     display: flex;
-    gap: var(--spacing-md);
+    /* gap was --spacing-md (1rem) — too wide; an extra char in the bill ID
+       (e.g. sjres104 vs sres536) pushed Teen Impact onto a second row.
+       --spacing-sm (0.5rem) buys ~24px back, enough for the longest bill
+       IDs while still reading as separate chips. */
+    gap: var(--spacing-sm);
     margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-sm);
     flex-wrap: wrap;
