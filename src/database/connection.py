@@ -35,6 +35,45 @@ _CB_RECOVERY_TIMEOUT = 30.0     # seconds before allowing a half-open probe
 # Overall timeout for postgres_connect() connection acquisition
 _CONNECT_ACQUIRE_TIMEOUT = 5.0  # seconds
 
+# Skip the SELECT 1 health-check on connections released back to the pool
+# within this many seconds. Validation adds 3 round-trips (~150ms on
+# Railway's cross-region proxy) to every checkout, which dominates p50
+# latency on simple endpoints. Connections recently in use are
+# overwhelmingly alive — TCP keepalives we set in init_connection_pool
+# catch dead sockets, and Postgres idle disconnects don't fire within
+# this window. Cold connections (>60s idle) still get validated.
+_VALIDATION_FRESHNESS_WINDOW = 60.0  # seconds
+_conn_last_used: dict[int, float] = {}
+_conn_last_used_lock = threading.Lock()
+
+
+def _stamp_last_used(conn) -> None:
+    if conn is None:
+        return
+    with _conn_last_used_lock:
+        _conn_last_used[id(conn)] = time.monotonic()
+
+
+def _conn_is_fresh(conn) -> bool:
+    """True if the connection was returned to the pool recently enough
+    that we trust it without a SELECT 1 probe."""
+    if conn is None:
+        return False
+    with _conn_last_used_lock:
+        last = _conn_last_used.get(id(conn))
+    if last is None:
+        return False
+    return (time.monotonic() - last) < _VALIDATION_FRESHNESS_WINDOW
+
+
+def _forget_conn(conn) -> None:
+    """Drop the freshness record when a connection is closed/discarded
+    so we don't leak entries as the pool rotates."""
+    if conn is None:
+        return
+    with _conn_last_used_lock:
+        _conn_last_used.pop(id(conn), None)
+
 
 # ---------- Circuit breaker helpers ----------
 
@@ -182,6 +221,8 @@ def close_connection_pool() -> None:
             except Exception as e:
                 logger.warning("Error closing connection pool: %s", e)
             _connection_pool = None
+            with _conn_last_used_lock:
+                _conn_last_used.clear()
             logger.info("Connection pool closed.")
 
 
@@ -231,11 +272,14 @@ def _acquire_connection() -> Optional[psycopg2.extensions.connection]:
         logger.warning("Failed to get connection from pool: %s", e)
         return None
 
-    if _validate_connection(conn):
+    # Skip validation when the conn was used within the freshness window.
+    # See _VALIDATION_FRESHNESS_WINDOW above for the rationale.
+    if _conn_is_fresh(conn) or _validate_connection(conn):
         return conn
 
     # Stale / dead connection — put it back and try once more
     logger.warning("Stale connection detected, attempting to reconnect.")
+    _forget_conn(conn)
     try:
         pool.putconn(conn, close=True)
     except Exception:
@@ -248,10 +292,13 @@ def _acquire_connection() -> Optional[psycopg2.extensions.connection]:
         logger.warning("Failed to get replacement connection from pool: %s", e)
         return None
 
+    # Replacement is brand-new from the pool — no freshness record yet,
+    # so always validate it. (Avoids trusting an uninitialized conn.)
     if _validate_connection(conn):
         return conn
 
     # Second attempt also failed — give up
+    _forget_conn(conn)
     try:
         pool.putconn(conn, close=True)
     except Exception:
@@ -283,16 +330,22 @@ def postgres_release(conn: psycopg2.extensions.connection) -> None:
 
     pool = _connection_pool
     if pool is None:
+        _forget_conn(conn)
         _safe_close(conn)
         return
 
     try:
         if conn.closed:
+            _forget_conn(conn)
             pool.putconn(conn, close=True)
         else:
+            # Stamp last-used BEFORE returning to pool so the next checkout
+            # can short-circuit validation if it happens within the window.
+            _stamp_last_used(conn)
             pool.putconn(conn)
     except Exception:
         # Pool rejected the connection — close it directly
+        _forget_conn(conn)
         _safe_close(conn)
 
 
