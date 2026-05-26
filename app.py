@@ -1398,6 +1398,15 @@ def apple_callback():
     }
     logger.info("Apple callback received: method=%s params=%s", request.method, log_safe)
 
+    # Re-sign + rebind the Apple JWT before exchanging the code. The JWT
+    # signed at app boot has a 1-hour TTL; without this refresh, every
+    # sign-in attempt after ~1 hour of uptime fails with invalid_client.
+    try:
+        from src.auth.apple import refresh_apple_client_secret
+        refresh_apple_client_secret(_oauth_registry)
+    except Exception as e:
+        logger.warning("Apple client_secret refresh failed before token exchange: %s", e)
+
     try:
         token = _oauth_registry.apple.authorize_access_token()
     except Exception as e:
