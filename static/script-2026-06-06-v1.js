@@ -23,8 +23,18 @@
   // right-side rail bind to these attributes.
   function applyUserStats(me) {
     if (!me) return;
+    const newBal = Math.round(Number(me.balance) || 0);
     document.querySelectorAll("[data-rail-tier]").forEach((el) => { el.textContent = me.tier; });
-    document.querySelectorAll("[data-rail-balance]").forEach((el) => { el.textContent = String(Math.round(me.balance)); });
+    document.querySelectorAll("[data-rail-balance]").forEach((el) => {
+      const prev = parseInt(el.textContent, 10);
+      el.textContent = String(newBal);
+      // Pop only when the displayed number actually went up. Guards against
+      // popping on /api/me hydration where the rail loads with the current
+      // balance for the first time (prev=NaN).
+      if (!Number.isNaN(prev) && newBal > prev) {
+        popKudosTarget(el);
+      }
+    });
     document.querySelectorAll("[data-rail-lifetime]").forEach((el) => { el.textContent = String(me.lifetime_votes_cast); });
     document.querySelectorAll("[data-rail-daily]").forEach((el) => { el.textContent = `${me.daily_used}/${me.daily_cap}`; });
     document.querySelectorAll("[data-rail-fill]").forEach((el) => {
@@ -46,6 +56,104 @@
         el.textContent = `${me.daily_tell_rep_used}/${me.daily_tell_rep_cap}`;
       }
     });
+  }
+
+  // --- Celebration micro-interactions ---
+
+  function prefersReducedMotion() {
+    try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+    catch { return false; }
+  }
+
+  // +N Kudos floater. Spawns at the visual center of the clicked element,
+  // floats up and fades. CSS keyframe handles the motion; JS just places
+  // and cleans up the node.
+  function spawnKudosFloater(anchor, amount) {
+    if (!anchor || prefersReducedMotion()) return;
+    let rect;
+    try { rect = anchor.getBoundingClientRect(); } catch { return; }
+    const el = document.createElement("div");
+    el.className = "kudos-floater";
+    el.textContent = `+${amount} Kudos`;
+    el.style.left = (rect.left + rect.width / 2) + "px";
+    el.style.top  = (rect.top  + rect.height / 2) + "px";
+    document.body.appendChild(el);
+    setTimeout(() => { try { el.remove(); } catch {} }, 1100);
+  }
+
+  // Single-shot scale-pop on the nav/rail Kudos numbers. Self-removing
+  // class so consecutive pops re-trigger the keyframe.
+  function popKudosTarget(el) {
+    if (!el || prefersReducedMotion()) return;
+    el.classList.remove("kudos-pop");
+    // Force reflow so the animation can replay on rapid consecutive votes.
+    void el.offsetWidth;
+    el.classList.add("kudos-pop");
+    setTimeout(() => { try { el.classList.remove("kudos-pop"); } catch {} }, 500);
+  }
+
+  // Full-screen tier-promotion modal. Built ad-hoc so we don't need to
+  // ship a modal partial in every template — the only thing that ever
+  // triggers it is a successful vote/tell-rep response carrying a
+  // `promotion` payload.
+  function showTierPromotion(promo) {
+    if (!promo || !promo.to_tier) return;
+    // Reduced motion: still show the moment, just skip confetti + transforms.
+    const reduced = prefersReducedMotion();
+    const backdrop = document.createElement("div");
+    backdrop.className = "tier-promo-backdrop";
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+    backdrop.setAttribute("aria-labelledby", "tier-promo-title");
+    backdrop.innerHTML = `
+      <div class="tier-promo-card${reduced ? " tier-promo-reduced" : ""}">
+        <div class="tier-promo-eyebrow">Tier up</div>
+        <div class="tier-promo-badge" aria-hidden="true">${promo.to_rank ?? ""}</div>
+        <h2 class="tier-promo-title" id="tier-promo-title">${escapeHtml(promo.to_tier)}</h2>
+        <p class="tier-promo-sub">You leveled up from <strong>${escapeHtml(promo.from_tier || "")}</strong>.</p>
+        <button type="button" class="btn btn-primary tier-promo-continue">Continue</button>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const close = () => {
+      try { backdrop.remove(); } catch {}
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+    const btn = backdrop.querySelector(".tier-promo-continue");
+    if (btn) { btn.addEventListener("click", close); setTimeout(() => btn.focus(), 50); }
+    if (!reduced) fireConfetti();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  // Tiny confetti — no library. Spawns ~60 absolutely-positioned divs
+  // with randomized horizontal drift + rotation, drops via CSS keyframe,
+  // self-removes. Branded palette pulled from style.css tokens (terracotta,
+  // sage, honey, navy). Total payload ~1KB of generated nodes for ~1.4s.
+  function fireConfetti() {
+    const palette = ["#C8553D", "#7FA66A", "#E2B33B", "#1B2A4E", "#E5826B"];
+    const layer = document.createElement("div");
+    layer.className = "tier-promo-confetti";
+    document.body.appendChild(layer);
+    const N = 70;
+    for (let i = 0; i < N; i++) {
+      const p = document.createElement("span");
+      p.className = "confetto";
+      p.style.left = (Math.random() * 100) + "%";
+      p.style.background = palette[i % palette.length];
+      p.style.animationDelay = (Math.random() * 0.25) + "s";
+      p.style.animationDuration = (1.2 + Math.random() * 0.8) + "s";
+      p.style.setProperty("--drift", ((Math.random() * 200) - 100) + "px");
+      p.style.setProperty("--rot", (Math.random() * 720 - 360) + "deg");
+      layer.appendChild(p);
+    }
+    setTimeout(() => { try { layer.remove(); } catch {} }, 2200);
   }
 
   // Fallback path: fetch fresh stats from /api/me. Used when we don't
@@ -78,6 +186,9 @@
   window.TC.applyUserStats = applyUserStats;
   window.TC.getCsrfToken = getCsrfToken;
   window.TC.API_BASE = API_BASE;
+  // Exposed for tell-rep to reuse on its own successful awards / promotions.
+  window.TC.spawnKudosFloater = spawnKudosFloater;
+  window.TC.showTierPromotion = showTierPromotion;
 
   // Safe localStorage helpers (handles Safari private mode)
   function getStored(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -187,13 +298,13 @@
             return;
           }
 
-          handleVote(billId, voteType, widget, storedVote);
+          handleVote(billId, voteType, widget, storedVote, option);
         }, { passive: true });
       });
     });
   }
 
-  function handleVote(billId, voteType, widget, previousVote) {
+  function handleVote(billId, voteType, widget, previousVote, clickedEl) {
     const options = $all(".poll-option", widget);
     const messageContainer = widget.querySelector(".poll-message");
 
@@ -255,10 +366,15 @@
     })
     .then((data) => {
       const isChange = !!previousVote && previousVote !== voteType;
+      const awarded = (data && Number(data.votes_awarded)) || 0;
+      const suffix = awarded > 0 ? ` +${awarded} Kudos` : "";
       if (isChange) {
-        showSuccessMessage(messageContainer, "Vote changed successfully!");
+        showSuccessMessage(messageContainer, "Vote changed successfully!" + suffix);
       } else {
-        showSuccessMessage(messageContainer, "Thanks for voting!");
+        showSuccessMessage(messageContainer, "Thanks for voting!" + suffix);
+      }
+      if (awarded > 0 && clickedEl) {
+        spawnKudosFloater(clickedEl, awarded);
       }
 
       setStored(`voted_${billId}`, voteType);
@@ -277,6 +393,13 @@
         applyUserStats(data.user);
       } else {
         refreshUserRail();
+      }
+
+      // Tier promotion — full-screen celebration moment. Fires AFTER
+      // the rail update so the new tier is already reflected when the
+      // user dismisses the modal.
+      if (data && data.promotion) {
+        showTierPromotion(data.promotion);
       }
 
       // Pre-warm reasoning cache in background (don't await, don't block UI)

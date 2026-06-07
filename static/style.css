@@ -4547,3 +4547,137 @@ h1, h2, h3, h4, h5, h6 {
     flex-basis: 100%;
 }
 [data-theme="dark"] .username-edit-error { color: #F3B5A6; }
+
+/* ----- Gamification celebration micro-interactions ----- */
+
+/* +N Kudos floater. Position is set inline (anchored to clicked element). */
+.kudos-floater {
+    position: fixed;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    pointer-events: none;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--color-brand-accent);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    animation: kudosFloatUp 1s ease-out forwards;
+    will-change: transform, opacity;
+}
+@keyframes kudosFloatUp {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+    15%  { opacity: 1; transform: translate(-50%, -90%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -180%) scale(1); }
+}
+
+/* Navbar/rail Kudos number pop on increase. */
+@keyframes kudosPop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.18); }
+    100% { transform: scale(1); }
+}
+.kudos-pop {
+    display: inline-block;
+    animation: kudosPop 0.45s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+/* Tier-promotion modal. */
+.tier-promo-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 20, 40, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: tierPromoFade 0.25s ease-out;
+    padding: 1rem;
+}
+@keyframes tierPromoFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.tier-promo-card {
+    background: var(--color-card-bg, #fff);
+    color: var(--color-text, #1a1a1a);
+    border-radius: 16px;
+    padding: 2rem 2rem 1.75rem;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    animation: tierPromoIn 0.5s cubic-bezier(.34, 1.56, .64, 1);
+    will-change: transform, opacity;
+}
+@keyframes tierPromoIn {
+    0%   { opacity: 0; transform: scale(0.7) translateY(20px); }
+    60%  { opacity: 1; transform: scale(1.04) translateY(0); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.tier-promo-reduced { animation: none; }
+.tier-promo-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-brand-accent);
+    margin-bottom: 0.75rem;
+}
+.tier-promo-badge {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-brand-accent), var(--color-primary));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    font-weight: 800;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.tier-promo-title {
+    font-size: 1.6rem;
+    margin: 0 0 0.5rem;
+    line-height: 1.2;
+}
+.tier-promo-sub {
+    margin: 0 0 1.5rem;
+    color: var(--color-text-muted, #555);
+    font-size: 0.95rem;
+}
+.tier-promo-continue { min-width: 140px; }
+
+/* Confetti layer + particles. */
+.tier-promo-confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 10001;
+}
+.tier-promo-confetti .confetto {
+    position: absolute;
+    top: -10px;
+    width: 8px;
+    height: 14px;
+    border-radius: 2px;
+    opacity: 0.95;
+    animation: confettoFall linear forwards;
+    will-change: transform, opacity;
+}
+@keyframes confettoFall {
+    0%   { transform: translate(0, -10px) rotate(0); opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translate(var(--drift), 105vh) rotate(var(--rot)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kudos-floater,
+    .kudos-pop,
+    .tier-promo-backdrop,
+    .tier-promo-card,
+    .tier-promo-confetti .confetto {
+        animation: none !important;
+    }
+}

@@ -822,6 +822,14 @@
           if (TC.applyUserStats) TC.applyUserStats(data.user);
           if (data.votes_awarded > 0) {
             showToast(`+${data.votes_awarded} Kudos for contacting your rep!`);
+            // Floater anchored to the Copy button the user just hit.
+            const copyBtn = section && section.querySelector(".btn-copy-email");
+            if (TC.spawnKudosFloater && copyBtn) {
+              TC.spawnKudosFloater(copyBtn, data.votes_awarded);
+            }
+          }
+          if (data.promotion && TC.showTierPromotion) {
+            TC.showTierPromotion(data.promotion);
           }
         })
         .catch(() => {});

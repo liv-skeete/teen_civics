@@ -821,6 +821,30 @@ def _user_stats(user_id):
     return _user_stats_from_bundle(bundle, user_id)
 
 
+def _detect_tier_promotion(post_user_stats, votes_awarded):
+    """If this award crossed a tier threshold, return promotion details
+    for the client to celebrate. Pure derivation from the post-vote
+    stats + the delta — no extra DB round-trip.
+
+    Returns {from_tier, to_tier, to_rank} when ranks differ, else None.
+    """
+    if not post_user_stats or not votes_awarded or votes_awarded <= 0:
+        return None
+    post_balance = float(post_user_stats.get("balance") or 0)
+    pre_balance = post_balance - float(votes_awarded)
+    if pre_balance < 0:
+        return None
+    pre_tier = gam_get_tier(pre_balance)
+    post_rank = int(post_user_stats.get("tier_rank") or 0)
+    if pre_tier.rank >= post_rank:
+        return None
+    return {
+        "from_tier": pre_tier.title,
+        "to_tier": post_user_stats.get("tier"),
+        "to_rank": post_rank,
+    }
+
+
 def _user_stats_from_bundle(bundle, user_id=None):
     """Shape a get_user_stats_bundle()-style dict into the response
     payload. Pulled out of _user_stats so vote_award_bundle (which
@@ -2424,11 +2448,13 @@ def record_vote():
                 votes_awarded = float(bundle.pop("_votes_awarded_this_call", 0.0))
                 user_stats = _user_stats_from_bundle(bundle)
 
+        promotion = _detect_tier_promotion(user_stats, votes_awarded)
         response = make_response(jsonify({
             "success": True,
             "voter_id": voter_id,
             "votes_awarded": votes_awarded,
             "user": user_stats,
+            "promotion": promotion,
         }))
         _set_voter_cookie(response, voter_id)
         return response
@@ -2469,10 +2495,12 @@ def award_tell_rep():
             auth_db.award_tell_rep(uid, bill_id, delta=awarded)
 
     user_stats = _user_stats(uid) if uid else None
+    promotion = _detect_tier_promotion(user_stats, awarded)
     return jsonify({
         "success": True,
         "votes_awarded": awarded,
         "user": user_stats,
+        "promotion": promotion,
     })
 
 
