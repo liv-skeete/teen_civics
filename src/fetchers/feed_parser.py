@@ -56,7 +56,10 @@ def scrape_bill_tracker(source_url: str, force_scrape=False, max_retries: int = 
                     )
                     page = context.new_page()
                     time.sleep(1)  # Small delay
-                    response = page.goto(source_url, timeout=timeout, wait_until='networkidle')
+                    # domcontentloaded, not networkidle: congress.gov never goes
+                    # network-quiet (analytics/beacons), so networkidle blocks
+                    # until timeout. See the domcontentloaded path at ~line 269.
+                    response = page.goto(source_url, timeout=timeout, wait_until='domcontentloaded')
 
                     if not response or response.status != 200:
                         logger.warning(f"⚠️ Failed to load page: {source_url} (status: {response.status if response else 'unknown'})")
@@ -778,7 +781,7 @@ def _extract_introduced_date_from_bill_page(url: str, timeout: int = 30) -> Opti
                     )
                     page = context.new_page()
                     time.sleep(0.5)
-                    response = page.goto(url, timeout=20000, wait_until='networkidle')
+                    response = page.goto(url, timeout=20000, wait_until='domcontentloaded')
                     if response and response.status == 200:
                         html = page.content()
                     context.close()
