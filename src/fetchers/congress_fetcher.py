@@ -263,7 +263,10 @@ def fetch_bills_from_feed(limit: int = 10, include_text: bool = True, text_chars
         scraped_trackers = {}
         if source_urls:
             from .feed_parser import scrape_multiple_bill_trackers
-            scraped_trackers = scrape_multiple_bill_trackers(source_urls, force_scrape=True)
+            # Do NOT force_scrape: in CI the headful congress.gov scrape hangs on
+            # networkidle and exhausts the job timeout. The CI guard skips it and
+            # bills fall back to the API-derived tracker (derive_tracker_from_actions).
+            scraped_trackers = scrape_multiple_bill_trackers(source_urls)
         # --- End pre-fetch ---
 
         for bill in feed_bills:
