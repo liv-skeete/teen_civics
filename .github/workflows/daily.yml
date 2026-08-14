@@ -37,7 +37,7 @@ jobs:
         pip install psycopg2-binary python-dotenv
 
     - name: Ping database
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 5
         max_attempts: 3
@@ -133,7 +133,7 @@ jobs:
         echo "STRICT_POSTING=true" >> $GITHUB_ENV
 
     - name: Run daily bill posting
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 13
         max_attempts: 2
