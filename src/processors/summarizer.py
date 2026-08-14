@@ -1099,7 +1099,12 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
     # Process tweet
     tweet_raw = str(parsed.get("tweet", "")).strip()
     tweet = _coherent_tighten_tweet(client, tweet_raw, bill, limit=200)
-    
+
+    # Carry the model's JSON score through to the caller. The score lives only
+    # in this JSON field (never in prose), so if it isn't copied here the final
+    # gate sees "Missing Teen Impact Score" and blocks every bill.
+    teen_impact_score = parsed.get("teen_impact_score")
+
     # If full text is not available, return empty summaries
     if not bill.get("full_text"):
         logger.warning(f"No full text for bill {bill.get('bill_id')}. Returning empty summaries.")
@@ -1107,6 +1112,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
             "overview": "",
             "detailed": "",
             "tweet": "",
+            "teen_impact_score": teen_impact_score,
             "subject_tags": subject_tags  # still return whatever tags we got
         }
     
@@ -1135,6 +1141,7 @@ def summarize_bill_enhanced(bill: Dict[str, Any]) -> Dict[str, str]:
         "overview": overview,
         "detailed": detailed,
         "tweet": tweet,
+        "teen_impact_score": teen_impact_score,
         "subject_tags": subject_tags
     }
 def summarize_title(bill_title: str) -> str:
