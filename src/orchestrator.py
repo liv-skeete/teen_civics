@@ -50,6 +50,34 @@ def snake_case(text: str) -> str:
     result = re.sub(r'[^a-zA-Z0-9]+', '_', text.lower())
     return result.strip('_')
 
+def _coerce_score(raw: Any) -> Optional[int]:
+    """
+    Coerce a teen_impact_score value into an int in [0, 10].
+
+    The model returns the field reliably (it's always in the JSON), but the
+    value format varies: bare int (7), int-string ("7"), float ("8.0"),
+    fraction ("7/10"), or prose ("7 out of 10"). The old int(raw) accepted
+    only the first two and silently dropped the rest, failing the final gate
+    for every bill. Extract the first integer and range-check it.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, bool):  # bool is an int subclass; reject explicitly
+        return None
+    if isinstance(raw, (int, float)):
+        score = int(raw)
+        return score if 0 <= score <= 10 else None
+    if not isinstance(raw, str):  # reject dict/list/etc., don't regex their repr
+        return None
+    import re
+    # First integer in the string; handles "7", "7/10", "8.0", "7 out of 10".
+    m = re.search(r"\d+", raw)
+    if not m:
+        return None
+    score = int(m.group())
+    return score if 0 <= score <= 10 else None
+
+
 def extract_teen_impact_score(summary: Any) -> Optional[int]:
     """
     Extract Teen Impact Score.
@@ -67,13 +95,9 @@ def extract_teen_impact_score(summary: Any) -> Optional[int]:
     """
     if isinstance(summary, dict):
         raw = summary.get("teen_impact_score")
-        if raw is not None:
-            try:
-                score = int(raw)
-                if 0 <= score <= 10:
-                    return score
-            except (ValueError, TypeError):
-                pass
+        score = _coerce_score(raw)
+        if score is not None:
+            return score
         text = summary.get("detailed") or ""
     else:
         text = summary or ""
