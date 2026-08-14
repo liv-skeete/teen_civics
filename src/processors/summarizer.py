@@ -645,6 +645,10 @@ def _summarize_large_bill_in_chunks(client: OpenAI, bill: Dict[str, Any], system
     full_text = str(bill.get("full_text") or "")
     chunk_size = 10000
     overlap = 1000
+    # Hard cap on Venice calls per bill. Each chunk is one ~13s API call made
+    # sequentially, so an uncapped omnibus bill (e.g. 2.5M chars → 281 chunks)
+    # runs ~60min and blows the CI job timeout. Configurable for tuning.
+    max_chunks = int(os.getenv("SUMMARY_MAX_CHUNKS", "12"))
 
     chunks: List[str] = []
     start = 0
@@ -655,7 +659,20 @@ def _summarize_large_bill_in_chunks(client: OpenAI, bill: Dict[str, Any], system
             break
         start = end - overlap
 
-    logger.info(f"Large bill detected ({len(full_text)} chars); summarizing in {len(chunks)} chunks")
+    # If the bill is too large, sample chunks evenly across the whole document
+    # (beginning → middle → end) instead of processing every one. This bounds
+    # runtime while preserving full-document coverage — important for spending
+    # bills where provisions are spread throughout, not front-loaded.
+    if len(chunks) > max_chunks:
+        step = len(chunks) / max_chunks
+        sampled = [chunks[min(int(i * step), len(chunks) - 1)] for i in range(max_chunks)]
+        logger.info(
+            f"Large bill detected ({len(full_text)} chars, {len(chunks)} chunks); "
+            f"sampling {max_chunks} evenly-spaced chunks to bound runtime"
+        )
+        chunks = sampled
+    else:
+        logger.info(f"Large bill detected ({len(full_text)} chars); summarizing in {len(chunks)} chunks")
 
     partial_summaries: List[str] = []
     total_chunks = len(chunks)
